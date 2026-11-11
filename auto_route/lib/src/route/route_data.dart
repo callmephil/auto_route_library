@@ -252,6 +252,12 @@ class RouteData<R> {
     _pendingChildren = List<RouteMatch<Object?>>.from(newMatch.children ?? []);
   }
 
+  // Whether replaceAll keeps this page's screen below the top for a new page
+  // of its route, see [StackRouter._keepingScreensOf]. Once the whole batch
+  // is in, the new page opens its own children in the screen's nested router,
+  // see [StackRouter._openChildrenInKeptScreens].
+  bool _isKeptByReplaceAll = false;
+
   bool _isPoppedByNavigator = false;
 
   /// Records that the navigator popped this route's page, e.g. through

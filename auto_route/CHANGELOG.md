@@ -22,6 +22,9 @@
   `replace` or `replaceAll` closes again, even with system back. Since 12.5.0 closing it threw
   `type 'AutoRoutePage<Object?>' is not a subtype of type 'Page<int>'`. The page that takes over a screen now keeps
   its result type, and a page whose type the screen's route can't hold gets a route of its own, as in Flutter.
+- **FIX**: a page holding a nested router or tabs that `replaceAll` keeps below the top, such as
+  `ShellRoute(children: [ChildBRoute()])` under a new top page, now shows the children `replaceAll` names, as one kept
+  on top already did. It kept showing its old children, and as the last page it stacked the new child over them.
 - **BEHAVIOR CHANGE**: `AutoTabsRouter` passes a new `homeIndex` on when it is rebuilt with one, so back goes to the new
   home tab. A `homeIndex` past the end of the tabs counts as no home tab instead of throwing (#1759).
 - **BEHAVIOR CHANGE**: a guard that rejects a page of a nested router when the guards are reevaluated now updates the

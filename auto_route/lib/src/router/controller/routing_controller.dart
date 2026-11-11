@@ -2608,7 +2608,9 @@ abstract class StackRouter extends RoutingController {
   /// place; the screen on top is kept by the first new page of its route,
   /// wherever it goes. A kept screen keeps its state, its result type and the
   /// wait of the code that opened it, which gets the result the screen closes
-  /// with. The code that opened any other page gets `null` as the page leaves.
+  /// with, and its nested router shows the children the new page's route
+  /// names, as a nested router built anew would. The code that opened any
+  /// other page gets `null` as the page leaves.
   /// With [updateExistingRoutes] false, every new page gets a screen of its
   /// own.
   ///
@@ -2694,9 +2696,10 @@ abstract class StackRouter extends RoutingController {
   // bottom of the stack and then from the top, as Flutter's Navigator updates
   // the routes of pages it can update from either end. The screen and its
   // state stay, so the new page takes over its result type and the wait of
-  // the code that opened it, see [_addNewPage], and its nested router. The
-  // screen the navigator shows on top is left to [_shownTopTakenOverBy],
-  // which also opens the new page's children in its nested router.
+  // the code that opened it, see [_addNewPage], and its nested router, which
+  // shows the new page's children once the whole batch is in, see
+  // [_openChildrenInKeptScreens]. The screen the navigator shows on top is
+  // left to [_shownTopTakenOverBy].
   List<RouteMatch<Object?>> _keepingScreensOf(
     List<AutoRoutePage<Object?>> previous,
     List<RouteMatch<Object?>> matches,
@@ -2717,6 +2720,7 @@ abstract class StackRouter extends RoutingController {
       }
       if (page != shownTop) {
         kept[index] = match.withId(data.matchId);
+        data._isKeptByReplaceAll = true;
         for (final ctr in _childControllers) {
           if (ctr.matchId == data.matchId) {
             ctr._isMarkedForDataUpdate = true;
@@ -3264,6 +3268,40 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
+  // The match ids of [routes] that keep a screen replaceAll keeps below the
+  // top, see [_keepingScreensOf]. Takes the marks off those screens' pages,
+  // so a batch a guard rejects leaves none behind.
+  Set<LocalKey> _takeScreensKeptByReplaceAll(List<RouteMatch<Object?>> routes) {
+    final kept = <LocalKey>{};
+    for (final route in routes) {
+      final data = _shownDataThatLeftWithId(route.id);
+      if (data != null && data._isKeptByReplaceAll) {
+        data._isKeptByReplaceAll = false;
+        kept.add(route.id);
+      }
+    }
+    return kept;
+  }
+
+  // Once every page of a batch is in, sends the nested router of each screen
+  // it keeps below the top, by the match ids in [keptScreens], to the
+  // children of the page that keeps it, as Flutter's Navigator builds the new
+  // content of a page it updates in place, wherever it is in the stack. Not
+  // before: a guard still deciding would see the screen change under it, and
+  // one that rejects the batch would leave the screen on the new children.
+  void _openChildrenInKeptScreens(
+    Set<LocalKey> keptScreens, {
+    OnNavigationFailure? onFailure,
+  }) {
+    final keeping = [
+      for (final page in _pages)
+        if (keptScreens.contains(page.routeData.matchId)) page.routeData,
+    ];
+    for (final data in keeping) {
+      _openChildrenInTakenOverRouter(data, onFailure: onFailure);
+    }
+  }
+
   Future<ResolverResult> _canNavigate(
     RouteMatch<Object?> route, {
     OnNavigationFailure? onFailure,
@@ -3367,6 +3405,7 @@ abstract class StackRouter extends RoutingController {
     Future<T?>? popped;
     if (routes.isNotEmpty) {
       var mayUpdateRoute = routes.last;
+      final keptScreens = _takeScreensKeptByReplaceAll(routes);
       if (!managedByWidget) {
         // The future of a pushed page completes when the page is popped, so
         // wait only until the page is added, to keep updating nested routers
@@ -3396,6 +3435,7 @@ abstract class StackRouter extends RoutingController {
           }
         } else if (pushed.isCompleted) {
           _closePagelessRoutesOverTop();
+          _openChildrenInKeptScreens(keptScreens, onFailure: onFailure);
         }
       }
       final mayUpdateController = _topInnerControllerOf(mayUpdateRoute.key);
@@ -3403,7 +3443,8 @@ abstract class StackRouter extends RoutingController {
       // A page that took over this nested router has opened its children in
       // it; opening them again would stack them twice.
       if (newChildren.isNotEmpty &&
-          _shownTopTakenOverBy(mayUpdateRoute) != null) {
+          (keptScreens.contains(mayUpdateRoute.id) ||
+              _shownTopTakenOverBy(mayUpdateRoute) != null)) {
         return null;
       }
       if (mayUpdateController != null) {
