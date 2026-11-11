@@ -1,13 +1,16 @@
 import 'package:material_ui/material_ui.dart';
 
-/// A page that shows 'Home' and calls [onInit] from its initState, so a test
+/// A page that shows [label] and calls [onInit] from its initState, so a test
 /// counts how often the page is built anew.
 class InitCountPage extends StatefulWidget {
   /// Calls [onInit] once per state.
-  const new(this.onInit, {super.key});
+  const new(this.onInit, {this.label = 'Home', super.key});
 
   /// Called from initState.
   final VoidCallback onInit;
+
+  /// The text the page shows.
+  final String label;
 
   @override
   State<InitCountPage> createState() => _InitCountPageState();
@@ -21,5 +24,5 @@ class _InitCountPageState extends State<InitCountPage> {
   }
 
   @override
-  Widget build(BuildContext context) => const Scaffold(body: Text('Home'));
+  Widget build(BuildContext context) => Scaffold(body: Text(widget.label));
 }

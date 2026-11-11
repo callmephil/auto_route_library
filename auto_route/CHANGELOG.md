@@ -1,3 +1,10 @@
+## Unreleased
+- **FIX**: `removeRoute` with the `RouteData` of a screen kept from before a navigation reached that screen again, such
+  as a link to it with new query params, counts as the app's own removal, as with the `RouteData` the screen shows now.
+  A push of the same route right after it builds a new page; it took over the screen just removed, with its old state.
+  Such a `RouteData` still removes the screen, as Flutter's `Navigator.removeRoute` removes a route it kept for a new
+  page.
+
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
   with `null` once its page leaves the stack, as a removed route's does in Flutter: when a later `navigate` or

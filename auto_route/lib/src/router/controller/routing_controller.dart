@@ -2264,9 +2264,18 @@ abstract class StackRouter extends RoutingController {
 
   /// Removes given [route] and any corresponding controllers
   ///
+  /// A [route] kept from before a navigation reached its screen again, such as
+  /// one with new query params, still names that screen and removes it, as
+  /// Flutter's [Navigator.removeRoute] removes a route it kept for a new page.
+  ///
   /// finally calls [notifyAll] if notify is true
   void removeRoute(RouteData<Object?> route, {bool notify = true}) {
-    _markRemovedByApp(_pages.where((page) => page.routeData == route));
+    // The page showing the screen now holds the screen's match id, whether or
+    // not it is the page [route] was built for.
+    final shown = _pages.lastWhereOrNull(
+      (page) => page.routeData.matchId == route.matchId,
+    );
+    _markRemovedByApp([?shown]);
     _removeRoute(route._route, notify: notify);
   }
 
