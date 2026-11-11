@@ -2599,13 +2599,21 @@ abstract class StackRouter extends RoutingController {
     return scope._pushAll(routes, onFailure: onFailure);
   }
 
-  /// Remove the whole current pages stack and push all given [routes]
+  /// Replaces every page of this stack with pages for [routes], the last one
+  /// on top.
   ///
-  /// if [onFailure] callback is provided, navigation errors will be passed to
-  /// it otherwise they'll be thrown
+  /// With [updateExistingRoutes], a new page whose route is that of the page
+  /// at its place, counted from the bottom of the stack or from the top, keeps
+  /// that page's screen, as Flutter's Navigator updates a page's route in
+  /// place; the screen on top is kept by the first new page of its route,
+  /// wherever it goes. A kept screen keeps its state, its result type and the
+  /// wait of the code that opened it, which gets the result the screen closes
+  /// with. The code that opened any other page gets `null` as the page leaves.
+  /// With [updateExistingRoutes] false, every new page gets a screen of its
+  /// own.
   ///
-  /// if [updateExistingRoutes] is set to false a fresh stack
-  /// will be initiated.
+  /// If [onFailure] is given, navigation errors are passed to it; otherwise
+  /// they are thrown.
   Future<void> replaceAll(
     List<PageRouteInfo> routes, {
     OnNavigationFailure? onFailure,
@@ -2644,16 +2652,19 @@ abstract class StackRouter extends RoutingController {
     final previousPages = List.of(_pages);
     final previousStackKey = _stackKey;
     var wasRejected = false;
+    final newMatches = updateExistingRoutes
+        ? _keepingScreensOf(previousPages, matches)
+        : matches;
     _pages.clear();
     if (!updateExistingRoutes) {
       _stackKey = UniqueKey();
     }
     markUrlStateForReplace();
     await _navigateAll(
-      matches,
+      newMatches,
       onFailure: (failure) {
         if (failure is RejectedByGuardFailure &&
-            matches.any((match) => match.id == failure.route.id)) {
+            newMatches.any((match) => match.id == failure.route.id)) {
           wasRejected = true;
         }
       },
@@ -2675,6 +2686,59 @@ abstract class StackRouter extends RoutingController {
     _stackKey = previousStackKey;
     markUrlStateForReplace();
     notifyAll(forceUrlRebuild: true);
+  }
+
+  // [matches], where each match the navigator will show in the route of a
+  // page of [previous] has that page's match id. The navigator updates a
+  // route with the new page of the same route at its place, counted from the
+  // bottom of the stack and then from the top, as Flutter's Navigator updates
+  // the routes of pages it can update from either end. The screen and its
+  // state stay, so the new page takes over its result type and the wait of
+  // the code that opened it, see [_addNewPage], and its nested router. The
+  // screen the navigator shows on top is left to [_shownTopTakenOverBy],
+  // which also opens the new page's children in its nested router.
+  List<RouteMatch<Object?>> _keepingScreensOf(
+    List<AutoRoutePage<Object?>> previous,
+    List<RouteMatch<Object?>> matches,
+  ) {
+    final kept = List.of(matches);
+    final shownTop = pagelessRoutesObserver.topPageRoute?.settings;
+    // Whether the navigator shows the match at [index] in the route of
+    // [page], as for a page of the same route in the same stack. If so, and
+    // [page] isn't the screen on top, the match gets the page's match id.
+    bool keepsScreen(AutoRoutePage<Object?>? page, int index) {
+      final match = matches.elementAtOrNull(index);
+      final data = page?.routeData;
+      if (data == null ||
+          match == null ||
+          data.key != match.key ||
+          data.stackKey != _stackKey) {
+        return false;
+      }
+      if (page != shownTop) {
+        kept[index] = match.withId(data.matchId);
+        for (final ctr in _childControllers) {
+          if (ctr.matchId == data.matchId) {
+            ctr._isMarkedForDataUpdate = true;
+          }
+        }
+      }
+      return true;
+    }
+
+    var bottom = 0;
+    while (keepsScreen(previous.elementAtOrNull(bottom), bottom)) {
+      bottom++;
+    }
+    var previousTop = previous.length - 1;
+    var matchesTop = matches.length - 1;
+    while (previousTop >= bottom &&
+        matchesTop >= bottom &&
+        keepsScreen(previous.elementAtOrNull(previousTop), matchesTop)) {
+      previousTop--;
+      matchesTop--;
+    }
+    return kept;
   }
 
   /// Pop the whole stack except for the first entry
@@ -3155,8 +3219,10 @@ abstract class StackRouter extends RoutingController {
   // the stack and [route] is about to go on top in its place. The new page
   // then takes over its route, see [AutoRoutePage.canUpdate], with the nested
   // router built inside it. A [route] that already has the page's match id,
-  // as navigate gives it, comes with a caller that updates that router. A page
-  // the app removed itself keeps its route (#1204).
+  // as navigate gives it, comes with a caller that updates that router. A
+  // [route] with the match id of another page that left takes over that
+  // page's screen instead, as replaceAll gives it. A page the app removed
+  // itself keeps its route (#1204).
   RouteData<Object?>? _shownTopTakenOverBy(RouteMatch<Object?> route) {
     final shownRoute = pagelessRoutesObserver.topPageRoute;
     final shownPage = shownRoute?.settings;
@@ -3171,7 +3237,8 @@ abstract class StackRouter extends RoutingController {
     final doesTakeOver =
         data.key == route.key &&
         data.stackKey == _stackKey &&
-        data.matchId != route.id;
+        data.matchId != route.id &&
+        _shownDataThatLeftWithId(route.id) == null;
     return doesTakeOver ? data : null;
   }
 
