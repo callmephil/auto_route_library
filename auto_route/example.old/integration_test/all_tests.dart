@@ -71,6 +71,8 @@ import 'navigate_inherited_path_params_test.dart'
     as navigate_inherited_path_params;
 import 'navigate_nested_update_test.dart' as navigate_nested_update;
 import 'navigate_over_pageless_route_test.dart' as navigate_over_pageless_route;
+import 'navigate_rejected_keeps_stack_test.dart'
+    as navigate_rejected_keeps_stack;
 import 'navigate_root_from_nested_test.dart' as navigate_root_from_nested;
 import 'navigate_to_non_tab_test.dart' as navigate_to_non_tab;
 import 'nested_absolute_redirect_test.dart' as nested_absolute_redirect;
@@ -299,6 +301,7 @@ void main() {
   navigate_inherited_path_params.main();
   navigate_nested_update.main();
   navigate_over_pageless_route.main();
+  navigate_rejected_keeps_stack.main();
   navigate_root_from_nested.main();
   navigate_to_non_tab.main();
   nested_absolute_redirect.main();

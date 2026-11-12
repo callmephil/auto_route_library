@@ -536,6 +536,9 @@ abstract class RoutingController with ChangeNotifier {
   /// Pops until given [route], if it already exists in stack otherwise adds it
   /// to the stack (good for web Apps and to avoid duplicate entries).
   ///
+  /// The pages above it leave only once the guards of [route] let it through;
+  /// a rejected [route] leaves the stack as it was.
+  ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
   Future<T?> navigate<T extends Object?>(
@@ -547,6 +550,9 @@ abstract class RoutingController with ChangeNotifier {
 
   /// Pops until given [path], if it already exists in stack
   /// otherwise adds it to the stack
+  ///
+  /// The pages above it leave only once the guards of its route let it
+  /// through; a rejected route leaves the stack as it was.
   ///
   /// if [includePrefixMatches] is true prefixed-matches
   /// will be added to to target destination
@@ -2383,6 +2389,16 @@ abstract class StackRouter extends RoutingController {
   // screen already shown keeps until the screen closes. A suspended call
   // would hold the pages and routers it took off until then, in debug builds,
   // which keep every local of a suspended call.
+  //
+  // The pages it takes off, those above the pages it keeps and the page the
+  // first route reaches again with every page above it, stay on the stack
+  // until the guards of that route let it through. A route a guard rejects
+  // leaves the stack as it was, with its pages, its url and the children of
+  // their nested routers, as a canceled traversal to an entry already in the
+  // history leaves the current entry on the web and an unwind segue that
+  // isn't performed leaves its view controllers on iOS and macOS. While a
+  // guard decides, the stack it reads is the one on screen, as Flutter's
+  // Router keeps building the current pages while its delegate waits.
   Future<T?> _popUntilOrPushAll<T extends Object?>(
     List<RouteMatch<Object?>> matches, {
     required Completer<void> pushed,
@@ -2390,28 +2406,26 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
   }) {
-    final kept = isReevaluating ? 0 : _keepPagesUnderTarget(matches);
+    final (:kept, :end) = isReevaluating
+        ? (kept: 0, end: _pages.length)
+        : _pagesKeptUnderTarget(matches);
     final toPush = kept == 0 ? matches : matches.sublist(kept);
     final anchor = toPush.firstOrNull;
     if (anchor == null) return Future.value();
-    final anchorPage = _pages.lastWhereOrNull((p) => p.routeKey == anchor.key);
-    if (anchorPage != null) {
-      for (final candidate in List<AutoRoutePage<Object?>>.unmodifiable(
-        _pages,
-      ).reversed) {
-        _markLeaving([candidate], .removed);
-        _pages.removeLast();
-        // The anchor page is the first one from the top with its key.
-        if (candidate.routeKey == anchorPage.routeKey) break;
-      }
+    // The anchor page is the first one from the top with its key, among the
+    // pages that stay.
+    final staying = _pages.sublist(0, end);
+    final anchorPage = staying.lastWhereOrNull((p) => p.routeKey == anchor.key);
+    final anchorId = anchorPage?.routeData.matchId;
+    if (anchorId != null) {
       // use the existing match id to avoid breaking child controllers
-      toPush[0] = anchor.withId(anchorPage.routeData.matchId);
-      for (final ctr in _childControllers) {
-        if (ctr.matchId == anchorPage.routeData.matchId) {
-          ctr._isMarkedForDataUpdate = true;
-        }
-      }
+      toPush[0] = anchor.withId(anchorId);
     }
+    // Let go once used, so the call that waits on the last page doesn't hold
+    // the pages that left.
+    List<AutoRoutePage<Object?>>? leaving = _pages.sublist(
+      anchorPage == null ? end : staying.lastIndexOf(anchorPage),
+    );
     return _pushAllGuarded(
       toPush,
       onFailure: onFailure,
@@ -2419,20 +2433,37 @@ abstract class StackRouter extends RoutingController {
       isReevaluating: isReevaluating,
       pushed: pushed,
       onLastRouteAdded: onLastRouteAdded,
+      onFirstRouteAccepted: () {
+        // A page popped while the guards decided has left already.
+        final left = [...?leaving?.where(_pages.contains)];
+        leaving = null;
+        _markLeaving(left, .removed);
+        _pages.removeWhere(left.contains);
+        if (anchorId == null) return;
+        for (final ctr in _childControllers) {
+          if (ctr.matchId == anchorId) {
+            ctr._isMarkedForDataUpdate = true;
+          }
+        }
+      },
     );
   }
 
-  // Keeps the pages that [matches], save the last, would build again as they
-  // are, from the page the first one matches up, and returns how many: their
-  // widgets are not created and built again, as with go_router
+  // How many of [matches], save the last, find a page they would build again
+  // as it is, from the page the first one matches up, and the end of the
+  // pages that stay: the pages above the kept ones leave, except one the next
+  // match opens again, which is left for the caller. The kept pages' widgets
+  // are not created and built again, as with go_router
   // (flutter/flutter#147639). A page holding a nested router is built again,
-  // which updates its router. The pages above the kept ones are removed,
-  // except one the next match opens again, which is left for the caller.
-  int _keepPagesUnderTarget(List<RouteMatch<Object?>> matches) {
+  // which updates its router.
+  ({int kept, int end}) _pagesKeptUnderTarget(
+    List<RouteMatch<Object?>> matches,
+  ) {
+    final none = (kept: 0, end: _pages.length);
     final start = _pages.lastIndexWhere(
       (p) => p.routeKey == matches.firstOrNull?.key,
     );
-    if (start == -1) return 0;
+    if (start == -1) return none;
     var kept = 0;
     while (kept < matches.length - 1) {
       final data = _pages.elementAtOrNull(start + kept)?.routeData;
@@ -2443,15 +2474,13 @@ abstract class StackRouter extends RoutingController {
       }
       kept++;
     }
-    if (kept == 0) return 0;
+    if (kept == 0) return none;
     final next = start + kept;
     final nextPage = _pages.elementAtOrNull(next);
-    if (nextPage != null &&
-        nextPage.routeKey != matches.elementAtOrNull(kept)?.key) {
-      _markLeaving(_pages.sublist(next), .removed);
-      _pages.removeRange(next, _pages.length);
-    }
-    return kept;
+    final isNextLeaving =
+        nextPage != null &&
+        nextPage.routeKey != matches.elementAtOrNull(kept)?.key;
+    return (kept: kept, end: isNextLeaving ? next : _pages.length);
   }
 
   // Why a router that AutoRouter.declarative builds can't push its own pages,
@@ -3058,6 +3087,7 @@ abstract class StackRouter extends RoutingController {
     bool isReevaluating = false,
     Completer<void>? pushed,
     ValueChanged<RouteMatch<Object?>>? onLastRouteAdded,
+    VoidCallback? onFirstRouteAccepted,
   }) async {
     assert(!managedByWidget, _managedByWidgetMessage);
 
@@ -3093,6 +3123,7 @@ abstract class StackRouter extends RoutingController {
       final match = result.route;
       if (wasPopped(match)) break;
       if (result.continueNavigation) {
+        if (i == 0) onFirstRouteAccepted?.call();
         if (i != (routes.length - 1)) {
           if (match is ReevaluatableRouteMatch) {
             _addReevaluatedPage(match, notify: false);
@@ -3448,15 +3479,24 @@ abstract class StackRouter extends RoutingController {
         // wait only until the page is added, to keep updating nested routers
         // right away.
         final pushed = Completer<void>();
+        var isLastRouteAdded = false;
         popped = _popUntilOrPushAll<T>(
           routes,
           onFailure: onFailure,
           isReevaluating: isReevaluating,
           pushed: pushed,
-          // a guard may have overridden the route, e.g. its children
-          onLastRouteAdded: (match) => mayUpdateRoute = match,
+          onLastRouteAdded: (match) {
+            // a guard may have overridden the route, e.g. its children
+            mayUpdateRoute = match;
+            isLastRouteAdded = true;
+          },
         );
         await Future.any([pushed.future, popped]);
+        if (!isReevaluating && !isLastRouteAdded) {
+          // A guard rejected the routes, or a later link took over: the
+          // nested router of a page they reach again keeps its children.
+          return await popped;
+        }
         if (isReevaluating) {
           // put pages pushed before or during the reevaluation back on top of
           // the reevaluated ones
