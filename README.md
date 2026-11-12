@@ -1638,7 +1638,7 @@ AutoRoute(page: AdminRoute.page, guards: [adminGuard], children: [
 // authGuard (AdminRoute), adminGuard, authGuard (UsersRoute), usersGuard
 ```
 
-When several routes are opened at once, as by `pushAll` or a deep link, they're checked one after another, from the bottom of the stack up, and a rejected route keeps the routes above it from opening too. The guards of tab routes run when their tab is about to show, without the global guards (see [Guarding tab routes](#guarding-tab-routes)).
+When several routes are opened at once, as by `pushAll` or a deep link, they're checked one after another, from the bottom of the stack up, and a rejected route rejects them all: the routes before it that its guards let through don't open either, and the stack stays as it was. A router with no pages yet, as when the app starts at a deep link, has no stack to go back to, so it opens the routes below the rejected one. The guards of tab routes run when their tab is about to show, without the global guards (see [Guarding tab routes](#guarding-tab-routes)).
 
 #### Waiting inside a guard, and redirecting without waiting
 

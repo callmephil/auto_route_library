@@ -92,7 +92,8 @@ void main() {
     decision.complete(false);
     await tester.pumpAndSettle();
     expect(isCompleted, isTrue);
-    expect(namesOf(router).lastOrNull, isNot('CheckoutRoute'));
+    expect(namesOf(router), ['HomeRoute']);
+    expect(find.text('HomeRoute'), findsOneWidget);
   });
 
   testWidgets('popAndPushAll completes once an async guard has decided', (
