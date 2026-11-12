@@ -4,24 +4,11 @@
   A push of the same route right after it builds a new page; it took over the screen just removed, with its old state.
   Such a `RouteData` still removes the screen, as Flutter's `Navigator.removeRoute` removes a route it kept for a new
   page.
-
-## 12.6.0
-- **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
-  with `null` once its page leaves the stack, as a removed route's does in Flutter: when a later `navigate` or
-  `replaceAll` takes the page off, or when the page's nested router closes. It never completed, and each call waiting
-  on it kept the pages it worked with in memory: one more page on every `replaceAll` in release builds, and in debug
-  builds and tests also the nested routers and page widgets of every link through nested routers. A navigation that
-  reaches a screen already shown keeps that screen, so the code that opened it keeps waiting and gets the result the
-  screen closes with, as Flutter's Navigator keeps the route of a page with the same type and key. So does a screen
-  below the top that `replaceAll` keeps, where the new stack has a page of the same route at its place, counted from
-  the bottom or from the top, as Flutter's Navigator updates such a page's route; a screen opened with a result type
-  now stays there too, with its state, instead of being built anew. The first build of 12.6.0 (b705ff78) answered
-  that code `null` at once: a picker answered `null` while still open, and a link to the redirect a guard showed with
-  `redirectUntil` left a blank screen.
-- **FIX**: a screen opened with a result type, such as with `push<int>`, and then reached again by `navigate`, a link,
-  `replace` or `replaceAll` closes again, even with system back. Since 12.5.0 closing it threw
-  `type 'AutoRoutePage<Object?>' is not a subtype of type 'Page<int>'`. The page that takes over a screen now keeps
-  its result type, and a page whose type the screen's route can't hold gets a route of its own, as in Flutter.
+- **FIX**: a screen that `replaceAll` keeps below the top, such as `ARoute` in
+  `replaceAll([HomeRoute(), ARoute(), CRoute()])` over `[HomeRoute(), ARoute(), BRoute()]`, keeps the code that opened
+  it waiting for the result it closes with, as Flutter's Navigator keeps the route of a page of the same type at the
+  same place. That code got `null` at once, and a screen opened with a result type, such as with `push<int>`, was built
+  anew there, losing its state.
 - **FIX**: a page holding a nested router or tabs that `replaceAll` keeps below the top, such as
   `ShellRoute(children: [ChildBRoute()])` under a new top page, now shows the children `replaceAll` names, as one kept
   on top already did. It kept showing its old children, and as the last page it stacked the new child over them.
@@ -36,6 +23,33 @@
   as a `ShellRoute(children: [ChildCRoute()])` pushed later, took the old shell's nested router; and a page of the
   shell's route earlier in the same batch took it from the page that keeps the shell. The shell's children then read
   the other page's path params.
+- **FIX**: `navigate` to a route already in the stack that a guard rejects leaves the stack, the screen and the url as
+  they were, as a rejected `replace` and `replaceAll` do. It took the page it reached, and every page above it, off the
+  stack before the guards ran: with `[HomeRoute(), ShellRoute(children: [ChildARoute()]), FirstRoute()]`, a rejected
+  `navigate` to the shell with `ChildBRoute` left only `HomeRoute` on the stack, and a pop then showed a blank screen.
+- **FIX**: `replacePath` that a guard rejects keeps the page it would replace, as `replace` does. It took the top page
+  off before the guards ran, so the code that pushed that page was told it had closed, and back from the next push
+  skipped it.
+- **FIX**, **BEHAVIOR CHANGE**: a guard that rejects one route of a batch now rejects the whole batch, as `replaceAll`
+  already did: `pushAll`, `popAndPushAll`, `navigatePath` with `includePrefixMatches` and a link the platform hands the
+  running app leave the stack as it was. The pages before the rejected route stayed on the stack unseen, and the next
+  change of the stack showed them. A batch that starts on an empty stack, as when the app opens at a link, still keeps
+  the pages its guards let through.
+
+## 12.6.0
+- **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
+  with `null` once its page leaves the stack, as a removed route's does in Flutter: when a later `navigate` or
+  `replaceAll` takes the page off, or when the page's nested router closes. It never completed, and each call waiting
+  on it kept the pages it worked with in memory: one more page on every `replaceAll` in release builds, and in debug
+  builds and tests also the nested routers and page widgets of every link through nested routers. A navigation that
+  reaches a screen already shown keeps that screen, so the code that opened it keeps waiting and gets the result the
+  screen closes with, as Flutter's Navigator keeps the route of a page with the same type and key. The first build of
+  12.6.0 (b705ff78) answered that code `null` at once: a picker answered `null` while still open, and a link to the
+  redirect a guard showed with `redirectUntil` left a blank screen.
+- **FIX**: a screen opened with a result type, such as with `push<int>`, and then reached again by `navigate`, a link,
+  `replace` or `replaceAll` closes again, even with system back. Since 12.5.0 closing it threw
+  `type 'AutoRoutePage<Object?>' is not a subtype of type 'Page<int>'`. The page that takes over a screen now keeps
+  its result type, and a page whose type the screen's route can't hold gets a route of its own, as in Flutter.
 - **BEHAVIOR CHANGE**: `AutoTabsRouter` passes a new `homeIndex` on when it is rebuilt with one, so back goes to the new
   home tab. A `homeIndex` past the end of the tabs counts as no home tab instead of throwing (#1759).
 - **BEHAVIOR CHANGE**: a guard that rejects a page of a nested router when the guards are reevaluated now updates the
