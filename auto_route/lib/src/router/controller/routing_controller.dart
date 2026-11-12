@@ -2609,8 +2609,9 @@ abstract class StackRouter extends RoutingController {
   /// wherever it goes. A kept screen keeps its state, its result type and the
   /// wait of the code that opened it, which gets the result the screen closes
   /// with, and its nested router shows the children the new page's route
-  /// names, as a nested router built anew would. The code that opened any
-  /// other page gets `null` as the page leaves.
+  /// names, as a nested router built anew would, once every guard lets the
+  /// batch in. The code that opened any other page gets `null` as the page
+  /// leaves.
   /// With [updateExistingRoutes] false, every new page gets a screen of its
   /// own.
   ///
@@ -2686,6 +2687,16 @@ abstract class StackRouter extends RoutingController {
       ..clear()
       ..addAll(previousPages);
     _stackKey = previousStackKey;
+    // A new page that kept a screen gave the screen's nested router its own
+    // data, see [_createRouteData]. The router belongs to the page put back.
+    for (final page in previousPages) {
+      final data = page.routeData;
+      for (final ctr in _childControllers) {
+        if (ctr.matchId == data.matchId && ctr.routeData != data) {
+          ctr.updateRouteData(data);
+        }
+      }
+    }
     markUrlStateForReplace();
     notifyAll(forceUrlRebuild: true);
   }
@@ -3061,6 +3072,16 @@ abstract class StackRouter extends RoutingController {
         match is ReevaluatableRouteMatch &&
         match.currentPage.routeData._isPoppedByNavigator;
     final link = root._startingLink;
+    // The page that takes over the screen on top opens its children in that
+    // screen's nested router only once every page is in, as the screens
+    // replaceAll keeps below the top do, see [_openChildrenInKeptScreens].
+    final takeovers = <RouteData<Object?>>[];
+    void openChildrenOfTakeovers() {
+      for (final data in takeovers) {
+        _openChildrenInTakenOverRouter(data, onFailure: onFailure);
+      }
+    }
+
     for (var i = 0; i < routes.length; i++) {
       if (wasPopped(routes[i])) break;
       final result = await _canNavigate(
@@ -3081,7 +3102,9 @@ abstract class StackRouter extends RoutingController {
           if (match is ReevaluatableRouteMatch) {
             _addReevaluatedPage(match, notify: false);
           } else {
-            unawaited(_addNewPage<T>(match, notify: false));
+            unawaited(
+              _addNewPage<T>(match, notify: false, takeovers: takeovers),
+            );
           }
         } else {
           _updateSharedPathData(
@@ -3092,8 +3115,10 @@ abstract class StackRouter extends RoutingController {
           onLastRouteAdded?.call(match);
           if (match is ReevaluatableRouteMatch) {
             _addReevaluatedPage(match, notify: notify);
+            openChildrenOfTakeovers();
           } else {
             final completer = _addNewPage<T>(match, notify: notify);
+            openChildrenOfTakeovers();
             if (pushed != null && !pushed.isCompleted) pushed.complete();
             // This is the last route, so the loop ends here either way.
             return returnLastRouteCompleter ? await completer : null;
@@ -3141,11 +3166,17 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
+  // Adds a page for [route] on top, or at [index]. A page that takes over the
+  // screen on top opens its children in that screen's nested router right
+  // after. With [takeovers], the page's data goes there instead, for a batch
+  // to open its children once the batch's last page is in: a guard later in
+  // the batch could still keep the batch out, or take its time.
   Future<T?> _addNewPage<T extends Object?>(
     RouteMatch<Object?> route, {
     bool notify = true,
     int? index,
     OnNavigationFailure? onFailure,
+    List<RouteData<Object?>>? takeovers,
   }) {
     final shownTop = _pages.lastOrNull?.routeData;
     if (shownTop != null && !shownTop._route.keepHistory) {
@@ -3198,7 +3229,11 @@ abstract class StackRouter extends RoutingController {
     // After the notification, so the url this page makes keeps its own replace
     // mark and the nested router's url gets one of its own.
     if (takenOver != null) {
-      _openChildrenInTakenOverRouter(data, onFailure: onFailure);
+      if (takeovers == null) {
+        _openChildrenInTakenOverRouter(data, onFailure: onFailure);
+      } else {
+        takeovers.add(data);
+      }
     }
     return switch (data.popped) {
       final Future<T?> popped => popped,

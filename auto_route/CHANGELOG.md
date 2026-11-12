@@ -25,6 +25,12 @@
 - **FIX**: a page holding a nested router or tabs that `replaceAll` keeps below the top, such as
   `ShellRoute(children: [ChildBRoute()])` under a new top page, now shows the children `replaceAll` names, as one kept
   on top already did. It kept showing its old children, and as the last page it stacked the new child over them.
+- **FIX**: a `replaceAll` that keeps the shell on top, such as `[HomeRoute(), ShellRoute(children: [ChildBRoute()]),
+  GuardedRoute()]` over `ShellRoute(children: [ChildARoute()])`, changes the shell's children only once every guard
+  lets the batch in. While a guard took its time, the shell already showed ChildBRoute and sent its url, and the new
+  top page then went in as a new history entry; a guard that rejected the batch left the shell on ChildBRoute, with
+  ChildARoute's state lost. A rejected batch also gives every kept screen's nested router back its own page's route
+  data, which the rejected page had taken.
 - **BEHAVIOR CHANGE**: `AutoTabsRouter` passes a new `homeIndex` on when it is rebuilt with one, so back goes to the new
   home tab. A `homeIndex` past the end of the tabs counts as no home tab instead of throwing (#1759).
 - **BEHAVIOR CHANGE**: a guard that rejects a page of a nested router when the guards are reevaluated now updates the
