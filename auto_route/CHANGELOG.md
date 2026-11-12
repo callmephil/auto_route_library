@@ -31,6 +31,11 @@
   top page then went in as a new history entry; a guard that rejected the batch left the shell on ChildBRoute, with
   ChildARoute's state lost. A rejected batch also gives every kept screen's nested router back its own page's route
   data, which the rejected page had taken.
+- **FIX**: the nested router of a shell that `replaceAll` keeps below the top keeps the route data of the page that
+  keeps the shell. When a guard rejected the batch before that page went in, the next page of the shell's route, such
+  as a `ShellRoute(children: [ChildCRoute()])` pushed later, took the old shell's nested router; and a page of the
+  shell's route earlier in the same batch took it from the page that keeps the shell. The shell's children then read
+  the other page's path params.
 - **BEHAVIOR CHANGE**: `AutoTabsRouter` passes a new `homeIndex` on when it is rebuilt with one, so back goes to the new
   home tab. A `homeIndex` past the end of the tabs counts as no home tab instead of throwing (#1759).
 - **BEHAVIOR CHANGE**: a guard that rejects a page of a nested router when the guards are reevaluated now updates the

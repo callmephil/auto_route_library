@@ -152,6 +152,8 @@ import 'replace_all_keeps_screen_below_top_test.dart'
     as replace_all_keeps_screen_below_top;
 import 'replace_all_kept_screen_shows_new_children_test.dart'
     as replace_all_kept_screen_shows_new_children;
+import 'replace_all_kept_shell_keeps_its_route_data_test.dart'
+    as replace_all_kept_shell_keeps_its_route_data;
 import 'replace_all_on_reevaluation_test.dart' as replace_all_on_reevaluation;
 import 'replace_all_parent_then_child_test.dart'
     as replace_all_parent_then_child;
@@ -371,6 +373,7 @@ void main() {
   replace_all_from_deep_stack.main();
   replace_all_keeps_screen_below_top.main();
   replace_all_kept_screen_shows_new_children.main();
+  replace_all_kept_shell_keeps_its_route_data.main();
   replace_all_on_reevaluation.main();
   replace_all_parent_then_child.main();
   replace_all_rejected.main();

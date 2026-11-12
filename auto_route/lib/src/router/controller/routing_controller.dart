@@ -2706,11 +2706,11 @@ abstract class StackRouter extends RoutingController {
   // route with the new page of the same route at its place, counted from the
   // bottom of the stack and then from the top, as Flutter's Navigator updates
   // the routes of pages it can update from either end. The screen and its
-  // state stay, so the new page takes over its result type and the wait of
-  // the code that opened it, see [_addNewPage], and its nested router, which
-  // shows the new page's children once the whole batch is in, see
-  // [_openChildrenInKeptScreens]. The screen the navigator shows on top is
-  // left to [_shownTopTakenOverBy].
+  // state stay, so the new page takes over its result type, the wait of the
+  // code that opened it and its nested router as it goes in, see
+  // [_addNewPage]. The router shows the new page's children once the whole
+  // batch is in, see [_openChildrenInKeptScreens]. The screen the navigator
+  // shows on top is left to [_shownTopTakenOverBy].
   List<RouteMatch<Object?>> _keepingScreensOf(
     List<AutoRoutePage<Object?>> previous,
     List<RouteMatch<Object?>> matches,
@@ -2732,11 +2732,6 @@ abstract class StackRouter extends RoutingController {
       if (page != shownTop) {
         kept[index] = match.withId(data.matchId);
         data._isKeptByReplaceAll = true;
-        for (final ctr in _childControllers) {
-          if (ctr.matchId == data.matchId) {
-            ctr._isMarkedForDataUpdate = true;
-          }
-        }
       }
       return true;
     }
@@ -3190,11 +3185,6 @@ abstract class StackRouter extends RoutingController {
       // it keeps its match id, as navigate does, for the router to stay its
       // own.
       match = route.withId(takenOver.matchId);
-      for (final ctr in _childControllers) {
-        if (ctr.matchId == takenOver.matchId) {
-          ctr._isMarkedForDataUpdate = true;
-        }
-      }
     }
     // A page that takes over a screen the navigator shows, as a navigation to
     // that screen does, keeps the screen's result type: the navigator keeps
@@ -3203,6 +3193,18 @@ abstract class StackRouter extends RoutingController {
     // which ends when the screen closes, as Flutter's Navigator keeps the
     // future of a route it keeps.
     final screen = takenOver ?? _shownDataThatLeftWithId(match.id);
+    // And the screen's nested router, which gets the page's data, see
+    // [_createRouteData]. Marked only as the page goes in: a mark made before
+    // stays if a guard keeps the page out, and the router would go to the
+    // next page of the route, as it would to an earlier page of the route in
+    // the same batch.
+    if (screen != null) {
+      for (final ctr in _childControllers) {
+        if (ctr.matchId == screen.matchId) {
+          ctr._isMarkedForDataUpdate = true;
+        }
+      }
+    }
     final page = switch (screen) {
       null => _createRouteData<T>(
         match,
