@@ -175,11 +175,28 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     }
     final platformDeepLink = PlatformDeepLink._(configuration, true);
     if (deepLinkBuilder != null) {
-      return await _handleDeepLink(await deepLinkBuilder!(platformDeepLink));
+      await _handleDeepLink(await deepLinkBuilder!(platformDeepLink));
+      return _reportRejectedLaunch();
     } else if (platformDeepLink.isValid) {
-      return await _handleDeepLink(platformDeepLink);
+      await _handleDeepLink(platformDeepLink);
+      return _reportRejectedLaunch();
     }
     throw FlutterError(_unresolvedMessage(platformDeepLink));
+  }
+
+  // The app opened at a link that put no page in, as when a guard rejected it.
+  // currentConfiguration stays null until a page is in, so the Router would
+  // leave the link in the address bar and a reload would open it again; now
+  // the empty url takes its place. A page that comes later is reported as usual.
+  void _reportRejectedLaunch() {
+    if (_hadPage || controller.hasEntries) return;
+    _hadPage = true;
+    // The rejected link's url was set before its guards ran.
+    controller.navigationHistory.onNewUrlState(
+      UrlState.fromSegments(const []).copyWith(shouldReplace: true),
+      notify: false,
+    );
+    notifyListeners();
   }
 
   Future<void> _handleDeepLink(

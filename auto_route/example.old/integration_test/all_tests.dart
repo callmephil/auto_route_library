@@ -160,6 +160,7 @@ import 'replace_all_kept_shell_keeps_its_route_data_test.dart'
 import 'replace_all_on_reevaluation_test.dart' as replace_all_on_reevaluation;
 import 'replace_all_parent_then_child_test.dart'
     as replace_all_parent_then_child;
+import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
 import 'replace_all_rejected_test.dart' as replace_all_rejected;
 import 'replace_all_shell_on_top_waits_for_guards_test.dart'
     as replace_all_shell_on_top_waits_for_guards;
@@ -382,6 +383,7 @@ void main() {
   replace_all_kept_shell_keeps_its_route_data.main();
   replace_all_on_reevaluation.main();
   replace_all_parent_then_child.main();
+  rejected_initial_link_url.main();
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
   replace_changed_path_param.main();

@@ -1,4 +1,7 @@
 ## Unreleased
+- **FIX**: an app opened at a link that a guard rejects, such as a browser opened at a protected page, no longer keeps
+  the rejected link in its url: the address bar and a reload show the page the app shows, or `/` when it shows none. The
+  Router reported nothing until a first page was in, so the browser kept the link.
 - **FIX**: `removeRoute` with the `RouteData` of a screen kept from before a navigation reached that screen again, such
   as a link to it with new query params, counts as the app's own removal, as with the `RouteData` the screen shows now.
   A push of the same route right after it builds a new page; it took over the screen just removed, with its old state.
