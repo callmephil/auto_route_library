@@ -2552,25 +2552,35 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
   }) {
     final scope = _findStackScope(route);
-    final replaced = scope._pages.lastOrNull?.routeData;
     return scope._push(
       route,
       onFailure: onFailure,
-      onAccepted: () {
-        // a guard may have removed it already, e.g. with redirectUntil(replace:
-        // true)
-        if (replaced != null &&
-            scope._pages.any((page) => page.routeData == replaced)) {
-          scope
-            .._markLeaving(
-              scope._pages.where((page) => page.routeData == replaced),
-              .replaced,
-            )
-            .._removeRoute(replaced._route, notify: false);
-        }
-        markUrlStateForReplace();
-      },
+      onAccepted: scope._replacingTop(),
     );
+  }
+
+  // For replace and replacePath: takes the page now on top off, and marks the
+  // url for replace, once the guards let the route that replaces it through.
+  // Until then the page stays on the stack, so a rejected route leaves the
+  // stack, the url and the wait of the code that opened the page as they were,
+  // as a canceled replace navigation leaves the current entry and url on the
+  // web, and Flutter's Navigator.pushReplacement takes the old route off in
+  // the same step that pushes the new one.
+  VoidCallback _replacingTop() {
+    final replaced = _pages.lastOrNull?.routeData;
+    return () {
+      // a guard may have removed it already, e.g. with redirectUntil(replace:
+      // true)
+      if (replaced != null &&
+          _pages.any((page) => page.routeData == replaced)) {
+        _markLeaving(
+          _pages.where((page) => page.routeData == replaced),
+          .replaced,
+        );
+        _removeRoute(replaced._route, notify: false);
+      }
+      markUrlStateForReplace();
+    };
   }
 
   Future<T?> _redirect<T extends Object?>(
@@ -3712,6 +3722,9 @@ abstract class StackRouter extends RoutingController {
   /// Removes last entry in stack and pushes given [path]
   /// if last entry.path == [path] page will just be updated
   ///
+  /// The last entry is removed only once the guards of the first route [path]
+  /// opens let it through; a rejected route leaves the stack as it was.
+  ///
   /// if [includePrefixMatches] is true prefixed-matches
   /// will be added to to target destination
   /// see [RouteMatcher.matchUri]
@@ -3730,11 +3743,12 @@ abstract class StackRouter extends RoutingController {
       onFailure: onFailure,
     );
     if (scope != null) {
-      scope.router
-        .._markLeaving(scope.router._pages.reversed.take(1), .replaced)
-        .._removeLast(notify: false);
-      markUrlStateForReplace();
-      return scope.router._pushAllGuarded(scope.matches, onFailure: onFailure);
+      final router = scope.router;
+      return router._pushAllGuarded(
+        scope.matches,
+        onFailure: onFailure,
+        onFirstRouteAccepted: router._replacingTop(),
+      );
     }
     return SynchronousFuture(null);
   }

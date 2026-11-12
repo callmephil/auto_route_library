@@ -163,6 +163,7 @@ import 'replace_all_rejected_test.dart' as replace_all_rejected;
 import 'replace_all_shell_on_top_waits_for_guards_test.dart'
     as replace_all_shell_on_top_waits_for_guards;
 import 'replace_changed_path_param_test.dart' as replace_changed_path_param;
+import 'replace_path_rejected_test.dart' as replace_path_rejected;
 import 'replace_rejected_test.dart' as replace_rejected;
 import 'replace_same_route_children_test.dart' as replace_same_route_children;
 import 'replace_while_animating_out_test.dart' as replace_while_animating_out;
@@ -382,6 +383,7 @@ void main() {
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
   replace_changed_path_param.main();
+  replace_path_rejected.main();
   replace_rejected.main();
   replace_same_route_children.main();
   replace_while_animating_out.main();
