@@ -26,7 +26,9 @@ class RouteData<R> {
   final Completer<R?>? _popCompleter;
 
   // The [AutoRouteLeaveListener]s in this page, told when the page is left.
-  final _leaveCallbacks = <RouteLeaveCallback>[];
+  // A page that takes over a screen the navigator shows shares the list of
+  // the screen's page before it, see [StackRouter._addNewPage].
+  var _leaveCallbacks = <RouteLeaveCallback>[];
 
   void _reportLeave(RouteLeaveKind kind) {
     for (final callback in List.of(_leaveCallbacks)) {

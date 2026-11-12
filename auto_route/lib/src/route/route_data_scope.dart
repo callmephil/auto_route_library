@@ -28,9 +28,13 @@ class RouteDataScope extends InheritedWidget {
     return scope!;
   }
 
+  /// Whether the widgets that depend on this scope rebuild: when the page
+  /// shows other route data, as when a new page takes over its route, or the
+  /// data's route changed.
   @override
   bool updateShouldNotify(covariant RouteDataScope oldWidget) {
-    return routeData.route != oldWidget.routeData.route;
+    return routeData != oldWidget.routeData ||
+        routeData.route != oldWidget.routeData.route;
   }
 
   @override

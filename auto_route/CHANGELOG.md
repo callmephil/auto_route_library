@@ -2,6 +2,11 @@
 - **FIX**: an app opened at a link that a guard rejects, such as a browser opened at a protected page, no longer keeps
   the rejected link in its url: the address bar and a reload show the page the app shows, or `/` when it shows none. The
   Router reported nothing until a first page was in, so the browser kept the link.
+- **FIX**: an `AutoRouteLeaveListener` in a screen that a navigation reaches again, such as `navigate` or a link to it,
+  `replace` with its route or a `replaceAll` that keeps it, goes on hearing the screen leave, as does one in a screen an
+  `AutoRouter.declarative` list keeps when the list changes. Since the listener came in (12.4.0) it heard nothing more
+  there: it stayed with the screen's first page, and the leave went to the page that took the screen over. Flutter's
+  Navigator keeps the route of a page of the same type and key, and a `PopScope` in it keeps hearing its pops.
 - **FIX**: `removeRoute` with the `RouteData` of a screen kept from before a navigation reached that screen again, such
   as a link to it with new query params, counts as the app's own removal, as with the `RouteData` the screen shows now.
   A push of the same route right after it builds a new page; it took over the screen just removed, with its old state.

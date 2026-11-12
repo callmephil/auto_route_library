@@ -17,11 +17,13 @@ part of 'routing_controller.dart';
 /// being opened can also stop them.
 ///
 /// It reports the changes of the stack of the router that shows its page.
-/// When a nested router goes away with its parent page, the listener in the
-/// parent page hears of it, not one in the nested pages. In a router built by
-/// [AutoRouter.declarative] only pops are reported, since the app's list
-/// decides the pages. Switching tabs is not a leave; [AutoRouteAware] reports
-/// tab changes.
+/// A navigation that reaches the page's screen again, such as `navigate` or a
+/// link to it, keeps the screen and this listener, which goes on hearing the
+/// screen leave. When a nested router goes away with its parent page, the
+/// listener in the parent page hears of it, not one in the nested pages. In a
+/// router built by [AutoRouter.declarative] only pops are reported, since the
+/// app's list decides the pages. Switching tabs is not a leave;
+/// [AutoRouteAware] reports tab changes.
 ///
 /// ```dart
 /// AutoRouteLeaveListener(
@@ -56,9 +58,13 @@ class _AutoRouteLeaveListenerState extends State<AutoRouteLeaveListener> {
 
   void _onLeave(RouteLeaveKind kind) => widget.onLeave(kind);
 
+  // Depends on the page's scope, so a new page the navigator gives this
+  // screen, as an app's declarative list does, moves the listener to that
+  // page's data, as a PopScope moves to a new route.
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    context.dependOnInheritedWidgetOfExactType<RouteDataScope>();
     final routeData = RouteData.of(context);
     if (routeData == _routeData) return;
     _routeData?._leaveCallbacks.remove(_onLeave);

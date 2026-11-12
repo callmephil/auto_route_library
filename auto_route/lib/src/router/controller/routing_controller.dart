@@ -3295,7 +3295,10 @@ abstract class StackRouter extends RoutingController {
     // the screen's route, and casts its page to the route's type when it
     // closes. It also keeps the wait of the code that opened the screen,
     // which ends when the screen closes, as Flutter's Navigator keeps the
-    // future of a route it keeps.
+    // future of a route it keeps. And it keeps the screen's leave listeners,
+    // which go on hearing the screen leave, as a PopScope in a route the
+    // Navigator keeps goes on hearing its pops. Now, not once the navigator
+    // shows the new page: a leave reported before then goes to this page.
     final screen = takenOver ?? _shownDataThatLeftWithId(match.id);
     // And the screen's nested router, which gets the page's data, see
     // [_createRouteData]. Marked only as the page goes in: a mark made before
@@ -3316,11 +3319,11 @@ abstract class StackRouter extends RoutingController {
         popCompleter: Completer<T?>(),
       ).buildPage<T>(),
       final shown => shown._withResultType(
-        <R>(data) => _createRouteData<R>(
+        <R>(data) => (_createRouteData<R>(
           match,
           routeData,
           popCompleter: data._pendingPopCompleter ?? Completer(),
-        ).buildPage<R>(),
+        ).._leaveCallbacks = data._leaveCallbacks).buildPage<R>(),
       ),
     };
     final data = page.routeData;
