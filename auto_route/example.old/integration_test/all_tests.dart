@@ -145,6 +145,8 @@ import 'reevaluate_deep_link_test.dart' as reevaluate_deep_link;
 import 'reevaluate_guarded_tab_child_test.dart' as reevaluate_guarded_tab_child;
 import 'reevaluation_nested_tabs_test.dart' as reevaluation_nested_tabs;
 import 'reevaluation_redirect_test.dart' as reevaluation_redirect;
+import 'reject_go_back_link_keeps_stack_test.dart'
+    as reject_go_back_link_keeps_stack;
 import 'reload_guard_test.dart' as reload_guard;
 import 'reload_hero_test.dart' as reload_hero;
 import 'remove_last_then_push_same_test.dart' as remove_last_then_push_same;
@@ -375,6 +377,7 @@ void main() {
   reevaluate_guarded_tab_child.main();
   reevaluation_nested_tabs.main();
   reevaluation_redirect.main();
+  reject_go_back_link_keeps_stack.main();
   reload_guard.main();
   reload_hero.main();
   remove_last_then_push_same.main();

@@ -48,6 +48,10 @@
   on screen, but `push<int>` of it had already finished with `null`, so the result the page closed with reached no one.
   The page `replacePath` with `includePrefixMatches` replaces, and the pages above its target that a link takes off,
   did the same when a later guard rejected the batch or its login page was canceled.
+- **FIX**: off the web, a link with a query or a fragment, such as `/secret?x=1`, whose guard calls
+  `reject(goBack: true)` leaves the stack as it was. Debug builds failed Flutter's duplicate page key assertion, and
+  release builds kept the page on screen twice, so closing it showed it again: the rejected batch and the router's
+  `back()` both put the page back.
 
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes

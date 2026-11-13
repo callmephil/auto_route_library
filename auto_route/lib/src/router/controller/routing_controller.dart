@@ -3264,7 +3264,9 @@ abstract class StackRouter extends RoutingController {
   // the pages below its own, rejects the whole batch: the pages the routes
   // before it put on the stack leave, and the pages they took off, such as a
   // top page that keeps no history, come back where they were. Pages others
-  // put on meanwhile, such as a guard's login page, stay. Flutter's Navigator
+  // put on meanwhile, such as a guard's login page, stay, and a screen they
+  // put back, as the back() of reject(goBack: true) does, is back once.
+  // Flutter's Navigator
   // takes a new list of pages as one update, Android applies a fragment
   // transaction as one atomic set of operations, and on the web a canceled
   // navigation leaves the url and the current entry as they were. A batch
@@ -3277,7 +3279,18 @@ abstract class StackRouter extends RoutingController {
     required List<AutoRoutePage<Object?>> takenOff,
   }) {
     final leaving = _pages.where(added.contains).toList();
-    final comingBack = takenOff.whereNot(_pages.contains).toList();
+    // The screens on the stack once the batch's pages leave. A page taken off
+    // whose screen another navigation put back meanwhile stays off: the page
+    // that holds the screen now keeps it, with its route and the wait of its
+    // caller, see [_addNewPage], and two pages of one screen would share its
+    // key.
+    final shownIds = {
+      for (final page in _pages)
+        if (!leaving.contains(page)) page.routeData.matchId,
+    };
+    final comingBack = takenOff
+        .whereNot((page) => shownIds.contains(page.routeData.matchId))
+        .toList();
     if (leaving.isEmpty && comingBack.isEmpty) return;
     // Where the batch's pages begin, so pages put on meanwhile stay on top.
     final firstLeaving = leaving.firstOrNull;
