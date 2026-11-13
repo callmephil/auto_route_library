@@ -1723,6 +1723,8 @@ Now, every time `AuthProvider` notifies listeners, the stack will be re-evaluate
 
 In the above example, we assigned our `AuthProvider` to `reevaluateListenable` directly, that's because `reevaluateListenable` takes a `Listenable` and AuthProvider extends `ChangeNotifier` which is a `Listenable`, if your auth provider is a stream you can use `reevaluateListenable: ReevaluateListenable.stream(YOUR-STREAM)`
 
+While a guard's check runs, for example while it awaits a request, its page stays on screen with its state, and so do the pages above it. Only the guard's answer closes a page: `resolver.reject()` closes it with the pages above it. A guard that returns without an answer, and without `resolver.redirectUntil`, holds its page back until it gives one.
+
 **Note**: When the Stack is re-evaluated, the whole existing hierarchy will be re-pushed, so if you want to stop re-evaluating routes at some point, pass `reevaluateNext: false`: `resolver.overrideNext(reevaluateNext: false)` continues without re-pushing the routes after the current one, and `resolver.reject(reevaluateNext: false)` stops.
 
 ```dart

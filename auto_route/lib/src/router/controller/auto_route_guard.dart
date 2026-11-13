@@ -456,10 +456,17 @@ class NavigationResolver {
   /// If there's an ongoing guard check, it waits for it to complete first
   /// before checking the provided [guard]
   /// returns the [ResolverResult] of the guard check
-  Future<ResolverResult> checkGuard(
+  Future<ResolverResult> checkGuard(AutoRouteGuard guard, StackRouter router) =>
+      _checkGuard(guard, router);
+
+  // [checkGuard], with [onLeftUndecided] called when [guard] returns without
+  // having resolved or redirected: it holds the navigation until it resolves
+  // later.
+  Future<ResolverResult> _checkGuard(
     AutoRouteGuard guard,
-    StackRouter router,
-  ) async {
+    StackRouter router, {
+    VoidCallback? onLeftUndecided,
+  }) async {
     if (_didReportRedirectLoop()) return await future;
     // Several reevaluations can wait for the same check; each takes its own
     // turn.
@@ -474,6 +481,7 @@ class NavigationResolver {
       _waitingCompleter = null;
       waiting.complete();
     }
+    if (!isResolved && !_isRedirecting) onLeftUndecided?.call();
     return await future;
   }
 }

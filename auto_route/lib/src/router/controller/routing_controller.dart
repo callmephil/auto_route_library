@@ -2002,6 +2002,12 @@ abstract class StackRouter extends RoutingController {
   ///
   /// e.g when the user is no longer authenticated
   /// and there are auth-protected routes in the stack
+  ///
+  /// While a guard's check runs, its page stays in the stack and on screen,
+  /// with the pages above it; only the guard's answer closes it. A guard that
+  /// returns without an answer, and without
+  /// [NavigationResolver.redirectUntil], holds its page back until it gives
+  /// one.
   Future<void> reevaluateGuards() async {
     final composed = await _composeMatchesForReevaluate();
     if (_isDisposed) return;
@@ -2430,7 +2436,11 @@ abstract class StackRouter extends RoutingController {
     // The anchor page is the first one from the top with its key, among the
     // pages that stay.
     final staying = _pages.sublist(0, end);
-    final anchorPage = staying.lastWhereOrNull((p) => p.routeKey == anchor.key);
+    // A reevaluation asks the guards of the pages where they are, so it
+    // reaches none again and takes none off here.
+    final anchorPage = isReevaluating
+        ? null
+        : staying.lastWhereOrNull((p) => p.routeKey == anchor.key);
     final anchorId = anchorPage?.routeData.matchId;
     if (anchorId != null) {
       // use the existing match id to avoid breaking child controllers
@@ -3126,6 +3136,21 @@ abstract class StackRouter extends RoutingController {
     bool wasPopped(RouteMatch<Object?> match) =>
         match is ReevaluatableRouteMatch &&
         match.currentPage.routeData._isPoppedByNavigator;
+    // A reevaluation asks the guards of each page with the page where it is:
+    // the stack stays as it is on screen while a guard's check runs, as
+    // Flutter's Router keeps building the current pages while its delegate
+    // waits, and as a sign-in check in flight leaves the screen up on iOS and
+    // Android. Only the guard's answer closes a page, with the pages above
+    // it, which the reevaluation has not asked yet. This takes off the pages
+    // of the routes from the one at [index] up.
+    void takeOffPagesFrom(int index) {
+      final leaving = {
+        for (final route in routes.skip(index))
+          if (route is ReevaluatableRouteMatch) route.currentPage.routeData,
+      };
+      _pages.removeWhere((page) => leaving.contains(page.routeData));
+    }
+
     // What the routes the guards let through did to the stack, undone when a
     // guard rejects a later route; see [_undoRejectedBatch]. The pages they
     // took off, such as a top page that keeps no history, keep their callers
@@ -3188,7 +3213,10 @@ abstract class StackRouter extends RoutingController {
 
     try {
       for (var i = 0; i < routes.length; i++) {
-        if (wasPopped(routes[i])) break;
+        if (wasPopped(routes[i])) {
+          takeOffPagesFrom(i + 1);
+          break;
+        }
         final result = await _canNavigate(
           routes[i],
           onFailure: onFailure,
@@ -3196,12 +3224,21 @@ abstract class StackRouter extends RoutingController {
               .whereIndexed((index, element) => index > i)
               .toList(),
           isReevaluating: isReevaluating,
+          // A guard that returns without an answer holds its page back until
+          // it gives one, as it holds back a page being pushed: the page
+          // waits off the stack, with the pages above it, and goes back on
+          // once the guard lets it through. The navigator isn't told, so the
+          // screen stays unless the guard shows a page of its own.
+          onLeftUndecided: isReevaluating ? () => takeOffPagesFrom(i) : null,
         );
         if (_isDisposed) break;
         // A later link took over while a guard decided.
         if (link != null && root._linkCount != link) break;
         final match = result.route;
-        if (wasPopped(match)) break;
+        if (wasPopped(match)) {
+          takeOffPagesFrom(i + 1);
+          break;
+        }
         if (result.continueNavigation) {
           final isLast = i == routes.length - 1;
           if (goesInAtOnce) {
@@ -3233,6 +3270,7 @@ abstract class StackRouter extends RoutingController {
           _takenOffByOpenBatches.addAll(left);
 
           if (isReevaluating && !result.reevaluateNext) {
+            takeOffPagesFrom(i + 1);
             break;
           }
         } else {
@@ -3241,6 +3279,7 @@ abstract class StackRouter extends RoutingController {
           if (match is ReevaluatableRouteMatch<Object?, Object?>) {
             _markLeaving([match.currentPage], .removed);
             _pages.remove(match.currentPage);
+            takeOffPagesFrom(i + 1);
             markUrlStateForReplace();
           } else if (!isReevaluating && !wasStackEmpty) {
             _undoRejectedBatch(
@@ -3559,6 +3598,7 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     List<RouteMatch<Object?>> pendingRoutes = const [],
     bool isReevaluating = false,
+    VoidCallback? onLeftUndecided,
   }) async {
     var routeToCheck = route;
     final guards = <AutoRouteGuard>[...root.guards, ...routeToCheck.guards];
@@ -3591,7 +3631,11 @@ abstract class StackRouter extends RoutingController {
       );
       final guardEntry = GuardEntry(guard, resolver);
       activeGuardObserver._add(guardEntry);
-      final result = await resolver.checkGuard(guard, this);
+      final result = await resolver._checkGuard(
+        guard,
+        this,
+        onLeftUndecided: onLeftUndecided,
+      );
       routeToCheck = result.route;
       if (!result.reevaluateNext) {
         shouldReevaluateNext = false;
@@ -3630,8 +3674,9 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
   }) async {
-    // A reevaluation takes every page off and puts back the ones its guards
-    // keep, so only the pages it closes are reported, once it ends.
+    // A reevaluation closes the pages its guards reject, and a guard may show
+    // a page of its own meanwhile, so the pages it closes are reported once
+    // it ends.
     if (isReevaluating && _leaveReportHolds == 0) {
       return await _holdingLeaveReports(
         () =>
@@ -3647,11 +3692,6 @@ abstract class StackRouter extends RoutingController {
     };
     bool wasReevaluated(AutoRoutePage<Object?> page) =>
         reevaluatedRoutes.contains(page.routeData);
-    final pushedMeanwhile = <AutoRoutePage<Object?>>[];
-    if (isReevaluating) {
-      pushedMeanwhile.addAll(_pages.whereNot(wasReevaluated));
-      _pages.clear();
-    }
     // Here alone, so a navigation reports once however it reaches this router.
     if (managedByWidget) _onNavigate(routes);
     Future<T?>? popped;
@@ -3682,12 +3722,13 @@ abstract class StackRouter extends RoutingController {
           return await popped;
         }
         if (isReevaluating) {
-          // put pages pushed before or during the reevaluation back on top of
-          // the reevaluated ones
-          final pushedDuring = _pages.whereNot(wasReevaluated).toList();
+          // Pages pushed before or during the reevaluation stay on top of
+          // the reevaluated ones, also of one a guard's redirect replaced
+          // and the reevaluation put back.
+          final pushedMeanwhile = _pages.whereNot(wasReevaluated).toList();
           _pages
             ..removeWhere((page) => !wasReevaluated(page))
-            ..addAll([...pushedMeanwhile, ...pushedDuring]);
+            ..addAll(pushedMeanwhile);
           if (_pages.where(wasReevaluated).length < reevaluatedRoutes.length) {
             await _reopenInitialRoutesIfEmptied();
             // Nothing else tells the navigator of a nested router that its
