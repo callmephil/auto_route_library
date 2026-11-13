@@ -29,8 +29,10 @@ import '../back_test_utils.dart';
 // makes no difference whether the guard shows it with redirectUntil, awaited
 // or not, or pushes it, at once or after a wait. A guard that shows no page
 // keeps them until it answers. They come back only if the guard then
-// rejects. A page the app pushes while a guard decides goes on over them and
-// is replaced with them.
+// rejects. While the guard's call still runs, a page the app pushes goes on
+// over them and is replaced with them; once that call has returned without
+// an answer, a page that goes on takes their place whoever puts it on, as
+// the guard then waits for something outside its call.
 // Android finishes the old screens of a task it clears as the new one
 // starts, iOS swaps a navigation stack in one step (setViewControllers), and
 // Flutter's Router keeps building the current pages while its delegate
@@ -310,15 +312,20 @@ void main() {
     expect(stackNames(router), ['HomeRoute']);
   });
 
-  // The app's own page is not the guard's: it goes on over the pages to
-  // replace, and is replaced with them.
+  // While the guard's own call still runs, the app's page is not the
+  // guard's: it goes on over the pages to replace, and is replaced with them.
   for (final isLetIn in [true, false]) {
-    testWidgets('A page the app pushes while a guard decides goes on over the '
-        'pages, and ${isLetIn ? 'is replaced with them' : 'stays when the '
+    testWidgets('A page the app pushes while the call of a guard still runs '
+        'goes on over the pages, and ${isLetIn ? 'is replaced with them' : 'stays when the '
                   'guard rejects'}', (tester) async {
-      final (router, signingIn, _) = await signOut(
+      final check = Completer<void>();
+      final (router, _, _) = await signOut(
         tester,
-        guardOf: answersLater,
+        guardOf: (session) => .simple((resolver, _) async {
+          if (session.isSignedIn.value) return resolver.next();
+          await check.future;
+          isLetIn ? resolver.next() : resolver.reject();
+        }),
         whileGuardDecides: (checking, _) async {
           unawaited(checking.push(const NamedRoute('HelpRoute')));
           await tester.pumpAndSettle();
@@ -327,6 +334,32 @@ void main() {
             'AccountRoute',
             'HelpRoute',
           ]);
+          check.complete();
+        },
+      );
+
+      expect(
+        stackNames(router),
+        isLetIn ? ['HomeRoute'] : ['HomeRoute', 'AccountRoute', 'HelpRoute'],
+      );
+    });
+  }
+
+  // Once the guard's call has returned without an answer, the guard waits
+  // for something outside it: a page that goes on then takes the place of
+  // the pages, whoever puts it on. They come back under it if the guard
+  // rejects.
+  for (final isLetIn in [true, false]) {
+    testWidgets('A page that goes on once the call of a guard has returned '
+        'takes the place of the pages, ${isLetIn ? 'and is replaced' : 'which '
+                  'come back when the guard rejects'}', (tester) async {
+      final (router, signingIn, _) = await signOut(
+        tester,
+        guardOf: answersLater,
+        whileGuardDecides: (checking, _) async {
+          unawaited(checking.push(const NamedRoute('HelpRoute')));
+          await tester.pumpAndSettle();
+          expect(stackNames(checking), ['HelpRoute']);
         },
       );
 
@@ -340,6 +373,58 @@ void main() {
       );
     });
   }
+
+  // Found by the review of this fix (Part 6, finding 2): the guard does not
+  // put the login page on itself. It asks the session for a sign-in and
+  // returns; a listener the app added at its start pushes the login page.
+  // Was, while only a page the guard's own code put on counted: [Home,
+  // Account, Login], and back from the login page showed the account.
+  testWidgets('The login page that a listener of the session pushes for a '
+      'guard is the only page, and back shows no account', (tester) async {
+    final needsSignIn = StreamController<StackRouter>.broadcast(sync: true);
+    addTearDown(needsSignIn.close);
+    // Added outside any guard's call.
+    final listener = needsSignIn.stream.listen(
+      (guarded) => unawaited(guarded.push(const NamedRoute('LoginRoute'))),
+    );
+    addTearDown(listener.cancel);
+    final (router, _, _) = await signOut(
+      tester,
+      guardOf: (session) => .simple((resolver, guarded) {
+        if (session.isSignedIn.value) return resolver.next();
+        session.signingIn.add(resolver);
+        needsSignIn.add(guarded);
+      }),
+    );
+
+    expect(stackNames(router), ['LoginRoute']);
+    expect(find.byType(BackButton), findsNothing);
+    await systemBack(tester);
+    expect(find.text('AccountRoute'), findsNothing);
+  });
+
+  // The same review finding: the guard pushes its login page in the next
+  // frame, as code that must not navigate during a build does.
+  testWidgets('The login page a guard pushes after the frame is the only '
+      'page, and back shows no account', (tester) async {
+    final (router, _, _) = await signOut(
+      tester,
+      guardOf: (session) => .simple((resolver, guarded) {
+        if (session.isSignedIn.value) return resolver.next();
+        session.signingIn.add(resolver);
+        WidgetsBinding.instance
+          ..addPostFrameCallback(
+            (_) => unawaited(guarded.push(const NamedRoute('LoginRoute'))),
+          )
+          ..ensureVisualUpdate();
+      }),
+    );
+
+    expect(stackNames(router), ['LoginRoute']);
+    expect(find.byType(BackButton), findsNothing);
+    await systemBack(tester);
+    expect(find.text('AccountRoute'), findsNothing);
+  });
 
   // The pages leave in the step in which the login page goes on, so that
   // step reports them.

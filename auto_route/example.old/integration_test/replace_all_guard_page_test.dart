@@ -20,17 +20,25 @@ void main() {
   group('replace all guard page', () {
     // Signed in, opens Home and pushes Account. Signs out and calls
     // replaceAll([HomeRoute]), whose guard sends a signed-out user to the
-    // login page and, with [awaitsRedirect], awaits that redirect. Checks
-    // that the login page is the only page, with no back button, then signs
-    // in on it and checks that Home opens alone.
+    // login page: with [awaitsRedirect] it awaits its redirect, and with
+    // [needsSignIn] it only asks the session there, whose listener shows the
+    // login page. Checks that the login page is the only page, with no back
+    // button, then signs in on it and checks that Home opens alone.
     Future<void> signOutAndIn(
       WidgetTester tester, {
-      required bool awaitsRedirect,
+      bool awaitsRedirect = false,
+      StreamController<StackRouter>? needsSignIn,
     }) async {
       final isSignedIn = ValueNotifier(true);
       addTearDown(isSignedIn.dispose);
       final signingIn = <NavigationResolver>[];
-      final guard = awaitsRedirect
+      final guard = needsSignIn != null
+          ? AutoRouteGuard.simple((resolver, router) {
+              if (isSignedIn.value) return resolver.next();
+              signingIn.add(resolver);
+              needsSignIn.add(router);
+            })
+          : awaitsRedirect
           ? AutoRouteGuard.simple((resolver, _) async {
               if (isSignedIn.value) return resolver.next();
               signingIn.add(resolver);
@@ -90,7 +98,7 @@ void main() {
     testWidgets(
       'The login page a guard of replaceAll shows is the only page, '
       'and signing in opens the new page alone',
-      (tester) => signOutAndIn(tester, awaitsRedirect: false),
+      signOutAndIn,
     );
 
     // The guard awaits its redirect, as the lints for futures that are not
@@ -101,6 +109,25 @@ void main() {
       'The login page of a guard of replaceAll that awaits its redirect is '
       'the only page, and signing in opens the new page alone',
       (tester) => signOutAndIn(tester, awaitsRedirect: true),
+    );
+
+    // The guard does not put the login page on itself: it asks the session
+    // for a sign-in and returns, and a listener the app added at its start
+    // pushes the login page.
+    // Was, while only a page the guard's own code put on took the place of
+    // the old pages: Home and Account stayed under the login page.
+    testWidgets(
+      'The login page that a listener of the session pushes for a guard of '
+      'replaceAll is the only page, and signing in opens the new page alone',
+      (tester) async {
+        final needsSignIn = StreamController<StackRouter>.broadcast(sync: true);
+        addTearDown(needsSignIn.close);
+        final listener = needsSignIn.stream.listen(
+          (router) => unawaited(router.push(const NamedRoute('LoginRoute'))),
+        );
+        addTearDown(listener.cancel);
+        await signOutAndIn(tester, needsSignIn: needsSignIn);
+      },
     );
 
     // Steps: open Home and push Account. Call replaceAll([HelpRoute]), whose

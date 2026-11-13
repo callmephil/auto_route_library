@@ -2344,6 +2344,22 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
+  // The replaceAll calls on this stack whose guards have not all answered,
+  // told of each new page that goes on, see [_reportPageGoesOn].
+  final _openReplacements = <_PagesReplacement>[];
+
+  // Called right before a new page goes on this stack. A replaceAll that
+  // waits for a guard hears of it: its pages to replace leave now when the
+  // page is the guard's own, which the zone the calling code runs in tells,
+  // or when the guard's call has returned without an answer, whoever puts
+  // the page on then, see [_replaceAllMatches].
+  void _reportPageGoesOn() {
+    NavigationResolver._reportPageGoesOn(this);
+    for (final replacement in List.of(_openReplacements)) {
+      replacement.onPageGoesOn();
+    }
+  }
+
   // Counts the pages taken off as replaced, for a replaceAll that waits
   // behind a guard's page to tell whether a page was replaced meanwhile, see
   // [_replaceAllMatches].
@@ -3181,10 +3197,11 @@ abstract class StackRouter extends RoutingController {
     final result = answer is ResolverResult ? answer : await answer;
     if (_isDisposed) return null;
     if (result.continueNavigation) {
-      // Before [onAccepted]: when this page is one a guard of replaceAll
-      // shows, the pages to replace leave first, so a redirect with replace
-      // finds none of them to replace and a rejection brings back them all.
-      NavigationResolver._reportPageGoesOn(this);
+      // Before [onAccepted]: when this page takes the place of the pages a
+      // replaceAll replaces, as one its guard shows, they leave first, so a
+      // redirect with replace finds none of them to replace and a rejection
+      // brings back them all.
+      _reportPageGoesOn();
       onAccepted?.call();
       _updateSharedPathData(
         queryParams: route.rawQueryParams,
@@ -3340,9 +3357,11 @@ abstract class StackRouter extends RoutingController {
   /// The pages are replaced in one step, once the guards of every one of
   /// [routes] have let it through. While a guard decides the stack stays as
   /// it is, and a guard that rejects one of [routes] rejects them all: the
-  /// stack stays as it was. A page that a guard shows before it
-  /// answers, such as a login with [NavigationResolver.redirectUntil], takes
-  /// the place of the pages as it goes on: back from that page shows none of
+  /// stack stays as it was. A page that a guard shows before it answers,
+  /// such as a login with [NavigationResolver.redirectUntil], takes the place
+  /// of the pages as it goes on, and so does a page that goes on once the
+  /// guard has returned without an answer, such as a login the app shows
+  /// when the guard asks for a sign-in: back from that page shows none of
   /// them, and they come back only if the guard then rejects. They stay gone
   /// once the app replaces the guard's page with another one, with [replace]
   /// or another [replaceAll]. A guard that shows no page keeps them until it
@@ -3401,8 +3420,16 @@ abstract class StackRouter extends RoutingController {
   // new one starts. A guard that shows no page, as one that asks in a dialog
   // or answers later from a callback, keeps them until it answers. They come
   // back only if the guard then rejects, and not once the app has replaced
-  // the guard's page with one of its own. A page the app itself pushes while
-  // a guard decides goes on over them, and is replaced with them.
+  // the guard's page with one of its own.
+  //
+  // Whose page it is matters only while the guard's call still runs, as
+  // while it awaits a request: then only the guard's own page takes their
+  // place, and a page the app pushes meanwhile goes on over them and is
+  // replaced with them. Once the guard's call has returned without an
+  // answer, the guard waits for something outside it, such as a sign-in the
+  // app shows from a listener of the session or in a later frame: from then
+  // on a page that goes on this stack takes their place, whoever puts it on,
+  // and one that went on during the call does as the call returns.
   //
   // A link's replacement, [isLink], keeps the pages under a guard's page:
   // they are the user's own pages, which the link found open, so back from
@@ -3425,24 +3452,48 @@ abstract class StackRouter extends RoutingController {
     var setAside = const <AutoRoutePage<Object?>>[];
     // [_replacedPagesCount] once they were set aside.
     var replacedThen = 0;
+    // Whether a guard's call has returned without an answer, and the guard
+    // has not answered since: it waits for something outside its call.
+    var isGuardWaiting = false;
+    // Sets the pages to replace aside for a page that is going on, or is on,
+    // in their place.
+    void setPagesAside() {
+      if (isLink) return;
+      final leaving = [...?pagesBefore?.where(_pages.contains)];
+      if (leaving.isEmpty) return;
+      setAside = [...setAside, ...leaving];
+      _markLeaving(leaving, .replaced);
+      replacedThen = _replacedPagesCount;
+      _pages.removeWhere(leaving.contains);
+      markUrlStateForReplace();
+    }
+
     return _navigateAll(
       matches,
       onFailure: onFailure,
       replacement: _PagesReplacement(
         onGuardShowsPage: (router) {
           // A page on another router is not in their place.
-          if (isLink || !identical(router, this)) return;
-          final leaving = [...?pagesBefore?.where(_pages.contains)];
-          if (leaving.isEmpty) return;
-          setAside = [...setAside, ...leaving];
-          _markLeaving(leaving, .replaced);
-          replacedThen = _replacedPagesCount;
-          _pages.removeWhere(leaving.contains);
-          markUrlStateForReplace();
+          if (identical(router, this)) setPagesAside();
+        },
+        onGuardReturned: () {
+          isGuardWaiting = true;
+          // A page that went on during the guard's call, put on by code
+          // that is not the guard's, such as a listener of the session the
+          // guard asked: it is in their place as the call returns.
+          final hasNewPage = _pages.any(
+            (page) => !(pagesBefore?.contains(page) ?? true),
+          );
+          if (hasNewPage) setPagesAside();
+        },
+        onGuardAnswered: () => isGuardWaiting = false,
+        onPageGoesOn: () {
+          if (isGuardWaiting) setPagesAside();
         },
         onAllAccepted: (accepted) {
           pagesBefore = null;
           setAside = const [];
+          isGuardWaiting = false;
           final replacing = updateExistingRoutes
               ? _keepingScreensOf(List.of(_pages), accepted)
               : accepted;
@@ -3459,6 +3510,7 @@ abstract class StackRouter extends RoutingController {
         },
         onRejected: () {
           pagesBefore = null;
+          isGuardWaiting = false;
           if (setAside.isEmpty) return;
           // The app replaced the guard's page meanwhile, with replace or
           // another replaceAll, as a "continue as guest" button on a login
@@ -4002,6 +4054,7 @@ abstract class StackRouter extends RoutingController {
       if (_isDisposed) return null;
     }
     if (isReevaluating) _reevaluationsInProgress++;
+    if (replacement != null) _openReplacements.add(replacement);
     try {
       for (var i = 0; i < routes.length; i++) {
         if (wasPopped(routes[i])) {
@@ -4024,13 +4077,17 @@ abstract class StackRouter extends RoutingController {
           // isn't told, so the screen stays unless the guard shows a page of
           // its own. A page under the guard's redirect stays, see
           // redirectUntil.
-          onLeftUndecided: isReevaluating
-              ? ({required isRedirecting}) {
-                  if (!isRedirecting) takeOffPagesFrom(i);
-                }
-              : null,
-          // The page a guard of replaceAll shows takes the place of the
-          // pages to replace, see [_replaceAllMatches].
+          //
+          // A guard of replaceAll that returns without an answer waits for
+          // something outside its call: from then on a page that goes on
+          // takes the place of the pages to replace whoever puts it on, see
+          // [_replaceAllMatches].
+          onLeftUndecided: ({required isRedirecting}) {
+            if (!isReevaluating) return replacement?.onGuardReturned();
+            if (!isRedirecting) takeOffPagesFrom(i);
+          },
+          // The page a guard of replaceAll shows itself takes their place
+          // also while its call still runs.
           onShowsPage: isReevaluating ? null : replacement?.onGuardShowsPage,
         );
         // No pause when every guard answers in its own call: the pages of a
@@ -4038,6 +4095,7 @@ abstract class StackRouter extends RoutingController {
         // reevaluation leaves no gap in which a page could be replaced
         // between its guard's answer and its place on the stack.
         final result = answer is ResolverResult ? answer : await answer;
+        replacement?.onGuardAnswered();
         if (_isDisposed) break;
         // A later link was let in while a guard decided. The pages this
         // link's guard set aside for its own page come back, unless a page
@@ -4077,6 +4135,7 @@ abstract class StackRouter extends RoutingController {
                 ? const <AutoRoutePage<Object?>>[]
                 : List.of(_pages);
             final going = replacement?.onAllAccepted(accepted) ?? accepted;
+            _openReplacements.remove(replacement);
             // The pages replaceAll takes off answer their callers in this
             // step, once the new pages are on and it is known whose screen
             // and wait a new page took over, as Flutter's Navigator ends the
@@ -4125,6 +4184,7 @@ abstract class StackRouter extends RoutingController {
       }
     } finally {
       _endWaitOfTakenOff(takenOff);
+      _openReplacements.remove(replacement);
       if (isReevaluating && --_reevaluationsInProgress == 0) {
         _heldBackByReevaluation.clear();
       }
@@ -4204,9 +4264,10 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     List<RouteData<Object?>>? takeovers,
   }) {
-    // The page of a guard that decides about a replaceAll takes the place of
-    // the pages to replace, which leave first, see [_replaceAllMatches].
-    NavigationResolver._reportPageGoesOn(this);
+    // A page that goes on while a guard decides about a replaceAll may take
+    // the place of the pages to replace, which leave first, see
+    // [_replaceAllMatches].
+    _reportPageGoesOn();
     final shownTop = _pages.lastOrNull?.routeData;
     // A top page that keeps no history leaves when a page goes on above it,
     // not when one goes in below it, as insert does: Flutter's Navigator
@@ -5093,6 +5154,9 @@ typedef _GuardHoldsCallback = void Function({required bool isRedirecting});
 class _PagesReplacement {
   const new({
     required this.onGuardShowsPage,
+    required this.onGuardReturned,
+    required this.onGuardAnswered,
+    required this.onPageGoesOn,
     required this.onAllAccepted,
     required this.onRejected,
   });
@@ -5100,6 +5164,16 @@ class _PagesReplacement {
   // A guard that has not answered puts a page of its own on the stack of the
   // given router, right after this returns.
   final ValueChanged<StackRouter> onGuardShowsPage;
+
+  // A guard's call returned without an answer.
+  final VoidCallback onGuardReturned;
+
+  // The guards of a route have answered.
+  final VoidCallback onGuardAnswered;
+
+  // A new page goes on the stack these pages are on, right after this
+  // returns, whoever puts it on.
+  final VoidCallback onPageGoesOn;
 
   // Every guard let the routes through; see [_RoutesChange].
   final _RoutesChange onAllAccepted;
@@ -5113,6 +5187,9 @@ class _PagesReplacement {
     ValueChanged<List<RouteMatch<Object?>>> then,
   ) => .new(
     onGuardShowsPage: onGuardShowsPage,
+    onGuardReturned: onGuardReturned,
+    onGuardAnswered: onGuardAnswered,
+    onPageGoesOn: onPageGoesOn,
     onRejected: onRejected,
     onAllAccepted: (accepted) {
       final replacing = onAllAccepted(accepted);
