@@ -2249,10 +2249,7 @@ abstract class StackRouter extends RoutingController {
     if (_leaveReportHolds > 0 || _isDisposed) return;
     final before = [for (final page in _pagesAtLastLeaveReport) page.routeData];
     final now = [for (final page in _pages) page.routeData];
-    final takenOver = {
-      for (final page in _pages)
-        if (!before.contains(page.routeData)) page.routeKey,
-    };
+    final takenOver = _takenOverScreens(_pagesAtLastLeaveReport, _pages);
     final previousPages = _pagesAtLastLeaveReport;
     _pagesAtLastLeaveReport = List.of(_pages);
     final kinds = Map.of(_leaveKinds);
@@ -2267,7 +2264,7 @@ abstract class StackRouter extends RoutingController {
     final leaves = <(RouteData<Object?>, RouteLeaveKind)>[
       for (final page in previousPages.reversed)
         if (!stillShown.contains(page.routeData) &&
-            !takenOver.contains(page.routeKey))
+            !takenOver.contains(page.routeData))
           (
             page.routeData,
             kinds[page.routeData] ??
@@ -2291,6 +2288,50 @@ abstract class StackRouter extends RoutingController {
             !_takenOffByOpenBatches.contains(page),
       ),
     );
+  }
+
+  // The pages of [before] whose screen a page of [after] takes over, so the
+  // screen stays: the pairs Flutter's Navigator makes as it updates its
+  // routes to new pages, by Page.canUpdate, first from the bottom, then from
+  // the top, then the rest by key. Only one page takes over a screen, so of
+  // two pages of one route that leave, the one whose screen no new page takes
+  // over has left.
+  static Set<RouteData<Object?>> _takenOverScreens(
+    List<AutoRoutePage<Object?>> before,
+    List<AutoRoutePage<Object?>> after,
+  ) {
+    final takenOver = <RouteData<Object?>>{};
+    // Pairs the page of [before] at [oldAt] with the page of [after] at
+    // [newAt] when the new page can take over its screen.
+    bool pairs(int oldAt, int newAt) {
+      final old = before.elementAtOrNull(oldAt);
+      final page = after.elementAtOrNull(newAt);
+      if (old == null || page == null || !page.canUpdate(old)) return false;
+      takenOver.add(old.routeData);
+      return true;
+    }
+
+    var bottom = 0;
+    while (pairs(bottom, bottom)) {
+      bottom++;
+    }
+    var oldTop = before.length - 1;
+    var newTop = after.length - 1;
+    while (oldTop >= bottom && newTop >= bottom && pairs(oldTop, newTop)) {
+      oldTop--;
+      newTop--;
+    }
+    final byKey = {
+      for (final page in before.sublist(bottom, oldTop + 1)) page.key: page,
+    };
+    for (final page in after.sublist(bottom, newTop + 1)) {
+      final old = byKey[page.key];
+      if (old != null && page.canUpdate(old)) {
+        takenOver.add(old.routeData);
+        byKey.remove(page.key);
+      }
+    }
+    return takenOver;
   }
 
   // The pop completers that the code which opened [pages] waits on.
