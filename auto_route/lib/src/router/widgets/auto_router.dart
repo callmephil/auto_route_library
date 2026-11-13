@@ -199,9 +199,11 @@ class AutoRouterState extends State<AutoRouter>
         });
       } else {
         // defer the setup of initial routes to the next frame
-        // so that we can have access to the context inside guards
+        // so that we can have access to the context inside guards. The router
+        // may have left the tree in the frame that built it, as a child laid
+        // out twice in one frame does; then there is nothing to set up.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _controller!.setupInitialRoutes();
+          _controller?.setupInitialRoutes();
         });
       }
     }
