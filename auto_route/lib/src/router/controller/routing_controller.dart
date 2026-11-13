@@ -2046,11 +2046,19 @@ abstract class StackRouter extends RoutingController {
     // no guard itself.
     final isLeftToNextRound = _askAgainRequests != requestsBefore;
     if (matches.isNotEmpty && !_isReevaluating && !isLeftToNextRound) {
+      // A request the last reevaluation left when a guard threw is met by
+      // this one.
+      _isAskingAgainDue = false;
       _isReevaluating = true;
       _isReevaluatingAgain = isAskingAgain;
-      await _navigateAll(matches, isReevaluating: true);
-      _isReevaluating = false;
-      _isReevaluatingAgain = false;
+      try {
+        await _navigateAll(matches, isReevaluating: true);
+      } finally {
+        // Also when a guard throws: the stack is as it was, and later
+        // reevaluations run.
+        _isReevaluating = false;
+        _isReevaluatingAgain = false;
+      }
       if (_isAskingAgainDue) {
         _isAskingAgainDue = false;
         if (!_isDisposed) await _reevaluateGuards(isAskingAgain: true);
@@ -3680,11 +3688,19 @@ abstract class StackRouter extends RoutingController {
       );
       final guardEntry = GuardEntry(guard, resolver);
       activeGuardObserver._add(guardEntry);
-      final result = await resolver._checkGuard(
-        guard,
-        this,
-        onLeftUndecided: onLeftUndecided,
-      );
+      final ResolverResult result;
+      try {
+        result = await resolver._checkGuard(
+          guard,
+          this,
+          onLeftUndecided: onLeftUndecided,
+        );
+      } finally {
+        // Also when the guard throws, as an async guard does when the
+        // request it awaits fails: the navigation is over, so no guard of it
+        // is in progress and no reevaluation asks it again.
+        activeGuardObserver._remove(guardEntry);
+      }
       routeToCheck = result.route;
       if (!result.reevaluateNext) {
         shouldReevaluateNext = false;
@@ -3693,10 +3709,8 @@ abstract class StackRouter extends RoutingController {
         if (onFailure != null) {
           onFailure(RejectedByGuardFailure(routeToCheck, guard));
         }
-        activeGuardObserver._remove(guardEntry);
         return result;
       }
-      activeGuardObserver._remove(guardEntry);
     }
     return ResolverResult(
       continueNavigation: true,
