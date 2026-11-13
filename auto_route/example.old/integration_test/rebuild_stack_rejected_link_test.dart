@@ -99,5 +99,76 @@ void main() {
       // running app this way only off it.
       skip: kIsWeb,
     );
+
+    // Steps: with rebuildStackOnDeepLink, open Home and push Details. The
+    // platform hands the app the link /account, whose guard shows a sign-in
+    // page in the place of the open pages; then the link /secret, which its
+    // guard rejects. The user cancels the sign-in, so the first guard
+    // rejects too.
+    // Was: no page was left, and the screen was blank.
+    // Should: Home and Details are back, as after the same rejection with no
+    // second link.
+    testWidgets(
+      'The pages come back when a second, rejected link came in while the '
+      'sign-in page of a link was open',
+      (tester) async {
+        final signingIn = <NavigationResolver>[];
+        final router = RootStackRouter.build(
+          routes: [
+            for (final (name, path) in [
+              ('HomeRoute', '/'),
+              ('DetailsRoute', '/details'),
+              ('SignInRoute', '/sign-in'),
+            ])
+              NamedRouteDef(
+                name: name,
+                path: path,
+                builder: (_, _) => page(name),
+              ),
+            NamedRouteDef(
+              name: 'AccountRoute',
+              path: '/account',
+              guards: [
+                AutoRouteGuard.simple((resolver, _) {
+                  signingIn.add(resolver);
+                  unawaited(
+                    resolver.redirectUntil(const NamedRoute('SignInRoute')),
+                  );
+                }),
+              ],
+              builder: (_, _) => page('AccountRoute'),
+            ),
+            NamedRouteDef(
+              name: 'SecretRoute',
+              path: '/secret',
+              guards: [
+                AutoRouteGuard.simple((resolver, _) => resolver.reject()),
+              ],
+              builder: (_, _) => page('SecretRoute'),
+            ),
+          ],
+        );
+        await pumpRouterConfigApp(
+          tester,
+          router.config(rebuildStackOnDeepLink: true),
+        );
+        unawaited(router.push(const NamedRoute('DetailsRoute')));
+        await tester.pumpAndSettle();
+
+        await openLink(tester, '/account');
+        final atSignIn = router.stack.map((page) => page.name).toList();
+        await openLink(tester, '/secret');
+        signingIn.firstOrNull?.reject();
+        await tester.pumpAndSettle();
+
+        expect(atSignIn, ['SignInRoute']);
+        expect(router.stack.map((page) => page.name), [
+          'HomeRoute',
+          'DetailsRoute',
+        ]);
+        expect(find.text('DetailsRoute'), findsOneWidget);
+      },
+      skip: kIsWeb,
+    );
   });
 }

@@ -152,4 +152,36 @@ void main() {
       },
     );
   }
+
+  // Found while proving a lead of the second audit of the library.
+  // Steps: a link whose guard shows a sign-in page puts it in the place of
+  // the open pages. A second link comes in and a guard rejects it. Then the
+  // first link's guard rejects, as when the user cancels the sign-in.
+  // Was: no page was left. The first link stopped as one a later link had
+  // taken over, without the step that brings back the pages its guard's
+  // page had taken the place of.
+  // Should: the open pages are back, as after the same rejection with no
+  // second link: a refused navigation changes nothing.
+  testWidgets('The pages come back when a second, rejected link came in '
+      'while the sign-in page of a link was open', (tester) async {
+    final router = buildRouter();
+    await pumpRouterConfigApp(
+      tester,
+      router.config(rebuildStackOnDeepLink: true),
+    );
+    await openDetails(tester, router);
+
+    await tester.binding.handlePushRoute('/account');
+    await tester.pumpAndSettle();
+    final atSignIn = stackNames(router);
+    final firstLink = signingIn;
+    await tester.binding.handlePushRoute('/guarded');
+    await tester.pumpAndSettle();
+    firstLink?.reject();
+    await tester.pumpAndSettle();
+
+    expect(atSignIn, ['OtherRoute']);
+    expect(stackNames(router), ['HomeRoute', 'DetailsRoute']);
+    expect(find.text('DetailsRoute'), findsOneWidget);
+  });
 }
