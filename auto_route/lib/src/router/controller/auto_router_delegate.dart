@@ -820,18 +820,28 @@ abstract class DeepLink {
   static const DeepLink none = _IgnoredDeepLink();
 
   /// Helper function to remove the prefix path of a [Uri]
-  /// You can use this method to remove the prefix of a path
-  /// the prefix should start with a `/`
+  /// You can use this method to remove the prefix of a path, such as '/app'
+  /// from 'https://app.example.com/app/books/1', which becomes
+  /// 'https://app.example.com/books/1'
   ///
-  /// If not able to parse the resulting Uri, return the original
+  /// The prefix is one or more whole segments at the start of the path, with
+  /// or without its leading `/`: '/app' strips '/app/books' and '/app', not
+  /// '/application'. The host, query and fragment stay; a path the prefix
+  /// doesn't start is left as it is
   static DeepLinkTransformer prefixStripper(String prefix) {
+    var segments = prefix;
+    while (segments.endsWith('/')) {
+      segments = segments.substring(0, segments.length - 1);
+    }
+    final prefixPath = segments.startsWith('/') ? segments : '/$segments';
     return (Uri uri) {
-      if (!uri.path.startsWith(prefix)) {
+      final path = uri.path;
+      if (prefixPath == '/' ||
+          (path != prefixPath && !path.startsWith('$prefixPath/'))) {
         return SynchronousFuture(uri); // No change if prefix not found
       }
-      return SynchronousFuture(
-        Uri.tryParse(uri.toString().replaceFirst(prefix, '')) ?? uri,
-      );
+      final rest = path.substring(prefixPath.length);
+      return SynchronousFuture(uri.replace(path: rest.isEmpty ? '/' : rest));
     };
   }
 }

@@ -1166,12 +1166,12 @@ MaterialApp.router(
 );
 ```
 
-**Note** for prefix stripping use the shipped-in `DeepLink.prefixStripper('prefix')`
+**Note** for prefix stripping use the shipped-in `DeepLink.prefixStripper('/prefix')`, which strips the prefix from the path alone, as whole segments
 
 ```dart
 MaterialApp.router(
   routerConfig: _appRouter.config(
-    deepLinkTransformer: DeepLink.prefixStripper('prefix'),
+    deepLinkTransformer: DeepLink.prefixStripper('/prefix'),
   ),
 );
 ```

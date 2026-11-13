@@ -129,6 +129,7 @@ import 'predictive_back_nested_under_root_test.dart'
     as predictive_back_nested_under_root;
 import 'prefix_matches_nested_test.dart' as prefix_matches_nested;
 import 'prefix_matches_tabs_test.dart' as prefix_matches_tabs;
+import 'prefix_stripper_test.dart' as prefix_stripper;
 import 'push_all_nested_routes_test.dart' as push_all_nested_routes;
 import 'push_all_waits_for_guard_test.dart' as push_all_waits_for_guard;
 import 'push_and_pop_until_async_test.dart' as push_and_pop_until_async;
@@ -430,6 +431,7 @@ void main() {
   rebuild_stack_rejected_link.main();
   rejected_link_url_running.main();
   slow_link_builder_order.main();
+  prefix_stripper.main();
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
   replace_all_slow_guard.main();
