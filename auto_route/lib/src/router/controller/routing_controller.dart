@@ -2344,6 +2344,11 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
+  // The pages that replaceAll calls set aside for a page that went on in
+  // their place while a guard decides. They may come back, so no new page
+  // takes over the screen of one of them, see [_shownTopTakenOverBy].
+  final _setAsideByReplaceAll = <AutoRoutePage<Object?>>{};
+
   // The replaceAll calls on this stack whose guards have not all answered,
   // told of each new page that goes on, see [_reportPageGoesOn].
   final _openReplacements = <_PagesReplacement>[];
@@ -3467,6 +3472,7 @@ abstract class StackRouter extends RoutingController {
       final leaving = [...?pagesBefore?.where(_pages.contains)];
       if (leaving.isEmpty) return;
       setAside = [...setAside, ...leaving];
+      _setAsideByReplaceAll.addAll(leaving);
       _markLeaving(leaving, .replaced);
       _pages.removeWhere(leaving.contains);
       placeTaker ??= isPageOn ? _pages.firstOrNull?.routeData : null;
@@ -3503,6 +3509,7 @@ abstract class StackRouter extends RoutingController {
         },
         onAllAccepted: (accepted) {
           pagesBefore = null;
+          _setAsideByReplaceAll.removeAll(setAside);
           setAside = const [];
           isGuardWaiting = false;
           isPlaceOpen = false;
@@ -3525,6 +3532,7 @@ abstract class StackRouter extends RoutingController {
           pagesBefore = null;
           isGuardWaiting = false;
           if (setAside.isEmpty) return;
+          _setAsideByReplaceAll.removeAll(setAside);
           // The app replaced the page that took their place, with replace
           // or another replaceAll, as a "continue as guest" button on a
           // guard's login page does: the guard's redirect ended with its
@@ -4389,7 +4397,8 @@ abstract class StackRouter extends RoutingController {
   // as navigate gives it, comes with a caller that updates that router. A
   // [route] with the match id of another page that left takes over that
   // page's screen instead, as replaceAll gives it. A page the app removed
-  // itself keeps its route (#1204).
+  // itself keeps its route (#1204), and so does one that replaceAll set
+  // aside for a guard's page, which may come back.
   RouteData<Object?>? _shownTopTakenOverBy(RouteMatch<Object?> route) {
     final shownRoute = pagelessRoutesObserver.topPageRoute;
     final shownPage = shownRoute?.settings;
@@ -4397,6 +4406,7 @@ abstract class StackRouter extends RoutingController {
         !shownRoute.isActive ||
         shownPage is! AutoRoutePage<Object?> ||
         shownPage.isRemoved ||
+        _setAsideByReplaceAll.contains(shownPage) ||
         _pages.contains(shownPage)) {
       return null;
     }

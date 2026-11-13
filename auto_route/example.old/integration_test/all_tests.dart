@@ -242,6 +242,8 @@ import 'repeated_query_key_test.dart' as repeated_query_key;
 import 'replace_all_from_deep_stack_test.dart' as replace_all_from_deep_stack;
 import 'replace_all_from_redirect_page_test.dart'
     as replace_all_from_redirect_page;
+import 'replace_all_guard_page_of_top_route_test.dart'
+    as replace_all_guard_page_of_top_route;
 import 'replace_all_guard_page_replaced_test.dart'
     as replace_all_guard_page_replaced;
 import 'replace_all_guard_page_test.dart' as replace_all_guard_page;
@@ -569,6 +571,7 @@ void main() {
   replace_all_from_deep_stack.main();
   replace_all_from_redirect_page.main();
   replace_all_guard_page.main();
+  replace_all_guard_page_of_top_route.main();
   replace_all_guard_page_replaced.main();
   replace_all_keeps_screen_below_top.main();
   replace_all_kept_screen_shows_new_children.main();
