@@ -45,6 +45,7 @@ import 'eager_tabs_test.dart' as eager_tabs;
 import 'empty_list_query_param_test.dart' as empty_list_query_param;
 import 'empty_nested_router_test.dart' as empty_nested_router;
 import 'encoded_deep_link_test.dart' as encoded_deep_link;
+import 'encoded_link_back_test.dart' as encoded_link_back;
 import 'encoded_path_params_test.dart' as encoded_path_params;
 import 'encoded_url_test.dart' as encoded_url;
 import 'enum_query_param_test.dart' as enum_query_param;
@@ -324,6 +325,7 @@ void main() {
   empty_list_query_param.main();
   empty_nested_router.main();
   encoded_deep_link.main();
+  encoded_link_back.main();
   encoded_path_params.main();
   encoded_url.main();
   enum_query_param.main();
