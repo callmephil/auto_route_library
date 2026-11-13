@@ -31,8 +31,16 @@ class _AutoTabsRouterBuilderState
     widget.onRouterReady?.call(_controller!);
     _didInitTabRoute(_controller!.activeIndex);
     _activeTab = _activeTabId;
+    _opensFirstTime(_activeTab);
     _controller!.addListener(_onTabsChanged);
   }
+
+  // The tabs reported as opened: a tab's first opening is an init, a return
+  // to it a change, as the default tabs report them.
+  final _openedTabs = <LocalKey>{};
+
+  // Whether [tab] opens for the first time, which it then counts as.
+  bool _opensFirstTime(LocalKey? tab) => tab != null && _openedTabs.add(tab);
 
   // The active tab last reported, by page, not index: a change of the tabs
   // list can move it to another index. The tabs router also notifies when a
@@ -49,10 +57,17 @@ class _AutoTabsRouterBuilderState
     final activeTab = _activeTabId;
     if (activeTab != _activeTab) {
       _activeTab = activeTab;
-      _didChangeTabRoute(
-        _controller!.activeIndex,
-        _controller!.previousIndex ?? 0,
-      );
+      if (_opensFirstTime(activeTab)) {
+        _didInitTabRoute(
+          _controller!.activeIndex,
+          _controller!.previousIndex ?? -1,
+        );
+      } else {
+        _didChangeTabRoute(
+          _controller!.activeIndex,
+          _controller!.previousIndex ?? 0,
+        );
+      }
       widget.onNavigate?.call(_controller!);
     }
   }
@@ -74,8 +89,16 @@ class _AutoTabsRouterBuilderState
       oldWidget.routes,
     )) {
       _controller!.replaceAll(widget.routes, _controller!.activeIndex);
-      // Like the default tabs, a change of the list reports no tab change.
+      // Like the default tabs, a change of the list reports no tab change,
+      // only the opening of a tab not opened before.
       _activeTab = _activeTabId;
+      final tabs = {
+        for (final page in _controller!.stack) page.routeData.matchId,
+      };
+      _openedTabs.retainWhere(tabs.contains);
+      if (_opensFirstTime(_activeTab)) {
+        _didInitTabRoute(_controller!.activeIndex);
+      }
       widget.onNavigate?.call(_controller!);
     }
   }
