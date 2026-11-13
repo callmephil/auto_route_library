@@ -5150,12 +5150,25 @@ class NestedStackRouter extends StackRouter {
   // the page that was kept out, names the page on screen, in the same
   // history entry: on the web a canceled navigation leaves the url of the
   // document on screen.
+  //
+  // While a guard of a later page decides, the pages before it that went on,
+  // such as the page a link brings below its own, show: a page on the stack
+  // is a page on screen, as Flutter's Navigator shows the pages its list
+  // holds. The url is left to the answer. A router that is named one page
+  // alone has none to show meanwhile and shows its placeholder.
   Future<void> _openPendingRoutes(List<RouteMatch<Object?>> routes) async {
     var isLastPageOn = false;
     await _pushAllGuarded(
       routes,
       returnLastRouteCompleter: false,
       onLastRouteAdded: (_) => isLastPageOn = true,
+      // The batch goes on without a pause until a guard makes it wait. So
+      // when its last page is not on a microtask after its first, a guard is
+      // deciding, or has kept a page out, and nobody has told the navigator
+      // of the pages that went on.
+      onFirstRouteAccepted: () => scheduleMicrotask(() {
+        if (!isLastPageOn && !_isDisposed) notifyListeners();
+      }),
     );
     if (isLastPageOn || _isDisposed) return;
     // The pages kept out are the ones this router opens with, as when its

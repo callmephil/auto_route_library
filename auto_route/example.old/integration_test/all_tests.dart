@@ -352,6 +352,8 @@ import 'two_navigations_to_one_page_test.dart' as two_navigations_to_one_page;
 import 'two_pushes_one_turn_test.dart' as two_pushes_one_turn;
 import 'typed_screen_reached_again_test.dart' as typed_screen_reached_again;
 import 'typed_url_test.dart' as typed_url;
+import 'unbuilt_nested_router_while_guard_decides_test.dart'
+    as unbuilt_nested_router_while_guard_decides;
 import 'universal_link_test.dart' as universal_link;
 import 'unmatched_deep_link_test.dart' as unmatched_deep_link;
 import 'unopened_tab_children_after_reevaluation_test.dart'
@@ -671,6 +673,7 @@ void main() {
   two_pushes_one_turn.main();
   typed_screen_reached_again.main();
   typed_url.main();
+  unbuilt_nested_router_while_guard_decides.main();
   universal_link.main();
   unmatched_deep_link.main();
   unopened_tab_children_after_reevaluation.main();

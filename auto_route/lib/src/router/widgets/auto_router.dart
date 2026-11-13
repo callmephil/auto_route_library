@@ -48,6 +48,12 @@ class AutoRouter extends StatefulWidget {
   /// A builder for the placeholder page that is shown
   /// before the first route can be rendered. Defaults to
   /// an empty page with `Theme.scaffoldBackgroundColor`.
+  ///
+  /// It also shows while a guard decides about the one page a path or a link
+  /// opens this router with, as a guard that awaits a request does: the
+  /// router has no page until the guard answers. Build what the user sees
+  /// meanwhile here, such as a progress indicator. A link that brings the
+  /// router's first page below its own shows that page meanwhile.
   final WidgetBuilder? placeholder;
 
   /// The clip behavior of the navigator
