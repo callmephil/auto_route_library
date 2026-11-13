@@ -1197,6 +1197,8 @@ class TabsRouter extends RoutingController {
     final match = route ?? _pages.elementAtOrNull(index)?.routeData._route;
     if (match == null) return _TabChange.done;
     final change = ++_tabChanges;
+    // What a link that changes the tab does once the tab's guards let it in.
+    final onLinkAccepted = root._takeLinkAcceptedStep();
     final checked = _checkTabGuards(match, onFailure: onFailure);
     if (checked is ResolverResult) {
       return _endTabChange(
@@ -1204,6 +1206,7 @@ class TabsRouter extends RoutingController {
         index,
         match,
         checked,
+        onLinkAccepted: onLinkAccepted,
         notify: notify,
         update: route != null,
         onFailure: onFailure,
@@ -1221,6 +1224,7 @@ class TabsRouter extends RoutingController {
         index,
         match,
         result,
+        onLinkAccepted: onLinkAccepted,
         update: route != null,
         onFailure: onFailure,
         remember: remember,
@@ -1234,6 +1238,7 @@ class TabsRouter extends RoutingController {
     int index,
     RouteMatch<Object?> match,
     ResolverResult result, {
+    VoidCallback? onLinkAccepted,
     bool notify = true,
     bool update = false,
     OnNavigationFailure? onFailure,
@@ -1248,6 +1253,7 @@ class TabsRouter extends RoutingController {
       if (notify) notifyListeners();
       return .rejected;
     }
+    onLinkAccepted?.call();
     // A guard may have overridden the route, e.g. its args.
     final updated = update || !identical(result.route, match)
         ? _updateTabPage(index, result.route)
@@ -3522,8 +3528,14 @@ abstract class StackRouter extends RoutingController {
           }
           if (isLast) {
             // The link that starts the batch is let in, before its pages go
-            // on.
-            onLinkAccepted?.call();
+            // on; or, when it goes on into the nested router of the page it
+            // reaches again, once the guards there let it in.
+            if (onLinkAccepted != null) {
+              _innerControllerOfMatch(match.id) != null &&
+                      (match.children?.isNotEmpty ?? false)
+                  ? root._linkAccepted = onLinkAccepted
+                  : onLinkAccepted();
+            }
             // With [replacement], the routes go on as it returns them, after
             // what it does to the stack.
             final accepted = [...held, match];
@@ -4087,6 +4099,8 @@ abstract class StackRouter extends RoutingController {
   // on top are popped, those under pages leaving now are removed unseen.
   // A guard reevaluation keeps them, since a guard may be showing one.
   void _closePagelessRoutesOverTop() {
+    // A link that goes on into a nested router closes them once let in.
+    if (root._deferToLinkAccepted(_closePagelessRoutesOverTop)) return;
     final top = _pages.lastOrNull;
     if (top == null) return;
     final shownRoute = pagelessRoutesObserver.routeWhere(

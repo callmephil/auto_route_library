@@ -199,16 +199,49 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     notifyListeners();
   }
 
+  // Opens [deepLink]. The pageless routes in [closing], such as a dialog the
+  // link came over, close only once its guards let it in: a link the app
+  // turns down changes nothing on screen.
   Future<void> _handleDeepLink(
     DeepLink deepLink, {
     bool replacesLaunchPage = false,
+    List<Route<Object?>> closing = const [],
   }) {
     if (deepLink is _IgnoredDeepLink) return SynchronousFuture(null);
 
     if (!deepLink.isValid) throw FlutterError(_unresolvedMessage(deepLink));
     return controller.root._openLink(
       () => _openDeepLink(deepLink, replacesLaunchPage: replacesLaunchPage),
+      onAccepted: () => _closePagelessRoutes(closing),
     );
+  }
+
+  // The dialogs, sheets and other pageless routes over the top page of the
+  // top-most router, the newest first.
+  List<Route<Object?>> _pagelessRoutesOnTop() {
+    final topMost = controller.topMostRouter();
+    if (topMost is! StackRouter || !topMost.hasPagelessTopRoute) {
+      return const [];
+    }
+    final observer = topMost.pagelessRoutesObserver;
+    final pageRoute = observer.topPageRoute;
+    if (pageRoute == null) return const [];
+    return observer.pagelessRoutesOver(pageRoute).reversed.toList();
+  }
+
+  // Closes the pageless [routes], the newest first, that are still open: the
+  // one on top is popped, one a page now covers, such as a guard's sign-in
+  // page, is removed unseen.
+  static void _closePagelessRoutes(List<Route<Object?>> routes) {
+    for (final route in routes) {
+      final navigator = route.navigator;
+      if (navigator == null || !route.isActive) continue;
+      if (route.isCurrent) {
+        navigator.pop();
+      } else {
+        navigator.removeRoute(route);
+      }
+    }
   }
 
   Future<void> _openDeepLink(
@@ -349,16 +382,17 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       history.returnBrowserToApp();
       return;
     }
-    final topMost = controller.topMostRouter();
-    if (topMost is StackRouter && topMost.hasPagelessTopRoute) {
-      topMost._popUntilNow((route) => route.settings is Page, isScoped: true);
-    }
+    final pageless = _pagelessRoutesOnTop();
 
     final pageToPush = history.pageToPushForBrowserEntry(configuration);
     if (pageToPush != null) {
       final (stack, page) = pageToPush;
       // The future completes when the page is popped.
-      unawaited(stack._pushAllGuarded([page]));
+      unawaited(
+        stack._pushAllGuarded([
+          page,
+        ], onFirstRouteAccepted: () => _closePagelessRoutes(pageless)),
+      );
     } else if (configuration.hasSegments) {
       final entryRoutes = controller.navigationHistory.routesOfBrowserEntry(
         configuration,
@@ -384,6 +418,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       await _handleDeepLink(
         resolvedLink,
         replacesLaunchPage: replacesLaunchPage,
+        closing: pageless,
       );
     }
 

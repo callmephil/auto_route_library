@@ -32,40 +32,72 @@ abstract class RootStackRouter extends StackRouter {
   // The count of the link whose navigation is starting, while it starts.
   int? _startingLink;
 
-  // What the link whose navigation is starting does once it is let in, until
-  // the guarded navigation it starts takes it, see [_takeLinkAcceptedStep].
-  VoidCallback? _startingLinkAccepted;
+  // Holds, in the zone a link's navigation runs in, the count of that link.
+  static final _linkZone = Object();
+
+  // What the link counted [_acceptingLink] does once it is let in, until a
+  // guarded navigation of that link takes it, see [_takeLinkAcceptedStep].
+  VoidCallback? _linkAccepted;
+  int? _acceptingLink;
 
   // Runs [open], which starts the navigation of a new link, as that link's.
-  // The navigation starts before [open] returns, up to its first guard.
-  // [onAccepted] runs once the guards let the link in, so a link the app
-  // turns down changes nothing else; at once when the navigation asks no
-  // stack guard, such as a tab change.
+  // The navigation starts before [open] returns, up to its first guard, and
+  // what it does later, such as navigating the nested router of a page
+  // already open or a tabs router, runs in a zone that names the link.
+  // [onAccepted] runs once the guards that navigation asks let the link in,
+  // so a link the app turns down changes nothing else; when it asks no
+  // guard, such as a link to the page already open, once it ends.
   Future<void> _openLink(
     Future<void> Function() open, {
     VoidCallback? onAccepted,
   }) {
-    _startingLink = ++_linkCount;
-    _startingLinkAccepted = onAccepted;
+    final link = _startingLink = ++_linkCount;
+    _linkAccepted = onAccepted;
+    _acceptingLink = link;
     final Future<void> navigation;
-    VoidCallback? untaken;
     try {
-      navigation = open();
+      navigation = runZoned(open, zoneValues: {_linkZone: link});
     } finally {
       _startingLink = null;
-      untaken = _startingLinkAccepted;
-      _startingLinkAccepted = null;
     }
-    untaken?.call();
+    if (_acceptingLink == link && _linkAccepted != null) {
+      // The navigation's own failure reaches its caller, which awaits it.
+      unawaited(
+        navigation.then(
+          (_) => _takeAcceptedStepOf(link)?.call(),
+          onError: (Object _) => null,
+        ),
+      );
+    }
     return navigation;
   }
 
-  // The step the link whose navigation is starting takes once it is let in,
-  // for the guarded navigation that starts it to run; null for any other.
-  VoidCallback? _takeLinkAcceptedStep() {
-    final step = _startingLinkAccepted;
-    _startingLinkAccepted = null;
+  // The count of the link whose navigation runs now, or null.
+  int? get _currentLink => _startingLink ?? Zone.current[_linkZone] as int?;
+
+  // The step the link whose navigation runs takes once it is let in, for
+  // the guarded navigation it starts to run; null for any other navigation
+  // and once taken.
+  VoidCallback? _takeLinkAcceptedStep() => _takeAcceptedStepOf(_currentLink);
+
+  VoidCallback? _takeAcceptedStepOf(int? link) {
+    if (link == null || link != _acceptingLink) return null;
+    final step = _linkAccepted;
+    _linkAccepted = null;
     return step;
+  }
+
+  // Whether [step] waits for the link whose navigation runs now to be let
+  // in, as it does while a guard of that link has yet to answer; it then
+  // runs with the link's own step, or not at all if the link is turned down.
+  bool _deferToLinkAccepted(VoidCallback step) {
+    final linkStep = _linkAccepted;
+    if (linkStep == null || _currentLink != _acceptingLink) return false;
+    _linkAccepted = () {
+      linkStep();
+      step();
+    };
+    return true;
   }
 
   /// Returns a [RouterConfig] instead to be passed

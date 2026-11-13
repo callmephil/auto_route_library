@@ -163,6 +163,7 @@ import 'reevaluation_redirect_test.dart' as reevaluation_redirect;
 import 'reject_go_back_link_keeps_stack_test.dart'
     as reject_go_back_link_keeps_stack;
 import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
+import 'rejected_link_keeps_dialog_test.dart' as rejected_link_keeps_dialog;
 import 'reload_guard_test.dart' as reload_guard;
 import 'reload_hero_test.dart' as reload_hero;
 import 'remove_last_then_push_same_test.dart' as remove_last_then_push_same;
@@ -422,6 +423,7 @@ void main() {
   replace_all_on_reevaluation.main();
   replace_all_parent_then_child.main();
   rejected_initial_link_url.main();
+  rejected_link_keeps_dialog.main();
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
   replace_all_slow_guard.main();
