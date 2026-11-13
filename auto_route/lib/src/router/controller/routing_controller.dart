@@ -3410,6 +3410,8 @@ abstract class StackRouter extends RoutingController {
     // [_endWaitOfTakenOff].
     final takenOff = <AutoRoutePage<Object?>>[];
     final link = root._startingLink;
+    // What the link that starts this batch does once its guards let it in.
+    final onLinkAccepted = root._takeLinkAcceptedStep();
     // The page that takes over the screen on top opens its children in that
     // screen's nested router only once every page is in, as the screens
     // replaceAll keeps below the top do, see [_openChildrenInKeptScreens].
@@ -3519,6 +3521,9 @@ abstract class StackRouter extends RoutingController {
             continue;
           }
           if (isLast) {
+            // The link that starts the batch is let in, before its pages go
+            // on.
+            onLinkAccepted?.call();
             // With [replacement], the routes go on as it returns them, after
             // what it does to the stack.
             final accepted = [...held, match];

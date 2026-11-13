@@ -32,17 +32,40 @@ abstract class RootStackRouter extends StackRouter {
   // The count of the link whose navigation is starting, while it starts.
   int? _startingLink;
 
+  // What the link whose navigation is starting does once it is let in, until
+  // the guarded navigation it starts takes it, see [_takeLinkAcceptedStep].
+  VoidCallback? _startingLinkAccepted;
+
   // Runs [open], which starts the navigation of a new link, as that link's.
   // The navigation starts before [open] returns, up to its first guard.
-  Future<void> _openLink(Future<void> Function() open) {
+  // [onAccepted] runs once the guards let the link in, so a link the app
+  // turns down changes nothing else; at once when the navigation asks no
+  // stack guard, such as a tab change.
+  Future<void> _openLink(
+    Future<void> Function() open, {
+    VoidCallback? onAccepted,
+  }) {
     _startingLink = ++_linkCount;
+    _startingLinkAccepted = onAccepted;
     final Future<void> navigation;
+    VoidCallback? untaken;
     try {
       navigation = open();
     } finally {
       _startingLink = null;
+      untaken = _startingLinkAccepted;
+      _startingLinkAccepted = null;
     }
+    untaken?.call();
     return navigation;
+  }
+
+  // The step the link whose navigation is starting takes once it is let in,
+  // for the guarded navigation that starts it to run; null for any other.
+  VoidCallback? _takeLinkAcceptedStep() {
+    final step = _startingLinkAccepted;
+    _startingLinkAccepted = null;
+    return step;
   }
 
   /// Returns a [RouterConfig] instead to be passed
