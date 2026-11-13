@@ -262,6 +262,11 @@ class RouteData<R> {
   // see [StackRouter._openChildrenInKeptScreens].
   bool _isKeptByReplaceAll = false;
 
+  // Whether the router took this page off as replaced by another page, as
+  // replace and replaceAll do. A replaceAll that waits behind a guard's page
+  // reads it of that page, see [StackRouter._replaceAllMatches].
+  bool _isReplaced = false;
+
   bool _isPoppedByNavigator = false;
 
   /// Records that the navigator popped this route's page, e.g. through

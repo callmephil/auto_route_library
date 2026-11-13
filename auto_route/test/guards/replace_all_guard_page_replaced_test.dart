@@ -25,6 +25,13 @@ import '../router_test_utils.dart';
 // only when the login page closes with nothing in its place, as when the
 // guard rejects. On Android, a screen started with FLAG_ACTIVITY_CLEAR_TASK
 // from a login screen leaves no screen of the old task to return to.
+//
+// Only a replace of the login page itself counts. Found by the review of
+// this fix (Part 6, finding 3): the login page opens "forgot password",
+// which goes on to "reset" in its own place, the user goes back to the login
+// page, and the guard rejects. Was, while any replaced page on the stack
+// counted: no page was left. Should: [Home, Account] again, as the login
+// page was never replaced.
 void main() {
   NamedRouteDef page(String name, String path, [AutoRouteGuard? guard]) => .new(
     name: name,
@@ -38,20 +45,24 @@ void main() {
 
   // Opens Home and Account signed in, then signs out with replaceAll, which
   // shows the login page alone. With [awaitsRedirect] the guard awaits its
-  // redirect.
+  // redirect. The resolvers of the guards that have not answered go to
+  // [signingIn].
   Future<RootStackRouter> signOut(
     WidgetTester tester, {
     required bool awaitsRedirect,
+    List<NavigationResolver>? signingIn,
   }) async {
     final isSignedIn = ValueNotifier(true);
     addTearDown(isSignedIn.dispose);
     final guard = awaitsRedirect
         ? AutoRouteGuard.simple((resolver, _) async {
             if (isSignedIn.value) return resolver.next();
+            signingIn?.add(resolver);
             await resolver.redirectUntil(const NamedRoute('LoginRoute'));
           })
         : AutoRouteGuard.simple((resolver, _) {
             if (isSignedIn.value) return resolver.next();
+            signingIn?.add(resolver);
             unawaited(resolver.redirectUntil(const NamedRoute('LoginRoute')));
           });
     final router = RootStackRouter.build(
@@ -60,6 +71,8 @@ void main() {
         page('AccountRoute', '/account', guard),
         page('LoginRoute', '/login'),
         page('WelcomeRoute', '/welcome'),
+        page('ForgotRoute', '/forgot'),
+        page('ResetRoute', '/reset'),
       ],
     );
     await pumpRouterApp(tester, router);
@@ -98,6 +111,31 @@ void main() {
       expect(stackNames(router), ['WelcomeRoute']);
       expect(find.text('WelcomeRoute'), findsOneWidget);
       expect(router.canPop(), isFalse);
+    });
+
+    testWidgets('The pages come back when a page above the login page of a '
+        'guard that $shape its redirect was replaced, and the guard then '
+        'rejects', (tester) async {
+      final signingIn = <NavigationResolver>[];
+      final router = await signOut(
+        tester,
+        awaitsRedirect: awaitsRedirect,
+        signingIn: signingIn,
+      );
+      unawaited(router.push(const NamedRoute('ForgotRoute')));
+      await tester.pumpAndSettle();
+      unawaited(router.replace(const NamedRoute('ResetRoute')));
+      await tester.pumpAndSettle();
+      final atReset = stackNames(router);
+      router.pop();
+      await tester.pumpAndSettle();
+
+      signingIn.firstOrNull?.reject();
+      await tester.pumpAndSettle();
+
+      expect(atReset, ['LoginRoute', 'ResetRoute']);
+      expect(stackNames(router), ['HomeRoute', 'AccountRoute']);
+      expect(find.text('AccountRoute'), findsOneWidget);
     });
   }
 }

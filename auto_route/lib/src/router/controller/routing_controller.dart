@@ -2340,7 +2340,7 @@ abstract class StackRouter extends RoutingController {
   ) {
     for (final page in pages) {
       _leaveKinds.putIfAbsent(page.routeData, () => kind);
-      if (kind == .replaced) _replacedPagesCount++;
+      if (kind == .replaced) page.routeData._isReplaced = true;
     }
   }
 
@@ -2360,10 +2360,12 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
-  // Counts the pages taken off as replaced, for a replaceAll that waits
-  // behind a guard's page to tell whether a page was replaced meanwhile, see
-  // [_replaceAllMatches].
-  var _replacedPagesCount = 0;
+  // Called right after the new page of [data] went on this stack.
+  void _reportPageWentOn(RouteData<Object?> data) {
+    for (final replacement in List.of(_openReplacements)) {
+      replacement.onPageWentOn(data);
+    }
+  }
 
   Future<T> _holdingLeaveReports<T>(Future<T> Function() change) async {
     _leaveReportHolds++;
@@ -3420,7 +3422,7 @@ abstract class StackRouter extends RoutingController {
   // new one starts. A guard that shows no page, as one that asks in a dialog
   // or answers later from a callback, keeps them until it answers. They come
   // back only if the guard then rejects, and not once the app has replaced
-  // the guard's page with one of its own.
+  // the page that took their place with one of its own.
   //
   // Whose page it is matters only while the guard's call still runs, as
   // while it awaits a request: then only the guard's own page takes their
@@ -3450,21 +3452,25 @@ abstract class StackRouter extends RoutingController {
     List<AutoRoutePage<Object?>>? pagesBefore = List.of(_pages);
     // The pages a guard that holds the navigation took the place of.
     var setAside = const <AutoRoutePage<Object?>>[];
-    // [_replacedPagesCount] once they were set aside.
-    var replacedThen = 0;
+    // The page that went on in their place, such as the guard's login page,
+    // once it is on.
+    RouteData<Object?>? placeTaker;
+    // Whether the pages were set aside for a page that is going on next.
+    var isPlaceOpen = false;
     // Whether a guard's call has returned without an answer, and the guard
     // has not answered since: it waits for something outside its call.
     var isGuardWaiting = false;
-    // Sets the pages to replace aside for a page that is going on, or is on,
-    // in their place.
-    void setPagesAside() {
+    // Sets the pages to replace aside for the page that goes on next in
+    // their place, or with [isPageOn] for one that is on already.
+    void setPagesAside({bool isPageOn = false}) {
       if (isLink) return;
       final leaving = [...?pagesBefore?.where(_pages.contains)];
       if (leaving.isEmpty) return;
       setAside = [...setAside, ...leaving];
       _markLeaving(leaving, .replaced);
-      replacedThen = _replacedPagesCount;
       _pages.removeWhere(leaving.contains);
+      placeTaker ??= isPageOn ? _pages.firstOrNull?.routeData : null;
+      isPlaceOpen = placeTaker == null;
       markUrlStateForReplace();
     }
 
@@ -3484,16 +3490,23 @@ abstract class StackRouter extends RoutingController {
           final hasNewPage = _pages.any(
             (page) => !(pagesBefore?.contains(page) ?? true),
           );
-          if (hasNewPage) setPagesAside();
+          if (hasNewPage) setPagesAside(isPageOn: true);
         },
         onGuardAnswered: () => isGuardWaiting = false,
         onPageGoesOn: () {
           if (isGuardWaiting) setPagesAside();
         },
+        onPageWentOn: (data) {
+          if (!isPlaceOpen) return;
+          placeTaker = data;
+          isPlaceOpen = false;
+        },
         onAllAccepted: (accepted) {
           pagesBefore = null;
           setAside = const [];
           isGuardWaiting = false;
+          isPlaceOpen = false;
+          placeTaker = null;
           final replacing = updateExistingRoutes
               ? _keepingScreensOf(List.of(_pages), accepted)
               : accepted;
@@ -3512,14 +3525,21 @@ abstract class StackRouter extends RoutingController {
           pagesBefore = null;
           isGuardWaiting = false;
           if (setAside.isEmpty) return;
-          // The app replaced the guard's page meanwhile, with replace or
-          // another replaceAll, as a "continue as guest" button on a login
-          // page does: the guard's redirect ended with its page, which
-          // rejects, but the new page took that page's place, and with it
-          // the place of the pages set aside. They are gone for good.
-          if (_replacedPagesCount != replacedThen) {
+          // The app replaced the page that took their place, with replace
+          // or another replaceAll, as a "continue as guest" button on a
+          // guard's login page does: the guard's redirect ended with its
+          // page, which rejects, but the new page took that page's place,
+          // and with it the place of the pages set aside. They are gone for
+          // good. A replace of another page, as of one the login page
+          // opened, changes nothing for them.
+          if (placeTaker?._isReplaced ?? false) {
             setAside = const [];
             return;
+          }
+          // Back as they were. Another replaceAll that had set them aside
+          // for its own guard's page has put them back before this.
+          for (final page in setAside) {
+            page.routeData._isReplaced = false;
           }
           // Under the pages put on meanwhile, such as a page the guard
           // still shows.
@@ -4327,6 +4347,7 @@ abstract class StackRouter extends RoutingController {
     } else {
       _pages.add(page);
     }
+    _reportPageWentOn(data);
     // The pages taken off for this page answer their callers, except one
     // whose screen and wait this page took over.
     _endWaitOfTakenOff(_takenOffForNewPage);
@@ -5157,6 +5178,7 @@ class _PagesReplacement {
     required this.onGuardReturned,
     required this.onGuardAnswered,
     required this.onPageGoesOn,
+    required this.onPageWentOn,
     required this.onAllAccepted,
     required this.onRejected,
   });
@@ -5175,6 +5197,9 @@ class _PagesReplacement {
   // returns, whoever puts it on.
   final VoidCallback onPageGoesOn;
 
+  // The new page of the given data went on that stack.
+  final ValueChanged<RouteData<Object?>> onPageWentOn;
+
   // Every guard let the routes through; see [_RoutesChange].
   final _RoutesChange onAllAccepted;
 
@@ -5190,6 +5215,7 @@ class _PagesReplacement {
     onGuardReturned: onGuardReturned,
     onGuardAnswered: onGuardAnswered,
     onPageGoesOn: onPageGoesOn,
+    onPageWentOn: onPageWentOn,
     onRejected: onRejected,
     onAllAccepted: (accepted) {
       final replacing = onAllAccepted(accepted);
