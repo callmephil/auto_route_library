@@ -166,10 +166,14 @@ class RouteMatcher {
         if (match.segments.length != pathSegments.length) {
           // has rest
           if (config.hasSubTree) {
-            final rest = uri.replace(
+            // Without the scheme and host, whose path Dart would start with
+            // a '/': the children match the rest of the path alone.
+            final rest = Uri(
               pathSegments: pathSegments
                   .sublist(match.segments.length)
                   .map(decodeUrlComponent),
+              query: uri.hasQuery ? uri.query : null,
+              fragment: uri.hasFragment ? uri.fragment : null,
             );
             final children = _match(
               rest,
