@@ -2213,8 +2213,14 @@ abstract class StackRouter extends RoutingController {
   ) {
     for (final page in pages) {
       _leaveKinds.putIfAbsent(page.routeData, () => kind);
+      if (kind == .replaced) _replacedPagesCount++;
     }
   }
+
+  // Counts the pages taken off as replaced, for a replaceAll that waits
+  // behind a guard's page to tell whether a page was replaced meanwhile, see
+  // [_replaceAllMatches].
+  var _replacedPagesCount = 0;
 
   Future<T> _holdingLeaveReports<T>(Future<T> Function() change) async {
     _leaveReportHolds++;
@@ -3157,8 +3163,10 @@ abstract class StackRouter extends RoutingController {
   /// stack stays as it was. A page that a guard shows before it
   /// answers, such as a login with [NavigationResolver.redirectUntil], takes
   /// the place of the pages as it goes on: back from that page shows none of
-  /// them, and they come back only if the guard then rejects. A guard that
-  /// shows no page keeps them until it answers.
+  /// them, and they come back only if the guard then rejects. They stay gone
+  /// once the app replaces the guard's page with another one, with [replace]
+  /// or another [replaceAll]. A guard that shows no page keeps them until it
+  /// answers.
   ///
   /// If [onFailure] is given, navigation errors are passed to it; otherwise
   /// they are thrown. A guard's rejection reaches it as a
@@ -3210,7 +3218,8 @@ abstract class StackRouter extends RoutingController {
   // to replace. Android finishes the old screens of a task it clears as the
   // new one starts. A guard that shows no page, as one that asks in a dialog
   // or answers later from a callback, keeps them until it answers. They come
-  // back only if the guard then rejects. A page the app itself pushes while
+  // back only if the guard then rejects, and not once the app has replaced
+  // the guard's page with one of its own. A page the app itself pushes while
   // a guard decides goes on over them, and is replaced with them.
   //
   // The screens the new pages keep are told as the pages are replaced, from
@@ -3225,6 +3234,8 @@ abstract class StackRouter extends RoutingController {
     List<AutoRoutePage<Object?>>? pagesBefore = List.of(_pages);
     // The pages a guard that holds the navigation took the place of.
     var setAside = const <AutoRoutePage<Object?>>[];
+    // [_replacedPagesCount] once they were set aside.
+    var replacedThen = 0;
     return _navigateAll(
       matches,
       onFailure: onFailure,
@@ -3236,6 +3247,7 @@ abstract class StackRouter extends RoutingController {
           if (leaving.isEmpty) return;
           setAside = [...setAside, ...leaving];
           _markLeaving(leaving, .replaced);
+          replacedThen = _replacedPagesCount;
           _pages.removeWhere(leaving.contains);
           markUrlStateForReplace();
         },
@@ -3259,6 +3271,15 @@ abstract class StackRouter extends RoutingController {
         onRejected: () {
           pagesBefore = null;
           if (setAside.isEmpty) return;
+          // The app replaced the guard's page meanwhile, with replace or
+          // another replaceAll, as a "continue as guest" button on a login
+          // page does: the guard's redirect ended with its page, which
+          // rejects, but the new page took that page's place, and with it
+          // the place of the pages set aside. They are gone for good.
+          if (_replacedPagesCount != replacedThen) {
+            setAside = const [];
+            return;
+          }
           // Under the pages put on meanwhile, such as a page the guard
           // still shows.
           _pages.insertAll(0, setAside);
