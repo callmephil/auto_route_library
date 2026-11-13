@@ -192,8 +192,9 @@ class NavigationHistoryImpl extends NavigationHistory {
   // apart end: it keeps what the two share from the bottom, steps back over
   // what is no longer there, writes what is new, and writes the top as a
   // replace when only the entry on top changed. An entry this frame added
-  // whose page is gone again was never shown, and gets none. Returns whether
-  // it moved or wrote anything.
+  // whose page is gone again was never shown, and gets none. Afterwards the
+  // account holds only what the browser holds, also when nothing was written.
+  // Returns whether it moved or wrote anything.
   bool _reconcile(
     Map<int, UrlState> start,
     int standsOn,
@@ -212,10 +213,10 @@ class NavigationHistoryImpl extends NavigationHistory {
         continue;
       }
       if (!isKept) {
-        final pageId = entry.topMatch?.id;
         final location = entry.url.isEmpty ? '/' : entry.uri.toString();
-        final isGone = pageId == null || controllerOfPage(pageId) == null;
-        if (isGone || (provider.neglectIf?.call(location) ?? false)) continue;
+        if (!_isShown(entry) || (provider.neglectIf?.call(location) ?? false)) {
+          continue;
+        }
         // A new entry that repeats the one under it adds nothing; one that
         // takes the place of an entry the browser holds stays a replace.
         if (i > standsOn && _isSameEntry(wanted.lastOrNull, entry)) continue;
@@ -228,7 +229,8 @@ class NavigationHistoryImpl extends NavigationHistory {
       if (index > standsOn || !_isSameEntry(entry, start[index])) break;
       shared++;
     }
-    if (top < 0 || (shared == wanted.length && top == standsOn)) return false;
+    if (top < 0) return false;
+    final isUnchanged = shared == wanted.length && top == standsOn;
 
     // From where the browser stands: a step back, if any, then the writes,
     // and the entries the browser then holds, from the bottom.
@@ -269,14 +271,36 @@ class NavigationHistoryImpl extends NavigationHistory {
       });
     _appIndex = holds.length - 1;
 
-    if (moveTo < standsOn) {
+    if (isUnchanged) return false;
+    // Steps are counted from the entry the browser really stands on, which
+    // differs from the account where the browser holds entries the app didn't
+    // write. Only a step backwards is made: any other reloads or leaves.
+    final steps = moveTo - _currentIndex;
+    if (moveTo < standsOn && steps < 0) {
       _ownMoveUrl = start[moveTo]?.url;
       _writesAfterMove = writes;
-      _history.go(moveTo - _currentIndex);
+      _history.go(steps);
     } else {
       writes.forEach(_write);
     }
     return true;
+  }
+
+  // Whether a stack holds the page on top of [entry], or the page whose nested
+  // router is not built yet, so that its children, the entry's own pages, are
+  // still to come: a page this turn pushes opens its nested router when it
+  // builds, after the turn.
+  bool _isShown(UrlState entry) {
+    final matches = entry.segments;
+    for (final (index, match) in matches.indexed.toList().reversed) {
+      final holder = controllerOfPage(match.id);
+      if (holder == null) continue;
+      return index == matches.length - 1 ||
+          !holder.childControllers.any(
+            (child) => child.routeData.matchId == match.id,
+          );
+    }
+    return false;
   }
 
   // Whether [a] and [b] are the same browser entry: the same url, page on top
