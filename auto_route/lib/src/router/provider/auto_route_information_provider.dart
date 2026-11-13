@@ -49,8 +49,12 @@ class AutoRouteInformationProvider extends RouteInformationProvider
   new _({required RouteInformation initialRouteInformation, this.neglectIf})
     : _value = initialRouteInformation;
 
-  /// if true is return the route will be
-  /// reported to engine
+  /// Decides whether a location the router reports is kept from the engine.
+  ///
+  /// Gets the location as the address bar shows it, with its query, such as
+  /// `/books/a%20b?note=x%26y`, on every platform. When it returns true, the
+  /// location isn't reported, so the address bar and the history stay as
+  /// they were.
   bool Function(String? location)? neglectIf;
 
   @override
@@ -58,10 +62,6 @@ class AutoRouteInformationProvider extends RouteInformationProvider
     RouteInformation routeInformation, {
     RouteInformationReportingType type = .none,
   }) {
-    if (neglectIf != null && neglectIf!(routeInformation.uri.toString())) {
-      return;
-    }
-
     // On web DefaultRouteParser hands over the uri escaped for the engine.
     // Compare and keep the app's own uri, and escape one that skipped it.
     final appRouteInformation =
@@ -72,6 +72,11 @@ class AutoRouteInformationProvider extends RouteInformationProvider
             state: routeInformation.state,
           )
         : routeInformation;
+    // neglectWhen gets the location the address bar shows, the same on every
+    // platform, not the string escaped once more for the web engine.
+    if (neglectIf?.call(appRouteInformation.uri.toString()) ?? false) {
+      return;
+    }
     final reportedUri =
         identical(appRouteInformation, routeInformation) && kIsWeb
         ? escapeForWebEngine(routeInformation.uri)
