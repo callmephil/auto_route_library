@@ -60,7 +60,10 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
     for (var i = 0; i < widget.stack.length; ++i) {
       if (kept.contains(widget.stack[i])) {
         _initializedPagesTracker[i] = true;
-      } else if (i == widget.activeIndex || !widget.lazyLoad) {
+      } else if (i == widget.activeIndex ||
+          // A tab that keeps no state is built only once it shows, and
+          // reported then.
+          (!widget.lazyLoad && widget.stack[i].maintainState)) {
         _initializedPagesTracker[i] = true;
         _didInitTabRoute(i);
       } else {
