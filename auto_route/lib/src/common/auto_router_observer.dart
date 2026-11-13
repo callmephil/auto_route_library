@@ -404,25 +404,26 @@ class AutoRouteObserver extends AutoRouterObserver {
   }
 
   void _notifyPop(Route<Object?> route, Route<Object?>? previousRoute) {
-    if (route.settings is AutoRoutePage &&
-        previousRoute != null &&
-        previousRoute.settings is AutoRoutePage) {
-      // The page that leaves hears first, then the page that shows again, as
-      // on a push, where the covered page hears didPushNext before the new
-      // page subscribes and hears didPush.
-      for (final routeAware
-          in _routeListeners[route]?.toList() ?? const <AutoRouteAware>[]) {
-        routeAware.didPop();
-      }
-      _notifyNested(route, (routeAware) => routeAware.didPop());
-
-      for (final routeAware
-          in _routeListeners[previousRoute]?.toList() ??
-              const <AutoRouteAware>[]) {
-        routeAware.didPopNext();
-      }
-      _notifyNested(previousRoute, (routeAware) => routeAware.didPopNext());
+    if (route.settings is! AutoRoutePage) return;
+    // The page that leaves hears first, then the page that shows again, as
+    // on a push, where the covered page hears didPushNext before the new
+    // page subscribes and hears didPush. The page that leaves hears didPop
+    // whatever shows under it, such as a page opened with pushWidget.
+    for (final routeAware
+        in _routeListeners[route]?.toList() ?? const <AutoRouteAware>[]) {
+      routeAware.didPop();
     }
+    _notifyNested(route, (routeAware) => routeAware.didPop());
+
+    if (previousRoute == null || previousRoute.settings is! AutoRoutePage) {
+      return;
+    }
+    for (final routeAware
+        in _routeListeners[previousRoute]?.toList() ??
+            const <AutoRouteAware>[]) {
+      routeAware.didPopNext();
+    }
+    _notifyNested(previousRoute, (routeAware) => routeAware.didPopNext());
   }
 
   // Forgets [route] once its navigator no longer shows it.
