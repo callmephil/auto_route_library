@@ -1854,10 +1854,17 @@ abstract class StackRouter extends RoutingController {
   // guard stops here, since the router's page left the stack meanwhile.
   bool _isDisposed = false;
 
-  // Pushes that no guard checks, from the call until their page is added a
-  // microtask later. A pop called meanwhile waits for them, so it pops the
-  // page the caller just pushed rather than the one below it.
+  // Pushes that no guard checks and that could not add their page as they
+  // were called, see [_canAddPageAtOnce], from the call until their page is
+  // added a microtask later. A pop called meanwhile waits for them, so it pops
+  // the page the caller just pushed rather than the one below it.
   final _landingPushes = <Future<void>>{};
+
+  // How many routes of batches, such as those of pushAll, replaceAll, navigate
+  // or a link, no guard is asked about and are on their way in: their page is
+  // added a microtask after the batch reaches them, see [_pushAllGuarded]. A
+  // push called meanwhile lands behind them.
+  var _landingBatchRoutes = 0;
 
   // The animations of pages the navigator popped, while they leave the
   // screen; see [waitForTransitions].
@@ -2323,7 +2330,8 @@ abstract class StackRouter extends RoutingController {
   /// see [Navigator.pop]
   ///
   /// Right after [push] or [replace] of a route without guards, the pop
-  /// waits for that page to be added and pops it, before it is ever shown.
+  /// closes that page, before it is ever shown; where the page is added a
+  /// microtask later, see [push], the pop waits for it.
   /// A push still waiting on a guard is not waited for: the guard may be
   /// waiting on the very route this pop closes, such as a dialog.
   ///
@@ -2461,6 +2469,18 @@ abstract class StackRouter extends RoutingController {
   List<AutoRoutePage<Object?>> get stack => .unmodifiable(_pages);
 
   /// Adds the corresponding page to given [route] to the [_pages] stack
+  ///
+  /// A [route] that no guard is asked about is on the stack as this call
+  /// returns, as a route is in the history as [Navigator.push] returns, so a
+  /// call made right after it, such as [replace], [replaceAll] or
+  /// [removeLast], acts on its page. Called while widgets are built, as from
+  /// `initState`, or right after a navigation whose page is still on its way
+  /// in, such as [replaceAll], the page is added a microtask later, behind
+  /// that page.
+  ///
+  /// A [route] a guard is asked about is added once its guards have answered,
+  /// a microtask after the call at the earliest. A call made meanwhile does
+  /// not wait for it and acts on the stack without its page.
   ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
@@ -2612,6 +2632,32 @@ abstract class StackRouter extends RoutingController {
     return (kept: kept, end: isNextLeaving ? next : _pages.length);
   }
 
+  // Whether a push that no guard asks about adds its page as it is called, as
+  // Navigator.push puts its route in the history at once, so that a call made
+  // right after it, such as replace, replaceAll, navigate or removeLast, acts
+  // on the stack with that page on top.
+  //
+  // Not while an earlier page of this router is still on its way in: the push
+  // takes its turn behind it and lands a microtask later, in the order of the
+  // calls. And not while widgets are built, where Navigator.push throws: the
+  // router's listeners rebuild the widgets that show it, which a build
+  // forbids (#853), so the page is added, and they are told, a microtask
+  // later. That covers the frame's build, layout and paint, the first build
+  // of the app, which runs outside a frame before the root element is set,
+  // and a router no widget shows yet.
+  bool get _canAddPageAtOnce {
+    if (_landingPushes.isNotEmpty || _landingBatchRoutes > 0) return false;
+    if (root.pagelessRoutesObserver.navigator == null) return false;
+    final binding = WidgetsBinding.instance;
+    return binding.rootElement != null &&
+        binding.schedulerPhase != .persistentCallbacks;
+  }
+
+  // Whether no guard is asked about [route]: it has none, or each has let it
+  // through already.
+  bool _asksNoGuard(RouteMatch<Object?> route) =>
+      [...root.guards, ...route.guards].every(route.evaluatedGuards.contains);
+
   // Why a router that AutoRouter.declarative builds can't push its own pages,
   // and what to do instead.
   String get _managedByWidgetMessage =>
@@ -2638,15 +2684,24 @@ abstract class StackRouter extends RoutingController {
       return null;
     }
     onMatch?.call(match);
-    final landing = root.guards.isEmpty && match.guards.isEmpty
-        ? Completer<void>()
-        : null;
-    if (landing != null) _landingPushes.add(landing.future);
-    final result = await _canNavigate(match, onFailure: onFailure);
-    if (landing != null) {
-      _landingPushes.remove(landing.future);
-      // Its listeners run in a later microtask, after this push adds its page.
-      landing.complete();
+    final isUnguarded = _asksNoGuard(match);
+    final ResolverResult result;
+    if (isUnguarded && _canAddPageAtOnce) {
+      result = ResolverResult(
+        continueNavigation: true,
+        reevaluateNext: true,
+        route: match,
+      );
+    } else {
+      final landing = isUnguarded ? Completer<void>() : null;
+      if (landing != null) _landingPushes.add(landing.future);
+      result = await _canNavigate(match, onFailure: onFailure);
+      if (landing != null) {
+        _landingPushes.remove(landing.future);
+        // Its listeners run in a later microtask, after this push adds its
+        // page.
+        landing.complete();
+      }
     }
     if (_isDisposed) return null;
     if (result.continueNavigation) {
@@ -3362,26 +3417,35 @@ abstract class StackRouter extends RoutingController {
           takeOffPagesFrom(i + 1);
           break;
         }
-        final result = await _canNavigate(
-          routes[i],
-          onFailure: onFailure,
-          pendingRoutes: routes
-              .whereIndexed((index, element) => index > i)
-              .toList(),
-          isReevaluating: isReevaluating,
-          // A guard that returns without an answer holds its page back until
-          // it gives one, as it holds back a page being pushed: the page
-          // waits off the stack, with the pages above it, and goes back on
-          // once the guard lets it through. The navigator isn't told, so the
-          // screen stays unless the guard shows a page of its own. A page
-          // under the guard's redirect stays, see redirectUntil. A guard of
-          // replaceAll that holds takes the pages to replace off, see
-          // [_replaceAllMatches].
-          onLeftUndecided: ({required isRedirecting}) {
-            if (!isReevaluating) return replacement?.onGuardHolds();
-            if (!isRedirecting) takeOffPagesFrom(i);
-          },
-        );
+        // A route no guard is asked about is on its way in from here, see
+        // [_landingBatchRoutes].
+        final isLanding = _asksNoGuard(routes[i]);
+        if (isLanding) _landingBatchRoutes++;
+        final ResolverResult result;
+        try {
+          result = await _canNavigate(
+            routes[i],
+            onFailure: onFailure,
+            pendingRoutes: routes
+                .whereIndexed((index, element) => index > i)
+                .toList(),
+            isReevaluating: isReevaluating,
+            // A guard that returns without an answer holds its page back until
+            // it gives one, as it holds back a page being pushed: the page
+            // waits off the stack, with the pages above it, and goes back on
+            // once the guard lets it through. The navigator isn't told, so the
+            // screen stays unless the guard shows a page of its own. A page
+            // under the guard's redirect stays, see redirectUntil. A guard of
+            // replaceAll that holds takes the pages to replace off, see
+            // [_replaceAllMatches].
+            onLeftUndecided: ({required isRedirecting}) {
+              if (!isReevaluating) return replacement?.onGuardHolds();
+              if (!isRedirecting) takeOffPagesFrom(i);
+            },
+          );
+        } finally {
+          if (isLanding) _landingBatchRoutes--;
+        }
         if (_isDisposed) break;
         // A later link took over while a guard decided.
         if (link != null && root._linkCount != link) break;

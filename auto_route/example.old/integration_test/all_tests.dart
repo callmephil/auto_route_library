@@ -80,6 +80,7 @@ import 'navigate_rejected_keeps_stack_test.dart'
     as navigate_rejected_keeps_stack;
 import 'navigate_root_from_nested_test.dart' as navigate_root_from_nested;
 import 'navigate_to_non_tab_test.dart' as navigate_to_non_tab;
+import 'navigations_in_one_turn_test.dart' as navigations_in_one_turn;
 import 'nested_absolute_redirect_test.dart' as nested_absolute_redirect;
 import 'nested_back_test.dart' as nested_back;
 import 'nested_browser_back_test.dart' as nested_browser_back;
@@ -329,6 +330,7 @@ void main() {
   navigate_rejected_keeps_stack.main();
   navigate_root_from_nested.main();
   navigate_to_non_tab.main();
+  navigations_in_one_turn.main();
   nested_absolute_redirect.main();
   nested_back.main();
   nested_browser_back.main();
