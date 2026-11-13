@@ -1550,8 +1550,12 @@ class TabsRouter extends RoutingController {
       _pendingTab = index;
       _pendingChange = guarding.then(
         (result) {
-          // The tab takes the first one's place in the url.
-          if (result.continueNavigation && change == _tabChanges) {
+          // The tab takes the first one's place in the url. Not once the tabs
+          // are gone: the url that follows is another page's, which must not
+          // take the place of the page shown before it.
+          if (result.continueNavigation &&
+              change == _tabChanges &&
+              !_isDisposed) {
             markUrlStateForReplace();
           }
           // The tabs may have changed meanwhile: replaceAll moves the tab.
