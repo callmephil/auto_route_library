@@ -240,10 +240,23 @@ mixin PredictiveBackGestureMixin {
   /// make sure to also opt-in into this feature in your device settings
   /// Settings => System => Developer => Predictive back animations
   ///
+  /// Without a [predictiveBackPageTransitionsBuilder], the route on Android
+  /// hands all its transitions to Flutter's
+  /// [PredictiveBackPageTransitionsBuilder], not only the back gesture: a
+  /// push, and a pop by a button, play that builder's fallback,
+  /// [FadeForwardsPageTransitionsBuilder], instead of the route's own
+  /// transition, such as a [CustomRouteType.transitionsBuilder] or the
+  /// theme's. To keep the route's own transition outside the gesture, give it
+  /// a [predictiveBackPageTransitionsBuilder].
+  ///
   /// defaults to false
   bool get enablePredictiveBackGesture;
 
-  /// The transitions builder to use for when the predictive back gesture is in
-  /// progress
+  /// The transitions builder to use while the predictive back gesture is in
+  /// progress.
+  ///
+  /// When it is set, the route plays its own transition at every other time,
+  /// a push and a pop by a button included. See [enablePredictiveBackGesture]
+  /// for what happens without it.
   RouteTransitionsBuilder? get predictiveBackPageTransitionsBuilder;
 }

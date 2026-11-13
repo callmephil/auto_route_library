@@ -2319,6 +2319,20 @@ after you've enabled the feature in your manifest file, you can simply create pr
 
 you can enable predictive back for all routes by overriding `defaultRouteType` in your router, all route types that apply on android support this feature.
 
+Without a `predictiveBackPageTransitionsBuilder`, a route with `enablePredictiveBackGesture: true` hands all its transitions on Android to Flutter's `PredictiveBackPageTransitionsBuilder`, not only the back gesture: a push, and a pop by a button, play that builder's fallback, `FadeForwardsPageTransitionsBuilder`, instead of the route's own transition, such as a `CustomRoute`'s `transitionsBuilder` or the theme's. To keep the route's own transition outside the gesture, give the route a `predictiveBackPageTransitionsBuilder`: it is used only while the gesture runs.
+
+```dart
+  CustomRoute(
+    page: DetailsRoute.page,
+    transitionsBuilder: TransitionsBuilders.slideLeft,
+    enablePredictiveBackGesture: true,
+    // Plays only during the back gesture; slideLeft plays at every other time.
+    predictiveBackPageTransitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  )
+```
+
 ### State Restoration
 
 When the platform ends an app in the background and opens it again, Flutter's state restoration can bring it back as it was. `auto_route` saves every page of every stack and tab, with their path and query params, so the user lands on the same page and back goes through the same pages.
