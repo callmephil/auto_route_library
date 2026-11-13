@@ -192,7 +192,10 @@ class RouteMatcher {
             match = match.copyWith(children: children);
           }
           matches.add(match);
-          if (match.allSegments().length >= pathSegments.length) {
+          // Counted as the last check counts, so a nested redirect to a
+          // shorter path stops the loop before a later route, such as the
+          // app's '*' page, takes the url.
+          if (_consumedSegments(match) >= pathSegments.length) {
             break;
           }
         } else {
