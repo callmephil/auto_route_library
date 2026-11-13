@@ -1750,7 +1750,7 @@ Now, every time `AuthProvider` notifies listeners, the stack will be re-evaluate
 
 In the above example, we assigned our `AuthProvider` to `reevaluateListenable` directly, that's because `reevaluateListenable` takes a `Listenable` and AuthProvider extends `ChangeNotifier` which is a `Listenable`, if your auth provider is a stream you can use `reevaluateListenable: ReevaluateListenable.stream(YOUR-STREAM)`
 
-While a guard's check runs, for example while it awaits a request, its page stays on screen with its state, and so do the pages above it. Only the guard's answer closes a page: `resolver.reject()` closes it with the pages above it. A guard that returns without an answer, and without `resolver.redirectUntil`, holds its page back until it gives one.
+While a guard's check runs, for example while it awaits a request, its page stays on screen with its state, and so do the pages above it. Only the guard's answer closes a page: `resolver.reject()` closes it with the pages above it. A guard that returns without an answer, and without `resolver.redirectUntil`, holds its page back until it gives one. A page the app takes off while a guard still decides, for example with `replace` or `replaceAll`, stays off whatever the guard then answers.
 
 If the listenable notifies again while a guard is still running its check, the guards are asked once more when that round ends, so the last change wins. A change during that extra round isn't followed by another, so a guard that notifies the listenable from its own check doesn't run without end.
 

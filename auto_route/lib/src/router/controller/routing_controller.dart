@@ -2152,6 +2152,30 @@ abstract class StackRouter extends RoutingController {
   // tell.
   var _askAgainRequests = 0;
 
+  // The pages a reevaluation in progress holds off the stack itself until
+  // their guards answer: the page of a guard that returned without an
+  // answer, with the pages above it, and the page a guard's redirect
+  // replaced. They go back on once their guards let them through.
+  final _heldBackByReevaluation = <RouteData<Object?>>{};
+
+  // How many reevaluations of this router's pages are in progress, the one
+  // a router above runs here among them.
+  var _reevaluationsInProgress = 0;
+
+  // Whether the app took the page of [match] off since the reevaluation that
+  // asks about it began, as replace, replaceAll, removeWhere and navigate
+  // do. Such a page stays off, whatever its guard answers: a reevaluation
+  // asks whether the pages on the stack may stay, and puts back only the
+  // pages it holds back itself, see [_heldBackByReevaluation]. Never true of
+  // a page of another router, such as the tab a tab's guard is asked about.
+  bool _wasTakenOffDuringReevaluation(RouteMatch<Object?> match) {
+    if (match is! ReevaluatableRouteMatch) return false;
+    final data = match.currentPage.routeData;
+    return identical(data.router, this) &&
+        !_heldBackByReevaluation.contains(data) &&
+        !_pages.any((page) => page.routeData == data);
+  }
+
   // The pages as the last report of leaves saw them, bottom first.
   var _pagesAtLastLeaveReport = <AutoRoutePage<Object?>>[];
 
@@ -2300,6 +2324,10 @@ abstract class StackRouter extends RoutingController {
   /// returns without an answer, and without
   /// [NavigationResolver.redirectUntil], holds its page back until it gives
   /// one.
+  ///
+  /// A page the app takes off while a guard still decides, as [replace],
+  /// [replaceAll], [removeWhere] and [navigate] do, stays off whatever the
+  /// guard then answers.
   ///
   /// Called again while a guard still runs its check, it asks the guards once
   /// more when that round ends, so the last change wins.
@@ -3021,13 +3049,20 @@ abstract class StackRouter extends RoutingController {
   // as a canceled replace navigation leaves the current entry and url on the
   // web, and Flutter's Navigator.pushReplacement takes the old route off in
   // the same step that pushes the new one.
-  VoidCallback _replacingTop() {
+  //
+  // With [isHeldBack], for the redirect of a guard that a reevaluation asks:
+  // the reevaluation puts the page back once its guards let it through, see
+  // [_heldBackByReevaluation].
+  VoidCallback _replacingTop({bool isHeldBack = false}) {
     final replaced = _pages.lastOrNull?.routeData;
     return () {
       // a guard may have removed it already, e.g. with redirectUntil(replace:
       // true)
       if (replaced != null &&
           _pages.any((page) => page.routeData == replaced)) {
+        if (isHeldBack && _reevaluationsInProgress > 0) {
+          _heldBackByReevaluation.add(replaced);
+        }
         _markLeaving(
           _pages.where((page) => page.routeData == replaced),
           .replaced,
@@ -3046,6 +3081,7 @@ abstract class StackRouter extends RoutingController {
     onMatch,
     OnNavigationFailure? onFailure,
     bool replace = false,
+    bool isReevaluating = false,
   }) {
     final scope = _findStackScope(route);
     return scope._push(
@@ -3054,7 +3090,9 @@ abstract class StackRouter extends RoutingController {
       onMatch: (match) => onMatch(scope, match),
       // The page on top leaves only once the guards let [route] through, as
       // with replace: a [route] that doesn't open leaves it on the stack.
-      onAccepted: replace ? scope._replacingTop() : null,
+      onAccepted: replace
+          ? scope._replacingTop(isHeldBack: isReevaluating)
+          : null,
     );
   }
 
@@ -3209,6 +3247,9 @@ abstract class StackRouter extends RoutingController {
               : accepted;
           _markLeaving(_pages, .replaced);
           _pages.clear();
+          // Also the pages a reevaluation holds off the stack for a guard
+          // that has not answered: they are replaced with the rest.
+          _heldBackByReevaluation.clear();
           if (!updateExistingRoutes) {
             _stackKey = UniqueKey();
           }
@@ -3659,7 +3700,11 @@ abstract class StackRouter extends RoutingController {
         for (final route in routes.skip(index))
           if (route is ReevaluatableRouteMatch) route.currentPage.routeData,
       };
-      _pages.removeWhere((page) => leaving.contains(page.routeData));
+      final onStack = _pages
+          .where((page) => leaving.contains(page.routeData))
+          .toList();
+      _pages.removeWhere(onStack.contains);
+      _heldBackByReevaluation.addAll(onStack.map((page) => page.routeData));
     }
 
     // A batch over pages already on screen, such as pushAll or a link with
@@ -3745,12 +3790,15 @@ abstract class StackRouter extends RoutingController {
       _endTurn(turn);
       if (_isDisposed) return null;
     }
+    if (isReevaluating) _reevaluationsInProgress++;
     try {
       for (var i = 0; i < routes.length; i++) {
         if (wasPopped(routes[i])) {
           takeOffPagesFrom(i + 1);
           break;
         }
+        // Not asked: the page is no longer there to stay or to close.
+        if (_wasTakenOffDuringReevaluation(routes[i])) continue;
         final answer = _canNavigate(
           routes[i],
           onFailure: onFailure,
@@ -3787,6 +3835,9 @@ abstract class StackRouter extends RoutingController {
           takeOffPagesFrom(i + 1);
           break;
         }
+        // The app took the page off while its guard decided: the answer
+        // comes too late to put it back, or to close the pages above it.
+        if (_wasTakenOffDuringReevaluation(routes[i])) continue;
         if (result.continueNavigation) {
           final isLast = i == routes.length - 1;
           if (isHeld && !isLast) {
@@ -3845,6 +3896,9 @@ abstract class StackRouter extends RoutingController {
       }
     } finally {
       _endWaitOfTakenOff(takenOff);
+      if (isReevaluating && --_reevaluationsInProgress == 0) {
+        _heldBackByReevaluation.clear();
+      }
     }
     return null;
   }

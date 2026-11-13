@@ -140,6 +140,8 @@ import 'override_args_on_reevaluate_test.dart' as override_args_on_reevaluate;
 import 'override_children_on_reevaluate_test.dart'
     as override_children_on_reevaluate;
 import 'page_semantics_identifier_test.dart' as page_semantics_identifier;
+import 'page_taken_off_while_reevaluating_test.dart'
+    as page_taken_off_while_reevaluating;
 import 'page_view_fast_guard_swipe_test.dart' as page_view_fast_guard_swipe;
 import 'page_view_quick_tab_changes_test.dart' as page_view_quick_tab_changes;
 import 'page_view_second_swipe_guard_test.dart' as page_view_second_swipe_guard;
@@ -452,6 +454,7 @@ void main() {
   override_args_on_reevaluate.main();
   override_children_on_reevaluate.main();
   page_semantics_identifier.main();
+  page_taken_off_while_reevaluating.main();
   page_view_fast_guard_swipe.main();
   page_view_quick_tab_changes.main();
   page_view_second_swipe_guard.main();

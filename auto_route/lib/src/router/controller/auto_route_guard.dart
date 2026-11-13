@@ -354,10 +354,16 @@ class NavigationResolver {
     bool replace = false,
   }) async {
     if (_isRedirecting) return;
+    final reevaluatedRoute = route;
+    // The app took the page off while this guard decided whether it may
+    // stay: no page is left to show [target] for.
+    if (_router._wasTakenOffDuringReevaluation(reevaluatedRoute)) {
+      if (!isResolved) reject();
+      return;
+    }
     _isRedirecting = true;
     // keep the page being reevaluated under the redirect route so its state is
     // preserved
-    final reevaluatedRoute = route;
     if (reevaluatedRoute is ReevaluatableRouteMatch<Object?, Object?> &&
         !_router._pages.contains(reevaluatedRoute.currentPage)) {
       _router._pages.add(reevaluatedRoute.currentPage);
@@ -370,6 +376,7 @@ class NavigationResolver {
       target,
       onFailure: onFailure,
       replace: replace,
+      isReevaluating: reevaluatedRoute is ReevaluatableRouteMatch,
       onMatch: (scope, match) =>
           unawaited(_removeRedirectOnceResolved(scope, match)),
     );
