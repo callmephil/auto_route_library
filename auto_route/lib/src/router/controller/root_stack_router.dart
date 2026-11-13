@@ -39,10 +39,9 @@ abstract class RootStackRouter extends StackRouter {
   // Holds, in the zone a link's navigation runs in, the count of that link.
   static final _linkZone = Object();
 
-  // What the link counted [_acceptingLink] does once it is let in, until a
-  // guarded navigation of that link takes it, see [_takeLinkAcceptedStep].
-  VoidCallback? _linkAccepted;
-  int? _acceptingLink;
+  // What each link does once it is let in, by its count, until a guarded
+  // navigation of that link takes it, see [_takeLinkAcceptedStep].
+  final _linkSteps = <int, VoidCallback>{};
 
   // Runs [open], which starts the navigation of a new link, as that link's.
   // The navigation starts before [open] returns, up to its first guard, and
@@ -56,22 +55,25 @@ abstract class RootStackRouter extends StackRouter {
     VoidCallback? onAccepted,
   }) {
     final link = _startingLink = ++_linkCount;
-    _linkAccepted = () {
-      if (link > _letInLink) _letInLink = link;
+    _linkSteps[link] = () {
+      if (link > _letInLink) {
+        _letInLink = link;
+        // The links before it give up at their next guard.
+        _linkSteps.removeWhere((other, _) => other < link);
+      }
       onAccepted?.call();
     };
-    _acceptingLink = link;
     final Future<void> navigation;
     try {
       navigation = runZoned(open, zoneValues: {_linkZone: link});
     } finally {
       _startingLink = null;
     }
-    if (_acceptingLink == link && _linkAccepted != null) {
+    if (_linkSteps.containsKey(link)) {
       // The navigation's own failure reaches its caller, which awaits it.
       unawaited(
         navigation.then(
-          (_) => _takeAcceptedStepOf(link)?.call(),
+          (_) => _linkSteps.remove(link)?.call(),
           onError: (Object _) => null,
         ),
       );
@@ -88,39 +90,35 @@ abstract class RootStackRouter extends StackRouter {
   // The step the link whose navigation runs takes once it is let in, for
   // the guarded navigation it starts to run; null for any other navigation
   // and once taken.
-  VoidCallback? _takeLinkAcceptedStep() => _takeAcceptedStepOf(_currentLink);
-
-  VoidCallback? _takeAcceptedStepOf(int? link) {
-    if (link == null || link != _acceptingLink) return null;
-    final step = _linkAccepted;
-    _linkAccepted = null;
-    return step;
+  VoidCallback? _takeLinkAcceptedStep() {
+    final link = _currentLink;
+    return link == null ? null : _linkSteps.remove(link);
   }
 
   // Makes [step] the step of the link whose navigation runs now, for the
   // guarded navigation it starts next to take, as when a tab change hands
   // it on to the tab's nested router, after any step that waits already.
-  // False when no link's navigation runs, or a later link has started.
-  bool _handLinkStepOn(VoidCallback step) {
+  // Drops it when a later link has been let in.
+  void _handLinkStepOn(VoidCallback step) {
     final link = _currentLink;
-    if (link == null || link != _acceptingLink) return false;
-    final waiting = _linkAccepted;
-    _linkAccepted = waiting == null
+    if (link == null || _isLinkOvertaken(link)) return;
+    final waiting = _linkSteps[link];
+    _linkSteps[link] = waiting == null
         ? step
         : () {
             waiting();
             step();
           };
-    return true;
   }
 
   // Whether [step] waits for the link whose navigation runs now to be let
   // in, as it does while a guard of that link has yet to answer; it then
   // runs with the link's own step, or not at all if the link is turned down.
   bool _deferToLinkAccepted(VoidCallback step) {
-    final linkStep = _linkAccepted;
-    if (linkStep == null || _currentLink != _acceptingLink) return false;
-    _linkAccepted = () {
+    final link = _currentLink;
+    final linkStep = link == null ? null : _linkSteps[link];
+    if (link == null || linkStep == null) return false;
+    _linkSteps[link] = () {
       linkStep();
       step();
     };

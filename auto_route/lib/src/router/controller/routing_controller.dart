@@ -1378,11 +1378,11 @@ class TabsRouter extends RoutingController {
     }
 
     void openInside(RouteMatch<Object?> tab) {
-      final isHandedOn = root._handLinkStepOn(onLetIn);
+      root._handLinkStepOn(onLetIn);
       unawaited(_navigateInsideTab(tab, onFailure: onFailure));
       // A nested router whose navigation asks no guard, such as a
       // declarative one, leaves the step: the tab shows at once.
-      if (isHandedOn) root._takeLinkAcceptedStep()?.call();
+      root._takeLinkAcceptedStep()?.call();
     }
 
     final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
@@ -3925,7 +3925,8 @@ abstract class StackRouter extends RoutingController {
     // keeps no history: their callers wait until the batch ends; see
     // [_endWaitOfTakenOff].
     final takenOff = <AutoRoutePage<Object?>>[];
-    final link = root._startingLink;
+    // The link whose navigation runs this batch, also in a nested router.
+    final link = root._currentLink;
     // What the link that starts this batch does once its guards let it in.
     final onLinkAccepted = root._takeLinkAcceptedStep();
     // The page that takes over the screen on top opens its children in that
@@ -4057,7 +4058,7 @@ abstract class StackRouter extends RoutingController {
             if (onLinkAccepted != null) {
               _innerControllerOfMatch(match.id) != null &&
                       (match.children?.isNotEmpty ?? false)
-                  ? root._linkAccepted = onLinkAccepted
+                  ? root._handLinkStepOn(onLinkAccepted)
                   : onLinkAccepted();
             }
             // With [replacement], the routes go on as it returns them, after
