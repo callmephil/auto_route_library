@@ -92,6 +92,10 @@ class _AutoTabsRouterIndexedStackState
   @override
   void didUpdateWidget(covariant _AutoTabsRouterIndexedStack oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // The next tab change animates as the app now asks, as Flutter's animated
+    // widgets take a new duration on a rebuild.
+    _animationController.duration = widget.duration;
+    _curvedAnimation.curve = widget.curve;
     if (!const ListEquality<Object?>().equals(
       widget.routes,
       oldWidget.routes,

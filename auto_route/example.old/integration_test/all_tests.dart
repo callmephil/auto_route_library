@@ -243,6 +243,7 @@ import 'tab_shared_route_navigate_test.dart' as tab_shared_route_navigate;
 import 'tab_switch_then_dispose_test.dart' as tab_switch_then_dispose;
 import 'tab_view_page_controller_test.dart' as tab_view_page_controller;
 import 'tabs_deep_link_test.dart' as tabs_deep_link;
+import 'tabs_duration_update_test.dart' as tabs_duration_update;
 import 'tabs_page_view_page_controller_test.dart'
     as tabs_page_view_page_controller;
 import 'tabs_pop_scope_test.dart' as tabs_pop_scope;
@@ -491,6 +492,7 @@ void main() {
   tab_switch_then_dispose.main();
   tab_view_page_controller.main();
   tabs_deep_link.main();
+  tabs_duration_update.main();
   tabs_page_view_page_controller.main();
   tabs_pop_scope.main();
   tabs_scaffold_build_count.main();
