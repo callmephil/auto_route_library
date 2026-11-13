@@ -31,6 +31,7 @@ void main() {
         ('HomeRoute', '/'),
         ('DetailsRoute', '/details'),
         ('OtherRoute', '/other'),
+        ('WelcomeRoute', '/welcome'),
       ])
         NamedRouteDef(
           name: name,
@@ -230,5 +231,35 @@ void main() {
     expect(stackNames(router), ['HomeRoute', 'DetailsRoute']);
     expect(find.text('DetailsRoute'), findsOneWidget);
     expect(router.currentUrl, '/details');
+  });
+
+  // Found by the second audit of the library (L2-4, its link form).
+  // Steps: a link whose guard shows a sign-in page over the open pages; the
+  // sign-in page then replaces the stack itself, as a "continue as guest"
+  // button or a sign-in handler that calls replaceAll does.
+  // Should: only the new page is left. The guard's redirect ends with its
+  // page, which rejects the link, and the open pages must not come back
+  // under the new one.
+  // Native behavior this holds to: replaceAll leaves only its own pages, as
+  // an Android start with FLAG_ACTIVITY_CLEAR_TASK does and as iOS
+  // setViewControllers drops every controller not in the new array.
+  testWidgets('A sign-in page that replaces the stack leaves only its new '
+      'page', (tester) async {
+    final router = buildRouter();
+    await pumpRouterConfigApp(
+      tester,
+      router.config(rebuildStackOnDeepLink: true),
+    );
+    await openDetails(tester, router);
+    await tester.binding.handlePushRoute('/account');
+    await tester.pumpAndSettle();
+    expect(find.text('OtherRoute'), findsOneWidget);
+
+    unawaited(router.replaceAll([const NamedRoute('WelcomeRoute')]));
+    await tester.pumpAndSettle();
+
+    expect(stackNames(router), ['WelcomeRoute']);
+    expect(find.text('WelcomeRoute'), findsOneWidget);
+    expect(router.canPop(), isFalse);
   });
 }
