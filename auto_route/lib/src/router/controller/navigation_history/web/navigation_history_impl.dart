@@ -97,6 +97,11 @@ class NavigationHistoryImpl extends NavigationHistory {
         newPage != appEntryPage &&
         _isSameUrl(_entries[_appIndex]?.url, newState.url) &&
         controllerOfPage(appEntryPage) == null;
+    // The app's first url, when it differs from the one the browser was opened
+    // at, as one written without an empty query value, takes that entry.
+    final reported = _appIndex == null && notify && !didBrowserMoveFirst
+        ? newState.copyWith(shouldReplace: true)
+        : newState;
     final hasFrame = notify && _startFrame();
     // Outside a frame, a step back moves the browser itself, which reports the
     // url once it gets there; a notification now would make the router write
@@ -104,7 +109,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     final doesNotify = notify && (!_isSteppingBack || hasFrame);
     _doesAddEntryWithSameUrl = doesNotify && isPushedOverSameUrl;
     try {
-      super.onNewUrlState(newState, notify: doesNotify);
+      super.onNewUrlState(reported, notify: doesNotify);
     } finally {
       _doesAddEntryWithSameUrl = false;
     }
@@ -116,9 +121,12 @@ class NavigationHistoryImpl extends NavigationHistory {
       _frameStartEntries?[browserIndex] = newState;
       if (_frameStartEntries != null) _frameStartIndex = browserIndex;
     } else if (notify && (isNewUrl || isPushedOverSameUrl || isNewPage)) {
+      final appIndex = _appIndex;
       _record(
         newState,
-        (_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1),
+        appIndex == null
+            ? browserIndex
+            : appIndex + (newState.shouldReplace ? 0 : 1),
       );
     }
   }
