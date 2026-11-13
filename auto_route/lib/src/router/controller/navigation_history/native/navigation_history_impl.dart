@@ -118,7 +118,7 @@ class NavigationHistoryImpl extends NavigationHistory {
   void back() {
     if (canNavigateBack) {
       _isNavigatingBack = true;
-      _entries.removeLast();
+      final left = _entries.removeLast();
 
       final last = _entries.lastOrNull;
       if (last == null) {
@@ -135,7 +135,16 @@ class NavigationHistoryImpl extends NavigationHistory {
       removePagesAbove(last.pageId);
       unawaited(
         router.navigateAll([last.route]).whenComplete(() {
-          if (backCount == _backCount) _stopNavigatingBack();
+          if (backCount != _backCount) return;
+          // The router never reported the entry's url and still shows the
+          // page left, as when a guard rejects it: a refused navigation
+          // changes nothing, so that page keeps its entry.
+          if (_isNavigatingBack &&
+              urlState.url == left.url &&
+              urlState.topMatch?.id == left.pageId) {
+            _entries.add(left);
+          }
+          _stopNavigatingBack();
         }),
       );
     }

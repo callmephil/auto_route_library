@@ -6,6 +6,7 @@ import 'android_back_in_app_test.dart' as android_back_in_app;
 import 'app_smoke_test.dart' as app_smoke;
 import 'async_simple_guard_test.dart' as async_simple_guard;
 import 'back_in_tabs_test.dart' as back_in_tabs;
+import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
 import 'back_same_url_test.dart' as back_same_url;
 import 'back_twice_test.dart' as back_twice;
@@ -292,6 +293,7 @@ void main() {
   app_smoke.main();
   async_simple_guard.main();
   back_in_tabs.main();
+  back_rejected_by_guard.main();
   back_same_route_params.main();
   back_same_url.main();
   back_twice.main();
