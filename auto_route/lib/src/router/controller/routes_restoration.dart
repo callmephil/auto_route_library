@@ -110,17 +110,27 @@ List<PageRouteInfo>? _restoredRoutes(Object? saved) {
 List<RouteMatch<Object?>> _buildableMatches(
   List<RouteMatch<Object?>> matches,
   RoutingController router,
+) => _buildableMatchesUnder(router.routeData, matches, router);
+
+// [_buildableMatches], each page built under [parent], the page of its parent
+// route, so the path params it inherits are there.
+List<RouteMatch<Object?>> _buildableMatchesUnder(
+  RouteData<Object?> parent,
+  List<RouteMatch<Object?>> matches,
+  RoutingController router,
 ) {
   final buildable = <RouteMatch<Object?>>[];
   for (final match in matches) {
+    final data = RouteData<Object?>(
+      route: match,
+      router: router,
+      stackKey: UniqueKey(),
+      pendingChildren: const [],
+      type: match.type ?? router.root.defaultRouteType,
+      parent: parent,
+    );
     try {
-      RouteData<Object?>(
-        route: match,
-        router: router,
-        stackKey: UniqueKey(),
-        pendingChildren: const [],
-        type: match.type ?? router.root.defaultRouteType,
-      ).buildPage<Object?>();
+      data.buildPage<Object?>();
       // A page that needs args it can't get is skipped; that is the error to
       // catch.
     } on MissingRequiredParameterError {
@@ -130,7 +140,9 @@ List<RouteMatch<Object?>> _buildableMatches(
     buildable.add(
       children == null
           ? match
-          : match.copyWith(children: _buildableMatches(children, router)),
+          : match.copyWith(
+              children: _buildableMatchesUnder(data, children, router),
+            ),
     );
   }
   return buildable;

@@ -228,6 +228,7 @@ import 'replaced_push_future_test.dart' as replaced_push_future;
 import 'required_args_test.dart' as required_args;
 import 'restore_args_test.dart' as restore_args;
 import 'restore_history_test.dart' as restore_history;
+import 'restore_inherited_path_param_test.dart' as restore_inherited_path_param;
 import 'restore_stack_test.dart' as restore_stack;
 import 'restore_tabs_test.dart' as restore_tabs;
 import 'restore_with_link_test.dart' as restore_with_link;
@@ -507,6 +508,7 @@ void main() {
   required_args.main();
   restore_args.main();
   restore_history.main();
+  restore_inherited_path_param.main();
   restore_stack.main();
   restore_tabs.main();
   restore_with_link.main();
