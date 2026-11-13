@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -21,6 +22,10 @@ import '../router_test_utils.dart';
 // was shown and left with a push, on Android's back stack, iOS's
 // UINavigationController and the browser's history. A navigation that
 // shows nothing, here to a tab no longer on screen, writes no entry.
+// On the web router.back() is the browser's own history.back(), which the
+// default test runner never hands to the app, so this test runs off the web.
+// The browser's back button is tested in
+// test/web/late_tab_guard_browser_back_web_test.dart.
 void main() {
   testWidgets('back after a late tab guard shows the page pushed over', (
     tester,
@@ -85,5 +90,5 @@ void main() {
 
     expect(find.text('SettingsRoute'), findsOneWidget);
     expect(router.urlState.url, '/settings');
-  });
+  }, skip: kIsWeb);
 }
