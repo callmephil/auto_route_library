@@ -359,6 +359,9 @@ class AutoTabViewState extends State<AutoTabView> {
           1.0,
         );
       }
+      // A drag that ended where it began changed no tab, so nothing else drops
+      // a tab without kept state that it uncovered.
+      _disposeInactiveChildren();
     }
     _scrollUnderwayCount -= 1;
   }

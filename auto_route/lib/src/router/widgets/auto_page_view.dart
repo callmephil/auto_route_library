@@ -298,6 +298,9 @@ class AutoPageViewState extends State<AutoPageView> {
         }
       }
     } else if (notification is ScrollEndNotification) {
+      // A drag that ended where it began changed no tab, so nothing else drops
+      // a tab without kept state that it uncovered.
+      _disposeInactiveChildren();
       // A tab whose guards still decide stays out, and asking again doesn't
       // notify: until they let it in, the active tab comes back on screen.
       // The scroll that ended settles first.
