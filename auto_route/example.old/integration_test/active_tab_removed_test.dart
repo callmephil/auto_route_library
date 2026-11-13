@@ -21,7 +21,9 @@ void main() {
       // Was: the url stayed '/c', and on Android 13 and later back closed the
       // app.
       // Should: the url is '/a/2', and back pops A2, as Android's back pops
-      // the page on top of the tab on screen.
+      // the page on top of the tab on screen. In a browser the url of A2
+      // replaces C's entry, as a redirect does, so the back button never
+      // shows '/c' again.
       testWidgets(
         '${kind.name}: the url and back follow the tab shown after the active '
         'tab is removed',
@@ -40,8 +42,11 @@ void main() {
           await tester.tap(find.text('Open tab C').hitTestable());
           await tester.pumpAndSettle();
           expect(find.text('C1').hitTestable(), findsOneWidget);
-          await tester.tap(find.text('Drop tab C').hitTestable());
-          await tester.pumpAndSettle();
+          // In a browser the url of A2 replaces the entry of C, which left.
+          await expectBrowserEntryAfter(0, () async {
+            await tester.tap(find.text('Drop tab C').hitTestable());
+            await tester.pumpAndSettle();
+          });
 
           expect(tester.takeException(), isNull);
           expect(find.text('A2').hitTestable(), findsOneWidget);

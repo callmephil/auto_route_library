@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -28,6 +29,10 @@ import '../router_test_utils.dart';
 // whether it takes back through SystemNavigator.setFrameworkHandlesBack, and
 // while that is false Android closes the app itself. The control shows the
 // same tab reached with setActiveIndex.
+// On the web Flutter tells the platform nothing about back
+// (SystemNavigator.setFrameworkHandlesBack returns at once there), so the
+// Android checks run off the web only. The browser's back button is tested in
+// test/web/active_tab_removed_browser_back_web_test.dart.
 void main() {
   for (final kind in _Tabs.values) {
     testWidgets(
@@ -51,6 +56,7 @@ void main() {
     testWidgets(
       '${kind.name}: Android back stays in the app after the active tab is '
       'removed',
+      skip: kIsWeb,
       (tester) async {
         final routes = ValueNotifier<List<PageRouteInfo>>(_kTabs);
         addTearDown(routes.dispose);
@@ -82,7 +88,7 @@ void main() {
 
       expect(find.text('A2'), findsOneWidget);
       expect(router.urlState.url, '/a/2');
-      expect(recorder.isHandlingBack, isTrue);
+      if (!kIsWeb) expect(recorder.isHandlingBack, isTrue);
     });
   }
 
@@ -181,7 +187,7 @@ Future<(RootStackRouter, TabsRouter, FrameworkHandlesBackRecorder)> _pumpTabs(
   unawaited(tabs.stackRouterOfIndex(0)!.push(const NamedRoute('A2')));
   await tester.pumpAndSettle();
   expect(find.text('A2'), findsOneWidget);
-  expect(recorder.isHandlingBack, isTrue);
+  if (!kIsWeb) expect(recorder.isHandlingBack, isTrue);
   tabs.setActiveIndex(2);
   await tester.pumpAndSettle();
   expect(find.text('C1'), findsOneWidget);

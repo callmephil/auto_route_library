@@ -1733,11 +1733,15 @@ class TabsRouter extends RoutingController {
     }
     // Another page is on screen: the url names it, and Android hears whether
     // the app takes back from it. This runs while the tabs widget builds, so
-    // they are told after the frame.
+    // they are told after the frame. The user navigated to none of it, so the
+    // url replaces the browser's entry, as a redirect does, and back never
+    // returns to the url of a tab that left.
     if (_activePage != previousActivePage) {
       SchedulerBinding.instance
         ..addPostFrameCallback((_) {
-          if (!_isDisposed) notifyAll();
+          if (_isDisposed) return;
+          markUrlStateForReplace();
+          notifyAll(forceUrlRebuild: true);
         })
         ..ensureVisualUpdate();
     }
