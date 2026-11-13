@@ -1,6 +1,7 @@
 import 'package:integration_test/integration_test.dart';
 
 import 'active_guard_observer_test.dart' as active_guard_observer;
+import 'active_tab_removed_test.dart' as active_tab_removed;
 import 'ancestor_path_params_test.dart' as ancestor_path_params;
 import 'android_back_in_app_test.dart' as android_back_in_app;
 import 'app_smoke_test.dart' as app_smoke;
@@ -317,6 +318,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   active_guard_observer.main();
+  active_tab_removed.main();
   ancestor_path_params.main();
   android_back_in_app.main();
   app_smoke.main();

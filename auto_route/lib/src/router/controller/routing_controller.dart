@@ -1665,6 +1665,16 @@ class TabsRouter extends RoutingController {
         _pendingTab = index;
       }
     }
+    // Another page is on screen: the url names it, and Android hears whether
+    // the app takes back from it. This runs while the tabs widget builds, so
+    // they are told after the frame.
+    if (_activePage != previousActivePage) {
+      SchedulerBinding.instance
+        ..addPostFrameCallback((_) {
+          if (!_isDisposed) notifyAll();
+        })
+        ..ensureVisualUpdate();
+    }
   }
 
   // Where the tab of [page], one of the tabs before they changed, is now:
