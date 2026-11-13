@@ -1846,6 +1846,7 @@ abstract class StackRouter extends RoutingController {
       ..._pagesAtLastLeaveReport,
       ..._pages,
       ..._takenOffByOpenBatches,
+      ..._takenOffForNewPage,
     });
   }
 
@@ -1911,9 +1912,19 @@ abstract class StackRouter extends RoutingController {
   // [_endWaitOfTakenOff].
   final _takenOffByOpenBatches = <AutoRoutePage<Object?>>{};
 
-  // Whether a batch is putting on the page of a route before its last; a page
-  // taken off meanwhile answers its caller only once the batch ends.
-  var _isBatchStepRunning = false;
+  // Whether a page is being taken off for a new page that goes on in its
+  // place, as a top page that keeps no history is, or the page replace
+  // replaces. The page answers its caller only once the new page is on, see
+  // [_takenOffForNewPage].
+  var _isTakingOffForNewPage = false;
+
+  // The pages taken off for a new page, until that page is on the stack. The
+  // new page may take over the screen of one of them, as a page of the same
+  // route does: the screen then stays, and the code that opened it goes on
+  // waiting for its result, as Flutter's Navigator keeps the route and its
+  // future for a page of the same type and key. The others answer null, see
+  // [_endWaitOfTakenOff].
+  final _takenOffForNewPage = <AutoRoutePage<Object?>>[];
 
   void _markLeaving(
     Iterable<AutoRoutePage<Object?>> pages,
@@ -2407,8 +2418,12 @@ abstract class StackRouter extends RoutingController {
     if (pageIndex != -1) {
       final page = _pages.removeAt(pageIndex);
       // Removed pages may be disposed without a pop callback from Navigator.
-      // A page a batch takes off waits for the batch to end.
-      if (!_isBatchStepRunning) page.routeData.onPopInvoked(null);
+      // A page taken off for a new page waits until that page is on.
+      if (_isTakingOffForNewPage) {
+        _takenOffForNewPage.add(page);
+      } else {
+        page.routeData.onPopInvoked(null);
+      }
     }
     _shareTopPathData();
     if (notify) {
@@ -2658,6 +2673,11 @@ abstract class StackRouter extends RoutingController {
   /// The last entry is removed only once the guards of [route] let it
   /// through; a rejected [route] leaves the stack as it was.
   ///
+  /// The code that opened the last entry gets `null` as it leaves. When
+  /// [route] is that entry's own route, with other params or args, the screen
+  /// stays and shows the new page, and that code goes on waiting for the
+  /// result the screen closes with.
+  ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
   @optionalTypeArgs
@@ -2691,7 +2711,9 @@ abstract class StackRouter extends RoutingController {
           _pages.where((page) => page.routeData == replaced),
           .replaced,
         );
-        _removeRoute(replaced._route, notify: false);
+        _takingOffForNewPage(
+          () => _removeRoute(replaced._route, notify: false),
+        );
       }
       markUrlStateForReplace();
     };
@@ -3293,7 +3315,7 @@ abstract class StackRouter extends RoutingController {
     // its guards let through as [match].
     void putOn(int index, RouteMatch<Object?> match) {
       final pagesBefore = List.of(_pages);
-      _runBatchStep(() {
+      _takingOffForNewPage(() {
         if (index == 0) onFirstRouteAccepted?.call();
         if (match is ReevaluatableRouteMatch) {
           _addReevaluatedPage(match, notify: false);
@@ -3421,15 +3443,17 @@ abstract class StackRouter extends RoutingController {
     return null;
   }
 
-  // Runs [step], which puts on the page of a route before a batch's last.
-  // The pages [step] takes off keep their callers waiting until the batch
-  // ends, see [_endWaitOfTakenOff].
-  void _runBatchStep(VoidCallback step) {
-    _isBatchStepRunning = true;
+  // Runs [step], which takes pages off for a new page: the top page that
+  // keeps no history, the page replace replaces, or all a route before a
+  // batch's last takes off. They keep their callers waiting until the new
+  // page is on, see [_takenOffForNewPage].
+  void _takingOffForNewPage(VoidCallback step) {
+    final wasTakingOff = _isTakingOffForNewPage;
+    _isTakingOffForNewPage = true;
     try {
       step();
     } finally {
-      _isBatchStepRunning = false;
+      _isTakingOffForNewPage = wasTakingOff;
     }
   }
 
@@ -3494,7 +3518,7 @@ abstract class StackRouter extends RoutingController {
     final shownTop = _pages.lastOrNull?.routeData;
     if (shownTop != null && !shownTop._route.keepHistory) {
       markUrlStateForReplace();
-      _removeRoute(shownTop._route, notify: false);
+      _takingOffForNewPage(() => _removeRoute(shownTop._route, notify: false));
     }
     var match = route;
     final takenOver = index == null ? _shownTopTakenOverBy(route) : null;
@@ -3546,6 +3570,9 @@ abstract class StackRouter extends RoutingController {
     } else {
       _pages.add(page);
     }
+    // The pages taken off for this page answer their callers, except one
+    // whose screen and wait this page took over.
+    _endWaitOfTakenOff(_takenOffForNewPage);
     if (notify) {
       notifyAll();
     }

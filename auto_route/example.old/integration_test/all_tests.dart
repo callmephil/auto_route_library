@@ -231,6 +231,8 @@ import 'tabs_page_view_page_controller_test.dart'
 import 'tabs_pop_scope_test.dart' as tabs_pop_scope;
 import 'tabs_scaffold_build_count_test.dart' as tabs_scaffold_build_count;
 import 'tabs_url_without_initial_test.dart' as tabs_url_without_initial;
+import 'taken_over_screen_keeps_caller_test.dart'
+    as taken_over_screen_keeps_caller;
 import 'theme_change_test.dart' as theme_change;
 import 'theme_page_transitions_test.dart' as theme_page_transitions;
 import 'typed_screen_reached_again_test.dart' as typed_screen_reached_again;
@@ -462,6 +464,7 @@ void main() {
   tabs_pop_scope.main();
   tabs_scaffold_build_count.main();
   tabs_url_without_initial.main();
+  taken_over_screen_keeps_caller.main();
   theme_change.main();
   theme_page_transitions.main();
   typed_screen_reached_again.main();
