@@ -38,12 +38,20 @@ class DeferredWidget extends StatefulWidget {
   static final Set<LibraryLoader> _loadedModules = {};
 
   static Future<void> _preload(LibraryLoader loader) {
-    if (!_moduleLoaders.containsKey(loader)) {
-      _moduleLoaders[loader] = loader().then((_) {
-        _loadedModules.add(loader);
-      });
+    return _moduleLoaders[loader] ??= _load(loader);
+  }
+
+  static Future<void> _load(LibraryLoader loader) async {
+    try {
+      await loader();
+    } on Object {
+      // A load that failed, as when the network drops on the web, is tried
+      // again by the next page that needs it: loadLibrary() may be called
+      // again after a failure. The future taken out is this load's own.
+      unawaited(_moduleLoaders.remove(loader));
+      rethrow;
     }
-    return _moduleLoaders[loader]!;
+    _loadedModules.add(loader);
   }
 
   @override
@@ -66,10 +74,26 @@ class _DeferredWidgetState extends State<DeferredWidget> {
       _createLoadedChild();
     } else {
       unawaited(
-        DeferredWidget._preload(widget.libraryLoader).then((_) {
-          // The page can leave the tree before its library loads.
-          if (mounted) setState(_createLoadedChild);
-        }),
+        DeferredWidget._preload(widget.libraryLoader).then(
+          (_) {
+            // The page can leave the tree before its library loads.
+            if (mounted) setState(_createLoadedChild);
+          },
+          // Reported as Flutter reports an image that fails to load; the
+          // placeholder stays, and the next visit loads the library again.
+          onError: (Object error, StackTrace stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(
+                exception: error,
+                stack: stackTrace,
+                library: 'auto_route',
+                context: ErrorDescription(
+                  'while loading the deferred library of a page',
+                ),
+              ),
+            );
+          },
+        ),
       );
     }
   }

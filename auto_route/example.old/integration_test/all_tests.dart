@@ -40,6 +40,8 @@ import 'declarative_update_keeps_nested_router_test.dart'
     as declarative_update_keeps_nested_router;
 import 'deep_link_parent_build_test.dart' as deep_link_parent_build;
 import 'deferred_and_eager_page_test.dart' as deferred_and_eager_page;
+import 'deferred_page_failed_load_retry_test.dart'
+    as deferred_page_failed_load_retry;
 import 'deferred_page_popped_test.dart' as deferred_page_popped;
 import 'dialog_args_route_information_test.dart'
     as dialog_args_route_information;
@@ -341,6 +343,7 @@ void main() {
   declarative_update_keeps_nested_router.main();
   deep_link_parent_build.main();
   deferred_and_eager_page.main();
+  deferred_page_failed_load_retry.main();
   deferred_page_popped.main();
   dialog_args_route_information.main();
   dialog_then_page_animates.main();
