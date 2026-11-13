@@ -69,6 +69,7 @@ import 'fragment_question_mark_url_test.dart' as fragment_question_mark_url;
 import 'full_url_nested_path_test.dart' as full_url_nested_path;
 import 'generic_page_test.dart' as generic_page;
 import 'guard_answers_at_once_test.dart' as guard_answers_at_once;
+import 'guard_throws_tab_test.dart' as guard_throws_tab;
 import 'guard_throws_test.dart' as guard_throws;
 import 'hero_controller_builder_test.dart' as hero_controller_builder;
 import 'hero_nested_router_test.dart' as hero_nested_router;
@@ -378,6 +379,7 @@ void main() {
   generic_page.main();
   guard_answers_at_once.main();
   guard_throws.main();
+  guard_throws_tab.main();
   hero_controller_builder.main();
   hero_nested_router.main();
   home_index_back.main();

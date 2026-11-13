@@ -1231,7 +1231,21 @@ class TabsRouter extends RoutingController {
         remember: remember,
         keepsUnnamedPages: keepsUnnamedPages,
       ),
+      onError: (Object error, StackTrace stackTrace) =>
+          _failTabChange(change, error, stackTrace),
     );
+  }
+
+  // Ends the change [change] whose guard threw: the tab stays out, the next
+  // change to it asks its guards anew, and the error goes on to the caller.
+  Never _failTabChange(int change, Object error, StackTrace stackTrace) {
+    if (!_isDisposed && change == _tabChanges) {
+      _pendingTab = null;
+      _pendingChange = null;
+      // A view that moved to the tab goes back to the active one.
+      notifyListeners();
+    }
+    Error.throwWithStackTrace(error, stackTrace);
   }
 
   // Calls off the change of the active tab still waiting for its guards: it
@@ -1339,7 +1353,13 @@ class TabsRouter extends RoutingController {
       checking.ignore();
       return onResult(result);
     }
-    return checking.then(onResult);
+    return checking.then(
+      onResult,
+      onError: (Object error, StackTrace stackTrace) {
+        router.activeGuardObserver._remove(entry);
+        Error.throwWithStackTrace(error, stackTrace);
+      },
+    );
   }
 
   // The stack router guards of the tabs get, the nearest one above them.
@@ -1500,20 +1520,24 @@ class TabsRouter extends RoutingController {
       final match = preMatchedRoute!;
       final change = ++_tabChanges;
       _pendingTab = index;
-      _pendingChange = guarding.then((result) {
-        // The tab takes the first one's place in the url.
-        if (result.continueNavigation && change == _tabChanges) {
-          markUrlStateForReplace();
-        }
-        // The tabs may have changed meanwhile: replaceAll moves the tab.
-        return _endTabChange(
-          change,
-          _pendingTab ?? index,
-          match,
-          result,
-          update: true,
-        );
-      });
+      _pendingChange = guarding.then(
+        (result) {
+          // The tab takes the first one's place in the url.
+          if (result.continueNavigation && change == _tabChanges) {
+            markUrlStateForReplace();
+          }
+          // The tabs may have changed meanwhile: replaceAll moves the tab.
+          return _endTabChange(
+            change,
+            _pendingTab ?? index,
+            match,
+            result,
+            update: true,
+          );
+        },
+        onError: (Object error, StackTrace stackTrace) =>
+            _failTabChange(change, error, stackTrace),
+      );
     }
     // A host opened by a url that names no tab, such as '/tabs' when no tab is
     // initial, shows its first tab. The url names that tab too, in place of
