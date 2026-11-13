@@ -11,11 +11,12 @@ import '../router_test_utils.dart';
 // Steps: the tabs FeedTab, ProfileTab and SettingsTab, each opened once, and
 // an AutoRouterObserver. On SettingsTab, call setActiveIndex twice in one
 // turn, or navigatePath to ProfileTab and setActiveIndex to FeedTab in one
-// turn, which the tabs take as FeedTab, then ProfileTab.
+// turn. The path reaches the tabs as its call returns, so the tabs take
+// ProfileTab, then FeedTab: the later call wins.
 // Was: the default tabs named SettingsTab as the previous tab of both
 // changes. They read the active index of their last build, and no frame was
-// built on FeedTab. The page-view, tab-bar and builder tabs are controls:
-// they read the router's tabs.
+// built on the tab between. The page-view, tab-bar and builder tabs are
+// controls: they read the router's tabs.
 // Native behavior this holds to: Flutter's TabController sets previousIndex
 // to the index it leaves on every change, also for two in one frame.
 void main() {
@@ -53,8 +54,8 @@ void main() {
         expect(
           (tabs.current.name, _events.join('; ')),
           (
-            'ProfileTab',
-            'change FeedTab from SettingsTab; change ProfileTab from FeedTab',
+            'FeedTab',
+            'change ProfileTab from SettingsTab; change FeedTab from ProfileTab',
           ),
         );
       },
