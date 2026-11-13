@@ -218,7 +218,9 @@ class RouteData<R> {
   /// Helper to access [RouteMatch.queryParams]
   Parameters get queryParams => _route.queryParams;
 
-  /// Helper to access [RouteMatch.fragment]
+  /// The url fragment, as the url has it: [RouteMatch.fragment]
+  ///
+  /// Not decoded, so '/docs#my%20section' reads 'my%20section'.
   String get fragment => _route.fragment;
 
   RouteMatch<Object?> _getTopMatch(RouteMatch<Object?> routeMatch) {

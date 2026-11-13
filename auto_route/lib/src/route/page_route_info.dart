@@ -84,7 +84,10 @@ class PageRouteInfo<T extends Object?> {
   /// by the sub-router when it's created
   final List<PageRouteInfo>? initialChildren;
 
-  /// The fragment of the [Uri.fragment]
+  /// The url fragment, as the url has it
+  ///
+  /// Not decoded; see [RouteMatch.fragment]. Pass it already encoded
+  /// ('my%20section') if the page must read the same after a reload.
   final String fragment;
 
   /// Takes the value of [RouteMatch.redirectedFrom]

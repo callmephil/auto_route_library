@@ -52,7 +52,15 @@ class RouteMatch<T> {
   /// The list of child matches of this match
   final List<RouteMatch<Object?>>? children;
 
-  /// The url fragment form [Uri.fragment]
+  /// The url fragment, as the url has it, the way [Uri.fragment] reads it
+  ///
+  /// Unlike path and query params, the fragment is not decoded: opened from
+  /// '/docs#my%20section', it reads 'my%20section', so a page can parse it
+  /// itself, as a sign-in callback parses '#token=a%2Bb'.
+  /// A fragment pushed in code is written to the url with
+  /// `Uri(fragment:)`, which escapes a space and keeps an escape that is
+  /// already there. So pass it already encoded ('my%20section', not
+  /// 'my section') if it must read the same after a reload.
   final String fragment;
 
   /// The expended path segments of this match
