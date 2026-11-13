@@ -168,6 +168,7 @@ import 'pop_and_push_all_test.dart' as pop_and_push_all;
 import 'pop_and_push_browser_back_test.dart' as pop_and_push_browser_back;
 import 'pop_and_push_from_animating_modal_test.dart'
     as pop_and_push_from_animating_modal;
+import 'pop_push_pop_test.dart' as pop_push_pop;
 import 'pop_right_after_push_test.dart' as pop_right_after_push;
 import 'pop_scope_once_test.dart' as pop_scope_once;
 import 'pop_scope_test.dart' as pop_scope;
@@ -520,6 +521,7 @@ void main() {
   pop_and_push_all.main();
   pop_and_push_browser_back.main();
   pop_and_push_from_animating_modal.main();
+  pop_push_pop.main();
   pop_right_after_push.main();
   pop_scope_once.main();
   pop_scope.main();
