@@ -52,6 +52,275 @@
   `reject(goBack: true)` leaves the stack as it was. Debug builds failed Flutter's duplicate page key assertion, and
   release builds kept the page on screen twice, so closing it showed it again: the rejected batch and the router's
   `back()` both put the page back.
+- **FIX**: a page behind an async guard stays on the stack and on screen, with the pages above it, when the app rebuilds
+  while `reevaluateGuards` or the `reevaluateListenable` asks its guard again; only the guard's answer closes it. It
+  closed, or the app went blank, as soon as anything rebuilt the app during the guard's check.
+- **FIX**, **BEHAVIOR CHANGE**: `replaceAll` keeps the pages on the stack, with their state, while a guard runs its
+  check, and replaces them in one step once every guard has let the new routes through; a `replaceAll` that a guard
+  rejects changes nothing. It emptied the stack before the guards ran: a rebuild of the app during a slow guard's check
+  showed a blank screen, and a rejection brought the pages back with their state lost. A guard that returns without an
+  answer and shows a page of its own, such as a login with `redirectUntil`, takes the old pages off for it as before:
+  back from that page shows none of them, and they come back only if the guard then rejects. A guard of `replaceAll`
+  that reads `router.stack` or `router.current` during its check now sees the pages on screen, not an empty stack.
+- **FIX**: when the `reevaluateListenable` notifies again while a guard still runs its check, the guards are asked once
+  more when that round ends, so the last change decides. The second change took the answer the guard had read before it,
+  so a page stayed open after a session ended during the guard's wait.
+- **FIX**, **BEHAVIOR CHANGE**: the pages of `pushAll`, `popAndPushAll`, `navigatePath` and `replacePath` with
+  `includePrefixMatches`, and a link that comes with the pages below its own go on in one step, once every guard has let
+  its route through, as Flutter's Navigator takes a new list of pages as one update. Each page went on as its own guards
+  accepted it, so `router.stack` and `router.current` showed the first pages while a later guard still decided, and a
+  rebuild of the app brought them on screen. An app opened at a link still opens each page as its guards let it through.
+  Two things an app can notice: a guard of a batch reads the stack without the batch's earlier pages while it decides,
+  and a login page that a later guard of `pushAll` shows over a page with `keepHistory: false` now takes that page off,
+  as a single push with that guard already did, so canceling the login shows the page below it.
+- **FIX**: `resolver.redirectUntil(route, replace: true)` takes the page on top off only once the guards have let its
+  target through. It took the page off the stack first, so after a target that a guard rejects, or that no route
+  matches, the page was still on screen but no longer on the stack: the next change of the stack took it away, and back
+  skipped it.
+- **FIX**: a guard that throws, as an async guard does when its request fails, leaves the router working: the navigation
+  fails with the guard's error, the stack stays as it was, `activeGuardObserver.guardInProgress` goes back to `false`,
+  and later reevaluations still ask the guards. A throw during a push left `guardInProgress` on `true` for good, and
+  after a throw during a reevaluation the guards were never asked again, so a later sign-out closed nothing.
+- **FIX**: the `onFailure` callback of `replaceAll` and `navigatePath` hears a guard's rejection, as a
+  `RejectedByGuardFailure`, as the callback of the other navigation calls does. It was never called for one.
+- **FIX**: `reevaluateGuards` and the `reevaluateListenable` ask the guards of every page again, also in the nested
+  router or the tabs of a page that another page covers, as Flutter's Router parses its whole configuration again when
+  its route information changes. Only the nested router of the page on top was asked, so a guarded page under another
+  page stayed open after a sign-out and showed on back. The nested routers are asked one after another, from the bottom
+  of the stack up, so two guards that answer a sign-out with a login page show one login page.
+- **FIX**, **BEHAVIOR CHANGE**: a screen that stays when `replace` puts a page of the same route in its place, or when a
+  page of the same route is pushed over it and it keeps no history (`keepHistory: false`), keeps the code that opened it
+  waiting, and that code gets the result the screen closes with, as Flutter's Navigator keeps the route of a page of the
+  same type and key. That code got `null` as the `replace` or the push went in, although the screen stayed. Code that
+  awaits the first push now runs on when the screen closes; what should run as the screen is replaced belongs after the
+  `replace` call.
+- **DOCS**: the README's section on guards says what a guard that awaits must mind: the state can change during the
+  wait, such as a sign-out during its request, so it reads what its answer depends on after its last `await`, right
+  before `resolver.next()`. It also says how `replaceAll` and a batch of pages wait for their guards.
+- **FIX**, **BEHAVIOR CHANGE**: a navigation called right after another, in the same handler with no await between them,
+  acts on the pages of the first. From Home, `push(A)` then `replace(B)` gives Home, B; `push(A)` then `replaceAll`,
+  `navigate`, `popAndPush` or `removeLast` no longer takes off the page below A; `pushAll([A, B])` then `push(C)` puts C
+  on top; `replaceAll([B])`, `push(A)`, `replace(C)` gives B, C. The first call added its pages a microtask or more
+  later, so the second acted on the stack without them. `push`, `replace`, `pushAll`, `replaceAll`, `navigate` and the
+  path calls now put their pages on the stack as the call returns, as Flutter's Navigator changes its history at each
+  call, when the route has no guard or each guard answers in its own call, as one that reads a flag and calls
+  `resolver.next()` does. An app sees the router's listeners run inside the call, not a microtask after it, and
+  `router.stack` hold the pages as the call returns. A guard that awaits before it answers, or shows a page of its own,
+  makes the navigation wait as before, and a call made meanwhile does not wait behind it. Called while widgets are
+  built, as from `initState`, a navigation starts a microtask later; two of them in one build start in order, but
+  `replace`, `navigate` and `removeLast` pick the pages they take off as they are called.
+- **FIX**, **BEHAVIOR CHANGE**: `navigate` to an open page that holds a nested router, with a route given no children
+  and with no initial child, as a "back to the shop" button calls `navigate(ShopRoute())`, keeps the pages that router
+  shows, and so does a tab reached that way. It left the nested router blank under a url that still named the child. An
+  app that called it to empty the nested router names the children it wants, or uses `navigatePath`. `navigatePath`, a
+  link, `back()` and the browser's buttons name the whole state, as a url does, and still empty a nested router they
+  name no page for; they now tell the router's listeners, so the url drops the child. It stayed `/mail/42` after
+  `navigatePath('/mail')` had emptied the detail pane.
+- **FIX**: `insert` below the top no longer closes a top page with `keepHistory: false`, which leaves when a page goes
+  on above it, not under it. An `insert` at the top index over such a page takes it off, as `push` does. It threw a
+  `RangeError`.
+- **FIX**: leaving a nested router while a guard's `redirectUntil` page is open in it, as when the user leaves a shell
+  from its login page, throws nothing. It threw "used after being disposed" once the guard answered, and left the url
+  marked, so the next page took the history entry of the page before it.
+- **FIX**, **BEHAVIOR CHANGE**: `parentAsStackRouter` and `parent<T>()` answer `null` when the parent is a router of the
+  other kind, as `parent<StackRouter>()` does in the router of a tab, as their nullable types say. They threw a type
+  error there, so a page shown both in a tab and outside one could not ask. Code that caught that error gets `null` now.
+- **FIX**, **BEHAVIOR CHANGE**: `removeWhere(notify: false)` tells no listener and leaves the url until the next change,
+  as `removeRoute(notify: false)` does. It notified once for every page it removed. With `notify` on, listeners now hear
+  one change for the whole call, not one per removed page and one more.
+- **FIX**, **BEHAVIOR CHANGE**: a guard that answers in its own call delays nothing, with any number of guards on the
+  route and in `RootStackRouter.guards`. Each answer was awaited for several microtasks, so the same two calls ended in
+  different stacks with a guard and without one. A guard that calls `resolver.next()` and then goes on working, such as
+  an `async` guard that awaits after its answer, no longer holds the navigation until it returns: the page opens at the
+  answer, and an error the guard throws after it is an uncaught error, not the navigation's. Do what must happen before
+  the page opens before the answer. While widgets are built, guards are asked a microtask after the call, not in it, so
+  `activeGuardObserver` no longer notifies inside a build. A page replaced with `replace` or `replaceAll` in the
+  `initState` that also changes the `reevaluateListenable`, such as a splash page that signs the user in, stays
+  replaced. It came back under its replacement when the new page had no guard.
+- **FIX**, **BEHAVIOR CHANGE**: a link from the platform that the app turns down keeps the dialog or sheet the user has
+  open, such as a draft: one a guard rejects, also a guard in a nested router or on a tab, or one `deepLinkBuilder`
+  answers with `DeepLink.none`. It closed it before the guards answered. The dialogs now close only once the link is let
+  in, and a browser back or forward that lands on the page already on top keeps them.
+- **FIX**, **BEHAVIOR CHANGE**: with `rebuildStackOnDeepLink`, a link a guard rejects keeps the pages the user has open,
+  and the url. The stack was popped before the guards ran, and nothing put it back. A link now replaces the stack as
+  `replaceAll` does, once its guards let it in, so the pages it replaces are reported to their leave listeners as
+  replaced, not popped.
+- **FIX**: after a link a guard rejects, or one `deepLinkBuilder` answers with `DeepLink.none`, the running app's url
+  names the page on screen: `currentUrl`, `urlState` and `isPathActive`, and on the web the address bar, which the app
+  writes over the turned-down link's entry, as after browser forward to an entry whose guard now rejects. They kept the
+  rejected link.
+- **FIX**: of two links handed to the app, the one handed over last stays on screen when `deepLinkBuilder` answers the
+  earlier one later or takes its time on every link, as on an iOS cold start from a link with a builder that waits for a
+  session. The earlier link's page opened over it.
+- **FIX**, **BEHAVIOR CHANGE**: `DeepLink.prefixStripper` strips its prefix from the link's path alone, as whole
+  segments: `prefixStripper('/app')` turns https://app.example.com/app/books/1 into https://app.example.com/books/1 and
+  leaves /application alone. It cut the text out of the host. A prefix without its leading '/', as the README showed it,
+  now strips too.
+- **FIX**: `AutoTabsRouter.pageView` opened under another page, such as by a link, a restored session or `replaceAll`,
+  shows the tab chosen once it is uncovered. A tab change while it was covered threw "Null check operator used on a null
+  value".
+- **FIX**: `AutoTabsRouter.pageView` keeps the active tab on screen when a tab whose guard is still deciding is swiped
+  to a second time, as `.tabBar` does. It rested on that tab's empty page.
+- **FIX**: `AutoTabsRouter.tabBar(duration: Duration.zero)` jumps back to the active tab when a swipe ends on a tab its
+  guard rejects. It failed the assertion "duration > Duration.zero".
+- **FIX**: with `AutoTabsRouter.pageView` and `.tabBar`, a tab with `maintainState: false` that a drag only peeked at is
+  disposed once the view settles back, as Flutter's `PageView` disposes a page scrolled out. It stayed built in the
+  background.
+- **FIX**: in right-to-left apps and with `scrollDirection: Axis.vertical`, a swipe in `AutoTabsRouter.pageView` or
+  `.tabBar` toward a tab not opened yet shows its page as it comes in. It uncovered blank space.
+- **FIX**, **BEHAVIOR CHANGE**: `AutoTabsRouter.builder` calls `didChangeTabRoute` and `onNavigate` only when another
+  tab shows, as the other tabs do. It also called them when a guard rejected a tab, when the open tab got new params,
+  and when a change of the tabs list moved the open tab to another index. An app that heard new params of the open tab
+  this way can listen to the `TabsRouter`, which still notifies.
+- **FIX**: the default `AutoTabsRouter` and `AutoTabsScaffold` no longer report `didInitTabRoute` again for a tab kept
+  across a change of the tabs list. They reported it on every change, though the tab's page was kept.
+- **FIX**: the default `AutoTabsRouter` and `AutoTabsScaffold` with `lazyLoad: false` report `didInitTabRoute` each time
+  a tab with `maintainState: false` opens, since its page is built anew. They reported nothing after its first opening.
+- **FIX**: the default `AutoTabsRouter`, and `AutoTabsScaffold` with `animationDuration` and `animationCurve`, take a
+  new duration and curve when rebuilt with them, as Flutter's implicit animations do. They kept the first ones.
+- **FIX**: `AutoTabsRouter.pageView` ends a swipe on a tab whose async guard lets it in at once, such as one that reads
+  a cached session. It slid back to the tab it left while the new tab was active.
+- **FIX**, **BEHAVIOR CHANGE**: `AutoTabsRouter.builder` reports a tab's first opening through `didInitTabRoute` and a
+  return to it through `didChangeTabRoute`, as the other tabs do. It reported every tab but the first through
+  `didChangeTabRoute`. An observer that sets a tab up when it first opens does so in `didInitTabRoute`.
+- **FIX**: the default `AutoTabsRouter` and `AutoTabsScaffold` with `lazyLoad: false` report `didInitTabRoute` for a tab
+  with `maintainState: false` when it opens, not at the start, since they build it only then. They reported two inits
+  for one page.
+- **FIX**: `AutoTabsRouter.tabBar` ends on the chosen tab when a drag during a tab change lets go over a tab whose guard
+  rejects. It failed the assertion "!indexIsChanging".
+- **FIX**: `AutoTabsRouter.pageView` shows only the tab left and the tabs chosen when the tab changes again while it
+  still moves, such as on two quick taps in a bottom bar. A tab between them flashed by.
+- **FIX**: two pages of one route in a stack, such as `/item/1` under `/item/2`, each hear only their own
+  `AutoRouteAware` events, as Flutter's `RouteObserver` tells each route its own. Each heard the other's before.
+- **FIX**: a tab's page built under a page that a deep link stacks over the tabs hears `didPushNext`, so its
+  `didPopNext` has a pair. It heard only `didInitTabRoute`, then an unpaired `didPopNext`.
+- **FIX**: an `AutoLeadingButton` above a nested router hides its back button once the page under the nested top page is
+  removed and nothing can pop. The button stayed and did nothing when tapped.
+- **FIX**: an `AutoLeadingButton` above a nested router shows the back button for a page the nested router opens with
+  `pushWidget`, `pushNativeRoute` or `Navigator.push`. It showed no button though the page could be popped.
+- **FIX**, **BEHAVIOR CHANGE**: `AutoLeadingButton(builder:)` is told `LeadingType.drawer` on a page with a drawer, as
+  the default button shows the drawer there, like Flutter's `AppBar`. It was told `back` when the page could pop; a
+  builder that relied on that should check for `LeadingType.drawer`.
+- **FIX**: a page pushed over a page opened with `pushWidget` hears `didPop` when it is popped, as Flutter's
+  `RouteObserver` tells the route that leaves. It heard `didPush` and never `didPop`.
+- **FIX**: a nested router whose pages are all removed while a dialog shows over them no longer says it can pop, and
+  the `AutoLeadingButton` above it hides. `canPop()` stayed true and the button showed back with nothing to go back to.
+- **FIX**: off the web, `router.back()` leaves a page that a link with a percent-escape in its path opened, such as
+  `/books/a%20b`. The link took the history entry of the page before it, so back stayed on it.
+- **FIX**: off the web, `router.back()` after `popUntilRoot` or `popUntil` no longer reopens a page they closed. The
+  closed pages kept their history entries.
+- **FIX**: on the web, the browser's back button leaves an entry made by `pushPathState`, also on a page whose
+  `PopScope` refuses to be left, and its forward button returns to it. The app wrote the state again as a new entry at
+  once, so back never left it; between two entries of one page no page closes, so the `PopScope` is not asked, as a
+  browser asks nothing between two states of one document.
+- **FIX**, **BEHAVIOR CHANGE**: on the web, `pushPathState` adds a browser entry also right after a replace, and
+  `pushPathState(null)` adds one without a state, as `history.pushState` does. Right after a replace it wrote over the
+  entry, and with `null` it did nothing; an app that called `pushPathState(null)` to change nothing now gets a new
+  entry, so skip the call instead.
+- **FIX**, **BEHAVIOR CHANGE**: on the web, `neglectWhen` gets the location as the address bar shows it, such as
+  `/books/a%20b?note=x%26y`, the same on every platform. It got the string escaped once more for the web engine,
+  `/books/a%2520b`; a callback that matched that form must match the url as shown now. Its doc comment, which said the
+  opposite of what `true` does, now says that `true` keeps the location from the engine.
+- **FIX**: on the web, the browser's back button after `popUntilRoot` or `popUntil` no longer reopens a page they
+  closed: the browser steps back to the entry of the page now on top. It stayed on the entry of the last page closed,
+  now showing the url of the page on top, so back reopened the page under it.
+- **FIX**: off the web, a `router.back()` whose target page a guard rejects keeps the history as it was, so a later
+  `back()` can still reach that page. It dropped the current entry before the guard answered, so once the guard let the
+  user through, `back()` skipped the guarded page.
+- **FIX**: on the web, a push and a replace of the pushed page in one frame keep the browser entry of the page under,
+  and the forward button after back reopens the new page with its arguments. The one url the router writes per frame
+  replaced the entry of the page under, so back had no entry of the app to go to.
+- **FIX**: on the web, two pushes in one turn get a browser entry each, so the browser's back button returns to the
+  first, as two `history.pushState` calls do. Only the second got an entry: back skipped the first page, still on the
+  stack, and forward reopened the second without its arguments.
+- **FIX**: a `RedirectRoute` among a route's children whose target is shorter than its path, such as `old/users` to
+  `users`, or the catch-all `*` to `''` for two segments, opens its target. It matched nothing before.
+- **FIX**: a url whose fragment holds a `?`, such as `/books/a%20b#what?`, opens its page. It threw a `RangeError`
+  before.
+- **FIX**: an app started at a link with an escape that isn't valid UTF-8, such as `/books/%FF`, shows a page, on the
+  web too; such bytes read as U+FFFD, as browsers read them. It showed no page at all before.
+- **FIX**: a link that repeats a query key, such as `?page=1&page=2`, gives `int`, `double`, `num` and `bool` params its
+  last value, as `String` params get. They got the default or a `MissingRequiredParameterError` before.
+- **DOCS**: `RouteData.fragment`, `RouteMatch.fragment` and `PageRouteInfo.fragment` say that a fragment reads as the
+  url has it, not decoded, and that a fragment pushed in code is passed already encoded (`my%20section`) if it must read
+  the same after a reload.
+- **FIX**: `pushPath` and the other path calls open a relative path whose first segment holds a `:`, such as `user:5` or
+  `12:30`. They opened another page or threw before.
+- **FIX**: a `RedirectRoute` whose `redirectTo` has a fragment, such as `/docs#faq`, keeps it. The url's own fragment
+  took its place before.
+- **FIX**: `navigatePath`, `pushPath` and the other path calls open a nested page from a url with a scheme and host, as
+  they already did for a top-level page. They matched nothing below the top before.
+- **FIX**: `Parameters` holding lists, `PageRouteInfo` with `argsEquality: false`, and `AutoRouteInformation` hash the
+  same when they are equal, so they work as keys of a `Map` or `Set`. Equal values could hash differently before.
+- **FIX**, **BEHAVIOR CHANGE**: a `RedirectRoute` whose `redirectTo` is only partly matched, such as `/profile/settings`
+  where only `/profile` is a page, opens what that url opens by itself: the `*` page, or nothing. It opened the page of
+  the first segments before; point `redirectTo` at a page's full path to keep that page.
+- **FIX**: a nested router inside a page of `AutoRouter.declarative` stays in the url and the router tree when the
+  declarative list around it changes, and a page it opens reads its host's new path params. Once the list changed, the
+  url, `topRoute`, `canPop` and `topMostRouter` no longer saw the nested router's pages, though they were still on
+  screen, and a page it opened read the host's old path params. Flutter's Navigator keeps the route and state of a page
+  it updates in place.
+- **FIX**: the first page of `AutoRouter.declarative` drops its back button once the page above it is popped, and
+  widgets that watch the router, such as `context.watchRouter` and `context.topRoute`, see the pages the navigator
+  shows. They stayed one update behind, so the first page kept a back button that did nothing.
+- **FIX**, **BEHAVIOR CHANGE**: in `AutoRouter.declarative`, a page closed by back opens again when the app's list names
+  it again. It stayed closed as long as the list came back unchanged, such as when the user picked the same item again.
+  The list is the truth, as a Navigator's `pages` are: a page the list still names after back closed it now comes back
+  at the next rebuild of the widget that builds the router, whatever caused that rebuild. Take the page out of the list
+  in `onPopRoute`, as the README's example now does.
+- **FIX**: after state restoration, a nested page that reads a path param of its parent route through
+  `inheritedPathParams` comes back. It was left out of the restored pages.
+- **FIX**, **BEHAVIOR CHANGE**: a deferred page whose library failed to load, as when the network drops on the web,
+  loads when it is opened again. Every later visit showed the loading placeholder until the app was reloaded. The
+  failure is now reported through `FlutterError.reportError`, so the app's `FlutterError.onError` sees it; it reached
+  the app as an unhandled async error.
+- **FIX**, **BEHAVIOR CHANGE**: `DeferredWidget` shows the `placeholder` it is given while its library loads; without
+  one, the router's placeholder shows as before. It ignored the parameter, so an app that builds a `DeferredWidget` with
+  its own `placeholder` now sees that placeholder.
+- **FIX**: a Cupertino page updated in place shows the new page's title in its navigation bar. It kept the title of the
+  page it first showed.
+- **FIX**, **BEHAVIOR CHANGE**: back on a Cupertino page asks the page's `PopScope` first, also while a drawer or
+  another local history entry is open, as Material pages and Flutter's own routes do. Back closed the drawer and the
+  `PopScope` heard nothing. A page whose `PopScope` blocks now hears the refused back, and can close the drawer itself
+  in `onPopInvokedWithResult`; a page with no blocking `PopScope` still closes its drawer on back.
+- **DOCS**: say what `enablePredictiveBackGesture` does to a route's transitions on Android without a
+  `predictiveBackPageTransitionsBuilder`: Flutter's predictive back builder runs all of them, push included, so a
+  `CustomRoute`'s own `transitionsBuilder` never runs. Give the route a `predictiveBackPageTransitionsBuilder` to keep
+  its own transition outside the gesture.
+- **FIX**: a nested `AutoRouter` whose first page has a guard, built and dropped within one frame, such as by a
+  `LayoutBuilder` in a viewport that lays it out twice, no longer throws a null check error after that frame.
+- **FIX**: route types that differ only in `enablePredictiveBackGesture` or `predictiveBackPageTransitionsBuilder` no
+  longer compare equal or share a hash code.
+- **FIX**: tabs of one route, such as one tab per list item, keep the tab on screen when the tabs list changes, and back
+  keeps their history. A change of the list showed the first tab of that route.
+- **FIX**: a tab whose guard is still deciding shows itself once the guard lets it in, also when the tabs list changes
+  meanwhile, and a tab that left the list no longer shows. The tab that took its old index showed, without asking its
+  own guard, and a shorter list failed an assertion.
+- **FIX**: when the active tab leaves the tabs list, the url names the tab shown instead, and Android's back stays in
+  the app. The url kept naming the removed tab, and on Android 13 and later back closed the app.
+- **FIX**: a tab whose guard threw once opens when it is chosen again, and the guard no longer stays in
+  `activeGuardObserver`. Choosing it again did nothing until another tab was opened first.
+- **FIX**: a tab change that another choice replaces while its guards decide asks none of its later guards, so a later
+  guard's login page no longer opens over the tab chosen instead.
+- **FIX**: a guard on a tab route can set the tab's children with `overrideNext`, as its doc says. It threw "does not
+  have children".
+- **FIX**: navigating to the tab on screen calls off a change to another tab still waiting for its guards, so the tab
+  navigated to stays. The waiting tab opened once its guards let it in. `setActiveIndex` with the active index still
+  calls off nothing, as Flutter's `TabController` ignores a choice of the selected tab.
+- **FIX**, **BEHAVIOR CHANGE**: reevaluating the guards, as after a sign-out, asks the guards of the active tab again,
+  and a tab they keep out gives way to the home tab, or the first. The tab stayed on screen and its guards were not
+  asked. A tab guard now runs once more on each reevaluation, with `resolver.isReevaluating` true, and one that
+  redirects opens its page then. A tabs page under other pages is asked as a stack asks its pages, one after another, so
+  a sign-out that a guard in the tabs and a guard above them answer with a login page shows one login page, not two.
+- **FIX**: `TabsRouter.previousIndex` follows the tab shown before when the tabs list changes, and is null once that tab
+  is gone or is the active one. It kept its old index, which could name another tab or point past the end.
+- **FIX**: `navigate` to a tab not shown yet, with a route object that names no children, opens the tab with the
+  children its `AutoTabsRouter` gave it. Its nested router opened empty. A path names the whole state, so `navigatePath`
+  to the tab with no child opens it with no page, as for a tab already shown.
+- **FIX**: a listener of `TabsRouter` that calls `setActiveIndex` for the tab whose guard is deciding, while it is told
+  of that change, gets that change. It threw "Null check operator used on a null value".
+- **FIX**: when the guard of a tab that a link opens answers after the tabs were left, the next page gets a history
+  entry of its own, so back no longer skips a page. The next page replaced the previous page's entry.
 
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
