@@ -158,7 +158,6 @@ class AutoRoutePage<T> extends Page<T> {
   /// `routeData.type`
   Route<T> onCreateRoute(BuildContext context) {
     final type = routeData.type;
-    final title = routeData.title(context);
     if (type is MaterialRouteType) {
       return _PageBasedMaterialPageRoute<T>(
         page: this,
@@ -167,7 +166,7 @@ class AutoRoutePage<T> extends Page<T> {
             type.predictiveBackPageTransitionsBuilder,
       );
     } else if (type is CupertinoRouteType) {
-      return _PageBasedCupertinoPageRoute<T>(page: this, title: title);
+      return _PageBasedCupertinoPageRoute<T>(page: this, context: context);
     } else if (type is CustomRouteType) {
       if (type.customRouteBuilder != null) {
         return type.customRouteBuilder!<T>(
@@ -190,7 +189,7 @@ class AutoRoutePage<T> extends Page<T> {
         TargetPlatform.macOS,
         TargetPlatform.iOS,
       ].contains(defaultTargetPlatform)) {
-        return _PageBasedCupertinoPageRoute<T>(page: this, title: title);
+        return _PageBasedCupertinoPageRoute<T>(page: this, context: context);
       }
       return _PageBasedMaterialPageRoute<T>(
         page: this,
@@ -492,13 +491,21 @@ class _PageBasedCupertinoPageRoute<T> extends _PageRoute<T>
     with
         CupertinoRouteTransitionMixin<T>,
         CupertinoRouteTransitionOverrideMixin<T> {
-  new({required super.page, required this.title});
+  new({required super.page, required BuildContext context})
+    : _navigatorContext = context;
+
+  // The context of the navigator that made this route, which the route's
+  // title builder reads.
+  final BuildContext _navigatorContext;
 
   @override
   Widget buildContent(BuildContext context) => _page.buildPage(context);
 
+  // The title of the page the route holds now, which a navigation that
+  // updates the page in place changes, as Flutter's own page-based Cupertino
+  // route reads its page's title.
   @override
-  final String title;
+  String get title => _page.routeData.title(_navigatorContext);
 }
 
 mixin _CustomPredictiveBackGestureMixin<T> on _PageRoute<T>
