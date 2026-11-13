@@ -1421,9 +1421,22 @@ You can also redirect paths with params like follows:
 
 ```dart
 <AutoRoute> [
-  RedirectRoute(path: 'books/:id', redirectTo: '/books/:id/details'),
+  RedirectRoute(path: '/books/:id', redirectTo: '/books/:id/details'),
   AutoRoute(path: '/books/:id/details', page: BookDetailsRoute.page),
 ]
+```
+
+A `RedirectRoute` among a route's children works the same way, with paths relative to its parent, whatever the length of its target:
+
+```dart
+AutoRoute(
+  path: '/dashboard',
+  page: DashboardRoute.page,
+  children: [
+    AutoRoute(path: 'users', page: UsersRoute.page),
+    RedirectRoute(path: 'old/users', redirectTo: 'users'),
+  ],
+)
 ```
 
 **Note**: `RedirectRoutes` are fully matched.

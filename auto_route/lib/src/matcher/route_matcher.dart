@@ -125,7 +125,7 @@ class RouteMatcher {
             );
             return null;
           }
-          return _handleRedirect(
+          final redirected = _handleRedirect(
             redirectChain: chain,
             routesCollection: routeCollection,
             includePrefixMatches: includePrefixMatches,
@@ -133,6 +133,11 @@ class RouteMatcher {
             redirectedFrom: redirectFrom,
             topRedirect: topRedirect,
           );
+          if (redirected case [..., final last]) {
+            // An outer redirect of a chain sets this last, so it wins.
+            _redirectSpan[last] = match.segments.length;
+          }
+          return redirected;
         }
 
         if (match.segments.length != pathSegments.length) {
@@ -204,15 +209,19 @@ class RouteMatcher {
     );
   }
 
-  // How many segments of the url [match] and its children consumed. A match
-  // with no segments of its own consumed none, unless a redirect to an empty
-  // path made it: then it stands for the segment the redirect matched. So a
-  // path no route has doesn't match the '' route of a router.
+  // How many segments of the url a redirect among a router's children took,
+  // keyed by the match it ended on. The target's own path can be shorter,
+  // such as 'old/users' to 'users', or '*' to '', and a redirect is fully
+  // matched, so this is every segment that was left for that router.
+  static final _redirectSpan = Expando<int>('redirect span');
+
+  // How many segments of the url [match] and its children consumed. A match a
+  // redirect ended on stands for the segments the redirect took from the url,
+  // not for its own. So a path no route has doesn't match the '' route of a
+  // router, and a redirect to a shorter path matches the whole url.
   static int _consumedSegments(RouteMatch<Object?> match) {
-    final own = match.segments.isEmpty && match.redirectedFrom != null
-        ? 1
-        : match.segments.length;
-    return own +
+    if (_redirectSpan[match] case final span?) return span;
+    return match.segments.length +
         (switch (match.children) {
           [..., final last] => _consumedSegments(last),
           _ => 0,
