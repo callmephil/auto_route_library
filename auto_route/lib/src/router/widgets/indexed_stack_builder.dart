@@ -34,9 +34,9 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
       }
       return false;
     }
-    if (widget.lazyLoad) {
-      _didInitTabRoute(index, widget.activeIndex);
-    }
+    // A tab not loaded is either lazy and not opened yet, or keeps no state
+    // and was dropped while another tab showed: either way it starts anew.
+    _didInitTabRoute(index, widget.activeIndex);
     setState(() => _initializedPagesTracker[index] = true);
     return true;
   }
