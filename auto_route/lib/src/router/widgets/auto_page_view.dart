@@ -297,6 +297,17 @@ class AutoPageViewState extends State<AutoPageView> {
           _preloadDraggedIn(currentPage + 1);
         }
       }
+    } else if (notification is ScrollEndNotification) {
+      // A tab whose guards still decide stays out, and asking again doesn't
+      // notify: until they let it in, the active tab comes back on screen.
+      // The scroll that ended settles first.
+      scheduleMicrotask(() {
+        if (!mounted || !_controller.hasClients) return;
+        final page = _controller.page?.round();
+        if (page != null && page != _router.activeIndex) {
+          unawaited(_warpToCurrentIndex(page));
+        }
+      });
     }
     _scrollUnderwayCount -= 1;
   }
