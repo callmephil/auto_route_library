@@ -1648,6 +1648,8 @@ When several routes are opened at once, as by `pushAll` or a deep link, they're 
 
 `onNavigation` can be `async`. The guarded route is not shown until `resolver.next()` is called, so a guard is the place for a check that has to finish before the first page, such as reading a stored session.
 
+What a guard reads can change while it waits: the user may sign out during the request it awaits. So read what the answer depends on after the last `await`, right before `resolver.next()`; a guard that answers with what it read before the wait lets that change through.
+
 `redirectUntil` suits a flow that comes back, like a login that resumes the navigation. When nothing has to resume, for example an onboarding that ends on the home page, there's no result to wait for. `AutoRouteGuard.redirect` takes a function that returns the route to open instead, or `null` to let the navigation through (`AutoRouteGuard.redirectPath` does the same with a path):
 
 ```dart
