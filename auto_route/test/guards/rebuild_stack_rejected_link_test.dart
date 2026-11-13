@@ -102,26 +102,38 @@ void main() {
     expect(find.text('DetailsRoute'), findsOneWidget);
   });
 
-  testWidgets('A link the guards let in replaces the stack', (tester) async {
-    final router = buildRouter();
-    await pumpRouterConfigApp(
-      tester,
-      router.config(rebuildStackOnDeepLink: true),
-    );
-    await openDetails(tester, router);
+  // Prefix matches are on by default off the web and off by default on it,
+  // where the browser's url names every page; the link names Home as well
+  // only with them.
+  for (final includePrefixMatches in [true, false]) {
+    testWidgets('A link the guards let in replaces the stack, with prefix '
+        'matches ${includePrefixMatches ? 'on' : 'off'}', (tester) async {
+      final router = buildRouter();
+      await pumpRouterConfigApp(
+        tester,
+        router.config(
+          rebuildStackOnDeepLink: true,
+          includePrefixMatches: includePrefixMatches,
+        ),
+      );
+      await openDetails(tester, router);
 
-    await tester.binding.handlePushRoute('/other');
-    await tester.pumpAndSettle();
+      await tester.binding.handlePushRoute('/other');
+      await tester.pumpAndSettle();
 
-    // With prefix matches, the default off the web, the link names Home too.
-    expect(stackNames(router), ['HomeRoute', 'OtherRoute']);
-    expect(find.text('OtherRoute'), findsOneWidget);
-    expect(router.currentUrl, '/other');
-  });
+      expect(stackNames(router), [
+        if (includePrefixMatches) 'HomeRoute',
+        'OtherRoute',
+      ]);
+      expect(find.text('OtherRoute'), findsOneWidget);
+      expect(router.currentUrl, '/other');
+    });
+  }
 
   // A guard that shows a page of its own, here a sign-in page with
   // redirectUntil, puts it in the place of the open pages, as replaceAll
-  // does; they come back if the guard then rejects the link.
+  // does; they come back if the guard then rejects the link. With prefix
+  // matches on, on the web too, the link names Home below its page.
   for (final isLetIn in [true, false]) {
     testWidgets(
       'A link whose guard shows a sign-in page '
@@ -130,7 +142,10 @@ void main() {
         final router = buildRouter();
         await pumpRouterConfigApp(
           tester,
-          router.config(rebuildStackOnDeepLink: true),
+          router.config(
+            rebuildStackOnDeepLink: true,
+            includePrefixMatches: true,
+          ),
         );
         await openDetails(tester, router);
 
