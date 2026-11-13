@@ -19,7 +19,9 @@ import '../router_test_utils.dart';
 // Was: Mail opened with nothing in it, at '/mail/13'. With a link its nested
 // router held the inbox, but its navigator was never told; with a path it
 // held no page.
-// Should: Mail shows its inbox, at '/mail'.
+// Should: Mail shows its inbox, at '/mail'. A link turned down inside a tab
+// that is not on screen leaves the tab on screen as it is, and the other
+// tab's nested router on its inbox.
 // Native behavior this holds to: on the web a navigation that is canceled
 // leaves the url of the document on screen. Flutter's Navigator shows the
 // pages its list holds and takes no empty list. On Android a screen that
@@ -124,26 +126,62 @@ void main() {
         expect(stackNames(router), ['HomeRoute']);
       }
     });
-
-    testWidgets('$way to a rejected page in a tab never opened shows the '
-        "tab's first page", (tester) async {
-      final router = buildRouter();
-      await pumpRouterConfigApp(tester, router.config());
-      unawaited(router.navigatePath('/tabs/first'));
-      await tester.pumpAndSettle();
-      final tabs = router.innerRouterOf<TabsRouter>('TabsRoute')!;
-
-      await open(tester, router, '/tabs/mail/13');
-      await tester.pumpAndSettle();
-
-      expect(tester.takeException(), isNull);
-      expect(tabs.current.name, 'MailTab');
-      expect(stackNames(tabs.innerRouterOf('MailTab')), ['InboxRoute']);
-      expect(find.text('InboxRoute'), findsOneWidget);
-      expect(find.text('Mail 13'), findsNothing);
-      expect(router.currentUrl, '/tabs/mail');
-    });
   }
+
+  // Opens the tabs on FirstTab; MailTab was never opened.
+  Future<(RootStackRouter, TabsRouter)> openFirstTab(
+    WidgetTester tester,
+  ) async {
+    final router = buildRouter();
+    await pumpRouterConfigApp(tester, router.config());
+    unawaited(router.navigatePath('/tabs/first'));
+    await tester.pumpAndSettle();
+    return (router, router.innerRouterOf<TabsRouter>('TabsRoute')!);
+  }
+
+  // A path the app calls itself goes to the tab, whose guards let it in, and
+  // is turned down inside it.
+  testWidgets('navigatePath to a rejected page in a tab never opened shows '
+      "the tab's first page", (tester) async {
+    final (router, tabs) = await openFirstTab(tester);
+
+    unawaited(router.navigatePath('/tabs/mail/13'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(tabs.current.name, 'MailTab');
+    expect(stackNames(tabs.innerRouterOf('MailTab')), ['InboxRoute']);
+    expect(find.text('InboxRoute'), findsOneWidget);
+    expect(find.text('Mail 13'), findsNothing);
+    expect(router.currentUrl, '/tabs/mail');
+  });
+
+  // A link the app turns down changes nothing: the tab the user is on stays
+  // on screen, with its url, as a link an Android activity ignores leaves
+  // its selected tab. The tab never opened is built off the screen for the
+  // link, and its nested router is left on its first page, not empty.
+  // Should: FirstTab shows, at its url. Choosing the Mail tab then shows the
+  // inbox.
+  testWidgets('A link to a rejected page in a tab never opened keeps the '
+      'tab on screen and leaves the other on its first page', (tester) async {
+    final (router, tabs) = await openFirstTab(tester);
+
+    await tester.binding.handlePushRoute('/tabs/mail/13');
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(tabs.current.name, 'FirstTab');
+    expect(find.text('FirstTab'), findsOneWidget);
+    expect(router.currentUrl, '/tabs/first');
+    expect(stackNames(tabs.innerRouterOf('MailTab')), ['InboxRoute']);
+    expect(find.text('Mail 13', skipOffstage: false), findsNothing);
+
+    tabs.setActiveIndex(1);
+    await tester.pumpAndSettle();
+
+    expect(find.text('InboxRoute'), findsOneWidget);
+    expect(router.currentUrl, '/tabs/mail');
+  });
 
   // As on the web, where a link brings only its own page, so the nested
   // router is named the rejected page alone.
