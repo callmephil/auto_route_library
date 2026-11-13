@@ -270,7 +270,7 @@ class AutoRouteInformation extends RouteInformation {
           state == other.state;
 
   @override
-  int get hashCode => replace.hashCode;
+  int get hashCode => Object.hash(runtimeType, uri, state);
 }
 
 /// [UrlState] Holds current url state in a more structured way

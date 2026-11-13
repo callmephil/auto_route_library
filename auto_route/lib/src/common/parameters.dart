@@ -28,16 +28,21 @@ class Parameters {
   Parameters operator +(Parameters other) =>
       .new({..._rawMap, ...other._rawMap});
 
+  // Deep, so params holding equal lists, as a repeated query key does, are
+  // equal and hash the same.
+  static const _equality = MapEquality<Object?, Object?>(
+    values: DeepCollectionEquality(),
+  );
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is Parameters &&
           runtimeType == other.runtimeType &&
-          const MapEquality<Object?, Object?>(values: DeepCollectionEquality())
-              .equals(_rawMap, other._rawMap);
+          _equality.equals(_rawMap, other._rawMap);
 
   @override
-  int get hashCode => const MapEquality<Object?, Object?>().hash(_rawMap);
+  int get hashCode => _equality.hash(_rawMap);
 
   /// Helper getter to `_rawMap.isNotEmpty`
   bool get isNotEmpty => _rawMap.isNotEmpty;

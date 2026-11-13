@@ -247,7 +247,8 @@ class PageRouteInfo<T extends Object?> {
   int get hashCode =>
       _routeName.hashCode ^
       fragment.hashCode ^
-      args.hashCode ^
+      // == skips args without argsEquality, so the hash does too.
+      (argsEquality ? args.hashCode : 0) ^
       const DeepCollectionEquality().hash(rawPathParams) ^
       const DeepCollectionEquality().hash(rawQueryParams) ^
       const ListEquality<Object?>().hash(initialChildren);
