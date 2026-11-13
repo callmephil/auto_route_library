@@ -1640,6 +1640,8 @@ AutoRoute(page: AdminRoute.page, guards: [adminGuard], children: [
 
 When several routes are opened at once, as by `pushAll` or a deep link, they're checked one after another, from the bottom of the stack up, and a rejected route rejects them all: the routes before it that its guards let through don't open either, and the stack stays as it was. A router with no pages yet, as when the app starts at a deep link, has no stack to go back to, so it opens the routes below the rejected one. The guards of tab routes run when their tab is about to show, without the global guards (see [Guarding tab routes](#guarding-tab-routes)).
 
+`replaceAll` replaces the pages in one step, once the last guard has let its route through; while a guard runs its check, the old pages stay on screen. A guard that returns without an answer and shows a page of its own, such as a login with `redirectUntil`, takes the old pages off for it: back from that page shows none of them, and they come back only if the guard then rejects.
+
 #### Waiting inside a guard, and redirecting without waiting
 
 `onNavigation` can be `async`. The guarded route is not shown until `resolver.next()` is called, so a guard is the place for a check that has to finish before the first page, such as reading a stored session.

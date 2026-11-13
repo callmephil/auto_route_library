@@ -460,12 +460,12 @@ class NavigationResolver {
       _checkGuard(guard, router);
 
   // [checkGuard], with [onLeftUndecided] called when [guard] returns without
-  // having resolved or redirected: it holds the navigation until it resolves
-  // later.
+  // having resolved: it holds the navigation until it resolves later, behind
+  // a redirect it started or with nothing shown.
   Future<ResolverResult> _checkGuard(
     AutoRouteGuard guard,
     StackRouter router, {
-    VoidCallback? onLeftUndecided,
+    _GuardHoldsCallback? onLeftUndecided,
   }) async {
     if (_didReportRedirectLoop()) return await future;
     // Several reevaluations can wait for the same check; each takes its own
@@ -481,7 +481,7 @@ class NavigationResolver {
       _waitingCompleter = null;
       waiting.complete();
     }
-    if (!isResolved && !_isRedirecting) onLeftUndecided?.call();
+    if (!isResolved) onLeftUndecided?.call(isRedirecting: _isRedirecting);
     return await future;
   }
 }

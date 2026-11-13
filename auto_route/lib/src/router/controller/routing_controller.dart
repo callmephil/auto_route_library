@@ -2426,7 +2426,22 @@ abstract class StackRouter extends RoutingController {
     required ValueChanged<RouteMatch<Object?>> onLastRouteAdded,
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
+    _PagesReplacement? replacement,
   }) {
+    // replaceAll reaches no page again: [replacement] takes every page off
+    // once every guard has let [matches] through, and their pages go on in
+    // the same step.
+    if (replacement != null) {
+      return _pushAllGuarded(
+        matches,
+        onFailure: onFailure,
+        updateAncestorsPathData: false,
+        goesInAtOnce: true,
+        pushed: pushed,
+        onLastRouteAdded: onLastRouteAdded,
+        replacement: replacement,
+      );
+    }
     final (:kept, :end) = isReevaluating
         ? (kept: 0, end: _pages.length)
         : _pagesKeptUnderTarget(matches);
@@ -2683,6 +2698,15 @@ abstract class StackRouter extends RoutingController {
   /// With [updateExistingRoutes] false, every new page gets a screen of its
   /// own.
   ///
+  /// The pages are replaced in one step, once the guards of every one of
+  /// [routes] have let it through. While a guard runs its check the stack
+  /// stays as it is, and a guard that rejects one of [routes] rejects them
+  /// all: the stack stays as it was. A guard that returns without an answer
+  /// and shows a page of its own, such as a login with
+  /// [NavigationResolver.redirectUntil], takes the pages off for it: back
+  /// from that page shows none of them, and they come back only if the guard
+  /// then rejects.
+  ///
   /// If [onFailure] is given, navigation errors are passed to it; otherwise
   /// they are thrown.
   Future<void> replaceAll(
@@ -2713,60 +2737,69 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
+  // Replaces every page with pages for [matches], once every guard has let
+  // them through. While a guard's own call runs, such as one that awaits a
+  // request, the stack stays as it is on screen, as Flutter's Router keeps
+  // building the current pages while its delegate waits and iOS swaps a
+  // navigation stack in one step (setViewControllers): no blank screen, and
+  // a guard that rejects one of [matches] rejects them all and leaves the
+  // pages with their State and the waits of the code that opened them.
+  //
+  // A guard that returns without an answer holds the navigation, usually
+  // behind a page of its own, such as a login it shows with redirectUntil.
+  // That page takes the place of the pages to replace: they leave then, so
+  // back from the guard's page never shows them, as Android finishes the old
+  // screens of a task it clears before the new one starts. They come back
+  // only if the guard then rejects.
+  //
+  // The screens the new pages keep are told as the pages are replaced, from
+  // the pages the navigator shows at that moment.
   Future<void> _replaceAllMatches(
     List<RouteMatch<Object?>> matches, {
     required bool updateExistingRoutes,
-  }) async {
-    _markLeaving(_pages, .replaced);
-    // A guard can reject the new routes; the whole batch is then rejected and
-    // the stack restored.
-    final previousPages = List.of(_pages);
-    final previousStackKey = _stackKey;
-    var wasRejected = false;
-    final newMatches = updateExistingRoutes
-        ? _keepingScreensOf(previousPages, matches)
-        : matches;
-    _pages.clear();
-    if (!updateExistingRoutes) {
-      _stackKey = UniqueKey();
-    }
-    markUrlStateForReplace();
-    await _navigateAll(
-      newMatches,
-      onFailure: (failure) {
-        if (failure is RejectedByGuardFailure &&
-            newMatches.any((match) => match.id == failure.route.id)) {
-          wasRejected = true;
-        }
-      },
+  }) {
+    // Let go once replaceAll has its answer, so the call that waits on the
+    // last new page doesn't hold the pages that left.
+    List<AutoRoutePage<Object?>>? pagesBefore = List.of(_pages);
+    // The pages a guard that holds the navigation took the place of.
+    var setAside = const <AutoRoutePage<Object?>>[];
+    return _navigateAll(
+      matches,
+      replacement: _PagesReplacement(
+        onGuardHolds: () {
+          final leaving = [...?pagesBefore?.where(_pages.contains)];
+          if (leaving.isEmpty) return;
+          setAside = [...setAside, ...leaving];
+          _markLeaving(leaving, .replaced);
+          _pages.removeWhere(leaving.contains);
+          markUrlStateForReplace();
+        },
+        onAllAccepted: (accepted) {
+          pagesBefore = null;
+          setAside = const [];
+          final replacing = updateExistingRoutes
+              ? _keepingScreensOf(List.of(_pages), accepted)
+              : accepted;
+          _markLeaving(_pages, .replaced);
+          _pages.clear();
+          if (!updateExistingRoutes) {
+            _stackKey = UniqueKey();
+          }
+          markUrlStateForReplace();
+          return replacing;
+        },
+        onRejected: () {
+          pagesBefore = null;
+          if (setAside.isEmpty) return;
+          // Under the pages put on meanwhile, such as a page the guard
+          // still shows.
+          _pages.insertAll(0, setAside);
+          setAside = const [];
+          markUrlStateForReplace();
+          notifyAll(forceUrlRebuild: true);
+        },
+      ),
     );
-    if (!wasRejected) return;
-    // A page that took over a previous page's screen holds its caller, who
-    // keeps waiting on the previous page put back.
-    final previousWaits = _pendingPopCompletersOf(previousPages);
-    for (final page in _pages.where(
-      (added) =>
-          !previousPages.contains(added) &&
-          !previousWaits.contains(added.routeData._popCompleter),
-    )) {
-      page.routeData.onPopInvoked(null);
-    }
-    _pages
-      ..clear()
-      ..addAll(previousPages);
-    _stackKey = previousStackKey;
-    // A new page that kept a screen gave the screen's nested router its own
-    // data, see [_createRouteData]. The router belongs to the page put back.
-    for (final page in previousPages) {
-      final data = page.routeData;
-      for (final ctr in _childControllers) {
-        if (ctr.matchId == data.matchId && ctr.routeData != data) {
-          ctr.updateRouteData(data);
-        }
-      }
-    }
-    markUrlStateForReplace();
-    notifyAll(forceUrlRebuild: true);
   }
 
   // [matches], where each match the navigator will show in the route of a
@@ -3128,6 +3161,7 @@ abstract class StackRouter extends RoutingController {
     Completer<void>? pushed,
     ValueChanged<RouteMatch<Object?>>? onLastRouteAdded,
     VoidCallback? onFirstRouteAccepted,
+    _PagesReplacement? replacement,
   }) async {
     assert(!managedByWidget, _managedByWidgetMessage);
 
@@ -3228,8 +3262,14 @@ abstract class StackRouter extends RoutingController {
           // it gives one, as it holds back a page being pushed: the page
           // waits off the stack, with the pages above it, and goes back on
           // once the guard lets it through. The navigator isn't told, so the
-          // screen stays unless the guard shows a page of its own.
-          onLeftUndecided: isReevaluating ? () => takeOffPagesFrom(i) : null,
+          // screen stays unless the guard shows a page of its own. A page
+          // under the guard's redirect stays, see redirectUntil. A guard of
+          // replaceAll that holds takes the pages to replace off, see
+          // [_replaceAllMatches].
+          onLeftUndecided: ({required isRedirecting}) {
+            if (!isReevaluating) return replacement?.onGuardHolds();
+            if (!isRedirecting) takeOffPagesFrom(i);
+          },
         );
         if (_isDisposed) break;
         // A later link took over while a guard decided.
@@ -3246,8 +3286,12 @@ abstract class StackRouter extends RoutingController {
               held.add(match);
               continue;
             }
-            held.forEachIndexed(putOn);
-            final popped = putOnLast(match);
+            // With [replacement], the routes go on as it returns them, after
+            // what it does to the stack.
+            final accepted = [...held, match];
+            final going = replacement?.onAllAccepted(accepted) ?? accepted;
+            going.take(going.length - 1).forEachIndexed(putOn);
+            final popped = putOnLast(going.lastOrNull ?? match);
             return returnLastRouteCompleter ? await popped : null;
           }
           // Before anything the route does to the stack once its guards
@@ -3281,6 +3325,8 @@ abstract class StackRouter extends RoutingController {
             _pages.remove(match.currentPage);
             takeOffPagesFrom(i + 1);
             markUrlStateForReplace();
+          } else if (replacement != null) {
+            replacement.onRejected();
           } else if (!isReevaluating && !wasStackEmpty) {
             _undoRejectedBatch(
               added: added,
@@ -3598,7 +3644,7 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     List<RouteMatch<Object?>> pendingRoutes = const [],
     bool isReevaluating = false,
-    VoidCallback? onLeftUndecided,
+    _GuardHoldsCallback? onLeftUndecided,
   }) async {
     var routeToCheck = route;
     final guards = <AutoRouteGuard>[...root.guards, ...routeToCheck.guards];
@@ -3673,6 +3719,7 @@ abstract class StackRouter extends RoutingController {
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
+    _PagesReplacement? replacement,
   }) async {
     // A reevaluation closes the pages its guards reject, and a guard may show
     // a page of its own meanwhile, so the pages it closes are reported once
@@ -3697,7 +3744,7 @@ abstract class StackRouter extends RoutingController {
     Future<T?>? popped;
     if (routes.isNotEmpty) {
       var mayUpdateRoute = routes.last;
-      final keptScreens = _takeScreensKeptByReplaceAll(routes);
+      var keptScreens = _takeScreensKeptByReplaceAll(routes);
       if (!managedByWidget) {
         // The future of a pushed page completes when the page is popped, so
         // wait only until the page is added, to keep updating nested routers
@@ -3714,6 +3761,11 @@ abstract class StackRouter extends RoutingController {
             mayUpdateRoute = match;
             isLastRouteAdded = true;
           },
+          // The screens replaceAll keeps are known once its pages have left.
+          replacement: replacement?.thenOnAllAccepted(
+            (replacing) =>
+                keptScreens = _takeScreensKeptByReplaceAll(replacing),
+          ),
         );
         await Future.any([pushed.future, popped]);
         if (!isReevaluating && !isLastRouteAdded) {
@@ -4165,6 +4217,49 @@ class NestedStackRouter extends StackRouter {
 // How a change of the active tab ended: the tab is active, its guards kept
 // it out, or a later change replaced it while its guards decided.
 enum _TabChange { done, rejected, replaced }
+
+// What a batch does once every guard has let its routes through, as
+// [accepted], right before their pages go on: returns the routes as they go
+// on.
+typedef _RoutesChange = List<RouteMatch<Object?>> Function(
+  List<RouteMatch<Object?>> accepted,
+);
+
+// Called when a guard returns without an answer, after it started a redirect
+// or not.
+typedef _GuardHoldsCallback = void Function({required bool isRedirecting});
+
+// What replaceAll does to the pages it replaces, as its guards answer.
+class _PagesReplacement {
+  const new({
+    required this.onGuardHolds,
+    required this.onAllAccepted,
+    required this.onRejected,
+  });
+
+  // A guard returned without an answer: it holds the navigation.
+  final VoidCallback onGuardHolds;
+
+  // Every guard let the routes through; see [_RoutesChange].
+  final _RoutesChange onAllAccepted;
+
+  // A guard rejected a route.
+  final VoidCallback onRejected;
+
+  // This replacement, with [then] called with the routes [onAllAccepted]
+  // returns.
+  _PagesReplacement thenOnAllAccepted(
+    ValueChanged<List<RouteMatch<Object?>>> then,
+  ) => .new(
+    onGuardHolds: onGuardHolds,
+    onRejected: onRejected,
+    onAllAccepted: (accepted) {
+      final replacing = onAllAccepted(accepted);
+      then(replacing);
+      return replacing;
+    },
+  );
+}
 
 class _RouterScopeResult<T extends RoutingController> {
   const new(this.router, this.matches);

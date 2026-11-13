@@ -157,6 +157,7 @@ import 'remove_route_kept_handle_test.dart' as remove_route_kept_handle;
 import 'remove_where_same_route_test.dart' as remove_where_same_route;
 import 'repeated_query_key_test.dart' as repeated_query_key;
 import 'replace_all_from_deep_stack_test.dart' as replace_all_from_deep_stack;
+import 'replace_all_guard_page_test.dart' as replace_all_guard_page;
 import 'replace_all_keeps_screen_below_top_test.dart'
     as replace_all_keeps_screen_below_top;
 import 'replace_all_kept_screen_shows_new_children_test.dart'
@@ -169,6 +170,7 @@ import 'replace_all_parent_then_child_test.dart'
 import 'replace_all_rejected_test.dart' as replace_all_rejected;
 import 'replace_all_shell_on_top_waits_for_guards_test.dart'
     as replace_all_shell_on_top_waits_for_guards;
+import 'replace_all_slow_guard_test.dart' as replace_all_slow_guard;
 import 'replace_changed_path_param_test.dart' as replace_changed_path_param;
 import 'replace_path_rejected_test.dart' as replace_path_rejected;
 import 'replace_rejected_test.dart' as replace_rejected;
@@ -388,6 +390,7 @@ void main() {
   remove_where_same_route.main();
   repeated_query_key.main();
   replace_all_from_deep_stack.main();
+  replace_all_guard_page.main();
   replace_all_keeps_screen_below_top.main();
   replace_all_kept_screen_shows_new_children.main();
   replace_all_kept_shell_keeps_its_route_data.main();
@@ -396,6 +399,7 @@ void main() {
   rejected_initial_link_url.main();
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
+  replace_all_slow_guard.main();
   replace_changed_path_param.main();
   replace_path_rejected.main();
   replace_rejected.main();
