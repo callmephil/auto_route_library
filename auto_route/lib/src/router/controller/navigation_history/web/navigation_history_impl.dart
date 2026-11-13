@@ -5,6 +5,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart' show LocalKey;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
+import 'package:flutter/widgets.dart' show Router;
 import 'package:web/web.dart';
 
 /// An implementation of [NavigationHistory]
@@ -38,9 +39,13 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   bool _doesAddEntryWithSameUrl = false;
 
-  // Whether a navigation of this frame adds an entry the router writes only
-  // when the frame ends.
-  bool _isNewEntryUnwritten = false;
+  // The entry a navigation of this frame adds, which the router writes only
+  // when the frame ends, or null.
+  int? _unwrittenIndex;
+
+  // Whether the app's entry is one the router has yet to write.
+  bool get _isAppEntryUnwritten =>
+      _unwrittenIndex != null && _unwrittenIndex == _appIndex;
 
   @override
   bool get addsEntryWithSameUrl => _doesAddEntryWithSameUrl;
@@ -53,7 +58,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     // still takes that entry's place here.
     final isReplace = newState.shouldReplace;
     _onNewUrlState(
-      isReplace && _isNewEntryUnwritten
+      isReplace && _isAppEntryUnwritten
           ? newState.copyWith(shouldReplace: false)
           : newState,
       notify: notify,
@@ -107,16 +112,48 @@ class NavigationHistoryImpl extends NavigationHistory {
     int browserIndex, {
     required bool isReplace,
   }) {
+    // Two navigations of one frame that each add an entry get one each, as two
+    // history.pushState calls do; the router would write only the last.
+    if (!isReplace && _isAppEntryUnwritten) _writeAppEntryNow();
     final index = (_appIndex ?? browserIndex) + (isReplace ? 0 : 1);
     _entries.removeWhere((key, _) => key >= index);
     _entries[index] = newState;
     _appIndex = index;
-    if (!isReplace && !_isNewEntryUnwritten) {
-      _isNewEntryUnwritten = true;
+    if (isReplace) return;
+    final isFirstOfFrame = _unwrittenIndex == null;
+    _unwrittenIndex = index;
+    // The router has written every entry of the frame once it ends.
+    if (isFirstOfFrame) {
       SchedulerBinding.instance.addPostFrameCallback(
-        (_) => _isNewEntryUnwritten = false,
+        (_) => _unwrittenIndex = null,
       );
     }
+  }
+
+  // Writes the app's entry, which the router has yet to write, as a new
+  // browser entry now, through the Router's own parser and provider, so
+  // neglectWhen still applies. Only while a stack still holds its page, as
+  // the first of two pushes stays under the second: a page that left before
+  // it showed, such as a guarded page that redirected at once, gets no entry.
+  // Does nothing before the router is built.
+  void _writeAppEntryNow() {
+    final entry = _entries[_appIndex];
+    final pageId = entry?.topMatch?.id;
+    final context = router.navigatorKey.currentContext;
+    if (entry == null ||
+        context == null ||
+        pageId == null ||
+        controllerOfPage(pageId) == null) {
+      return;
+    }
+    final shownBy = Router.maybeOf<Object?>(context);
+    final information = shownBy?.routeInformationParser
+        ?.restoreRouteInformation(entry);
+    if (information == null) return;
+    shownBy!.routeInformationProvider?.routerReportsNewRouteInformation(
+      information,
+      type: .navigate,
+    );
   }
 
   @override

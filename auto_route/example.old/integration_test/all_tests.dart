@@ -269,6 +269,7 @@ import 'taken_over_screen_keeps_caller_test.dart'
     as taken_over_screen_keeps_caller;
 import 'theme_change_test.dart' as theme_change;
 import 'theme_page_transitions_test.dart' as theme_page_transitions;
+import 'two_pushes_one_turn_test.dart' as two_pushes_one_turn;
 import 'typed_screen_reached_again_test.dart' as typed_screen_reached_again;
 import 'typed_url_test.dart' as typed_url;
 import 'universal_link_test.dart' as universal_link;
@@ -529,6 +530,7 @@ void main() {
   taken_over_screen_keeps_caller.main();
   theme_change.main();
   theme_page_transitions.main();
+  two_pushes_one_turn.main();
   typed_screen_reached_again.main();
   typed_url.main();
   universal_link.main();
