@@ -108,6 +108,8 @@ import 'navigate_over_pageless_route_test.dart' as navigate_over_pageless_route;
 import 'navigate_rejected_keeps_stack_test.dart'
     as navigate_rejected_keeps_stack;
 import 'navigate_root_from_nested_test.dart' as navigate_root_from_nested;
+import 'navigate_to_active_tab_while_guard_decides_test.dart'
+    as navigate_to_active_tab_while_guard_decides;
 import 'navigate_to_non_tab_test.dart' as navigate_to_non_tab;
 import 'navigations_in_one_turn_test.dart' as navigations_in_one_turn;
 import 'nested_absolute_redirect_test.dart' as nested_absolute_redirect;
@@ -414,6 +416,7 @@ void main() {
   navigate_over_pageless_route.main();
   navigate_rejected_keeps_stack.main();
   navigate_root_from_nested.main();
+  navigate_to_active_tab_while_guard_decides.main();
   navigate_to_non_tab.main();
   navigations_in_one_turn.main();
   nested_absolute_redirect.main();

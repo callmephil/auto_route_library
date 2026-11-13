@@ -1760,6 +1760,12 @@ class TabsRouter extends RoutingController {
             keepsUnnamedPages: keepsUnnamedPages,
           );
         } else {
+          // A navigation to the tab on screen is the latest choice: it calls
+          // off a change to another tab still waiting for its guards. A
+          // setActiveIndex to it is not: the tabs views echo the active index
+          // while a guard decides, and Flutter's TabController ignores a
+          // choice of the selected tab.
+          if (!isReevaluating && _pendingTab != null) _callOffPendingChange();
           final shouldNotify =
               mayUpdateRoute !=
               _pages.elementAtOrNull(pageToUpdateIndex)?.routeData._route;
