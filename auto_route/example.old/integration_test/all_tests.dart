@@ -142,6 +142,7 @@ import 'redirect_lifecycle_test.dart' as redirect_lifecycle;
 import 'redirect_loop_test.dart' as redirect_loop;
 import 'redirect_param_name_prefix_test.dart' as redirect_param_name_prefix;
 import 'redirect_path_param_test.dart' as redirect_path_param;
+import 'redirect_replace_rejected_test.dart' as redirect_replace_rejected;
 import 'redirect_route_cycle_test.dart' as redirect_route_cycle;
 import 'reevaluate_deep_link_test.dart' as reevaluate_deep_link;
 import 'reevaluate_guarded_tab_child_test.dart' as reevaluate_guarded_tab_child;
@@ -380,6 +381,7 @@ void main() {
   redirect_loop.main();
   redirect_param_name_prefix.main();
   redirect_path_param.main();
+  redirect_replace_rejected.main();
   redirect_route_cycle.main();
   reevaluate_deep_link.main();
   reevaluate_guarded_tab_child.main();

@@ -333,6 +333,11 @@ class NavigationResolver {
   ///    }
   ///  }
   ///
+  /// With [replace], [target] takes the place of the page on top, which
+  /// leaves once the guards of [target] let it through. A [target] that
+  /// doesn't open, as one a guard rejects or one no route matches, leaves
+  /// that page on the stack.
+  ///
   /// The returned future completes once [route] is closed, whether by
   /// [next] or by a pop, and at once when a redirect is already running or
   /// [route] can't be opened.

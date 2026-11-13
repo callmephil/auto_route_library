@@ -2691,16 +2691,13 @@ abstract class StackRouter extends RoutingController {
     bool replace = false,
   }) {
     final scope = _findStackScope(route);
-    if (replace) {
-      scope
-        .._markLeaving(scope._pages.reversed.take(1), .replaced)
-        .._removeLast(notify: false);
-      markUrlStateForReplace();
-    }
     return scope._push(
       route,
       onFailure: onFailure,
       onMatch: (match) => onMatch(scope, match),
+      // The page on top leaves only once the guards let [route] through, as
+      // with replace: a [route] that doesn't open leaves it on the stack.
+      onAccepted: replace ? scope._replacingTop() : null,
     );
   }
 
