@@ -257,17 +257,17 @@ class AutoTabViewState extends State<AutoTabView> {
     _warpUnderwayCount -= 1;
   }
 
-  Future<void> _warpToAdjacentTab(Duration duration) async {
+  // A zero duration jumps: animateToPage asserts a duration above zero.
+  Future<void> _moveToPage(int page, Duration duration) async {
     if (duration == .zero) {
-      _jumpToPage(_currentIndex!);
+      _jumpToPage(page);
     } else {
-      await _animateToPage(
-        _currentIndex!,
-        duration: duration,
-        curve: Curves.ease,
-      );
+      await _animateToPage(page, duration: duration, curve: Curves.ease);
     }
   }
+
+  Future<void> _warpToAdjacentTab(Duration duration) =>
+      _moveToPage(_currentIndex!, duration);
 
   Future<void> _warpToNonAdjacentTab(Duration duration) async {
     final previousIndex = _controller.previousIndex;
@@ -298,15 +298,7 @@ class AutoTabViewState extends State<AutoTabView> {
     _jumpToPage(initialPage);
 
     // Jump or animate to the destination page.
-    if (duration == .zero) {
-      _jumpToPage(_currentIndex!);
-    } else {
-      await _animateToPage(
-        _currentIndex!,
-        duration: duration,
-        curve: Curves.ease,
-      );
-    }
+    await _moveToPage(_currentIndex!, duration);
   }
 
   // Called when the PageView scrolls
@@ -351,11 +343,7 @@ class AutoTabViewState extends State<AutoTabView> {
           scheduleMicrotask(() {
             if (mounted) {
               unawaited(
-                _animateToPage(
-                  _router.activeIndex,
-                  duration: _controller.animationDuration,
-                  curve: Curves.ease,
-                ),
+                _moveToPage(_router.activeIndex, _controller.animationDuration),
               );
             }
           });

@@ -223,6 +223,7 @@ import 'swipe_init_tab_test.dart' as swipe_init_tab;
 import 'switch_routers_test.dart' as switch_routers;
 import 'tab_bar_dispose_test.dart' as tab_bar_dispose;
 import 'tab_bar_indicator_test.dart' as tab_bar_indicator;
+import 'tab_bar_zero_duration_guard_test.dart' as tab_bar_zero_duration_guard;
 import 'tab_cached_context_test.dart' as tab_cached_context;
 import 'tab_guards_test.dart' as tab_guards;
 import 'tab_history_back_rebuild_test.dart' as tab_history_back_rebuild;
@@ -469,6 +470,7 @@ void main() {
   switch_routers.main();
   tab_bar_dispose.main();
   tab_bar_indicator.main();
+  tab_bar_zero_duration_guard.main();
   tab_cached_context.main();
   tab_guards.main();
   tab_history_back_rebuild.main();
