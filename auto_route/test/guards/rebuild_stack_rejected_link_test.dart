@@ -4,6 +4,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../back_test_utils.dart';
 import '../router_test_utils.dart';
 
 // Found by an audit of auto_route/lib; no upstream issue.
@@ -131,9 +132,10 @@ void main() {
   }
 
   // A guard that shows a page of its own, here a sign-in page with
-  // redirectUntil, puts it in the place of the open pages, as replaceAll
-  // does; they come back if the guard then rejects the link. With prefix
-  // matches on, on the web too, the link names Home below its page.
+  // redirectUntil, shows it over the open pages: they are the user's own,
+  // which the link found. A link let in replaces them in one step; one the
+  // guard rejects leaves them. With prefix matches on, on the web too, the
+  // link names Home below its page.
   for (final isLetIn in [true, false]) {
     testWidgets(
       'A link whose guard shows a sign-in page '
@@ -151,7 +153,7 @@ void main() {
 
         await tester.binding.handlePushRoute('/account');
         await tester.pumpAndSettle();
-        expect(stackNames(router), ['OtherRoute']);
+        expect(stackNames(router), ['HomeRoute', 'DetailsRoute', 'OtherRoute']);
 
         isLetIn ? signingIn!.next() : signingIn!.reject();
         await tester.pumpAndSettle();
@@ -169,9 +171,9 @@ void main() {
   }
 
   // Found while proving a lead of the second audit of the library.
-  // Steps: a link whose guard shows a sign-in page puts it in the place of
-  // the open pages. A second link comes in and a guard rejects it. Then the
-  // first link's guard rejects, as when the user cancels the sign-in.
+  // Steps: a link whose guard shows a sign-in page shows it over the open
+  // pages. A second link comes in and a guard rejects it. Then the first
+  // link's guard rejects, as when the user cancels the sign-in.
   // Was: no page was left. The first link stopped as one a later link had
   // taken over, without the step that brings back the pages its guard's
   // page had taken the place of.
@@ -195,8 +197,38 @@ void main() {
     firstLink?.reject();
     await tester.pumpAndSettle();
 
-    expect(atSignIn, ['OtherRoute']);
+    expect(atSignIn, ['HomeRoute', 'DetailsRoute', 'OtherRoute']);
     expect(stackNames(router), ['HomeRoute', 'DetailsRoute']);
     expect(find.text('DetailsRoute'), findsOneWidget);
+  });
+
+  // Found by the review of the batch's links (Part 5); dev had [Home, Login].
+  // Steps: a link whose guard shows a sign-in page; the user goes back from
+  // it, with the Android back key or the back button.
+  // Was: the sign-in page was the only page, so back closed nothing and on
+  // Android the back key closed the app.
+  // Should: back leaves the sign-in page, which rejects the link, and the
+  // pages the user had open show again, with their url.
+  // Native behavior this holds to: back from a screen a link opened shows
+  // the app under it, on Android (the task's back stack) and on iOS.
+  testWidgets('Back from the sign-in page of a link shows the pages that '
+      'were open', (tester) async {
+    final router = buildRouter();
+    await pumpRouterConfigApp(
+      tester,
+      router.config(rebuildStackOnDeepLink: true),
+    );
+    await openDetails(tester, router);
+
+    await tester.binding.handlePushRoute('/account');
+    await tester.pumpAndSettle();
+    expect(find.text('OtherRoute'), findsOneWidget);
+    expect(router.canPop(), isTrue);
+
+    await systemBack(tester);
+
+    expect(stackNames(router), ['HomeRoute', 'DetailsRoute']);
+    expect(find.text('DetailsRoute'), findsOneWidget);
+    expect(router.currentUrl, '/details');
   });
 }

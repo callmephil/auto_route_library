@@ -71,7 +71,10 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   ///
   /// replaces all previous routes with the new ones, each on a screen of its
   /// own, once the guards let the new ones in, as [StackRouter.replaceAll]
-  /// does; a link they reject leaves the stack as it was
+  /// does; a link they reject leaves the stack as it was. A page a guard
+  /// shows meanwhile, such as a login with
+  /// [NavigationResolver.redirectUntil], goes on over the pages that are
+  /// open, and back from it rejects the link and shows them
   ///
   /// this is used after a deep-link is
   /// resolved by [deepLinkBuilder] if provided
@@ -311,6 +314,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
           ? controller._replaceAllMatches(
               deepLink.matches,
               updateExistingRoutes: !rebuildsStack,
+              isLink: true,
             )
           : controller.navigateAll(deepLink.matches);
     } else if (deepLink is _PathDeepLink) {
@@ -325,6 +329,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         return controller._replaceAllMatches(
           matches,
           updateExistingRoutes: false,
+          isLink: true,
         );
       }
       if (deepLink.navigate) {
@@ -342,6 +347,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         return controller._replaceAll(
           deepLink.routes,
           updateExistingRoutes: false,
+          isLink: true,
         );
       }
       if (deepLink.navigate) {

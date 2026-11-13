@@ -3369,6 +3369,7 @@ abstract class StackRouter extends RoutingController {
     List<PageRouteInfo> routes, {
     required bool updateExistingRoutes,
     OnNavigationFailure? onFailure,
+    bool isLink = false,
   }) async {
     final matches = _matchAllOrReportFailure(routes, onFailure: onFailure);
     if (matches != null) {
@@ -3376,6 +3377,7 @@ abstract class StackRouter extends RoutingController {
         matches,
         updateExistingRoutes: updateExistingRoutes,
         onFailure: onFailure,
+        isLink: isLink,
       );
     }
   }
@@ -3402,12 +3404,19 @@ abstract class StackRouter extends RoutingController {
   // the guard's page with one of its own. A page the app itself pushes while
   // a guard decides goes on over them, and is replaced with them.
   //
+  // A link's replacement, [isLink], keeps the pages under a guard's page:
+  // they are the user's own pages, which the link found open, so back from
+  // the guard's page rejects the link and shows them, as back from a screen
+  // a link opened shows the app under it on Android and iOS. Only the app's
+  // own replaceAll, as after a sign-out, has them leave for the guard's page.
+  //
   // The screens the new pages keep are told as the pages are replaced, from
   // the pages the navigator shows at that moment.
   Future<void> _replaceAllMatches(
     List<RouteMatch<Object?>> matches, {
     required bool updateExistingRoutes,
     OnNavigationFailure? onFailure,
+    bool isLink = false,
   }) {
     // Let go once replaceAll has its answer, so the call that waits on the
     // last new page doesn't hold the pages that left.
@@ -3422,7 +3431,7 @@ abstract class StackRouter extends RoutingController {
       replacement: _PagesReplacement(
         onGuardShowsPage: (router) {
           // A page on another router is not in their place.
-          if (!identical(router, this)) return;
+          if (isLink || !identical(router, this)) return;
           final leaving = [...?pagesBefore?.where(_pages.contains)];
           if (leaving.isEmpty) return;
           setAside = [...setAside, ...leaving];
