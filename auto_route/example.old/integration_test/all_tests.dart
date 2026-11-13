@@ -143,6 +143,8 @@ import 'query_toggle_back_test.dart' as query_toggle_back;
 import 'rapid_pops_test.dart' as rapid_pops;
 import 'redirect_cycle_test.dart' as redirect_cycle;
 import 'redirect_history_test.dart' as redirect_history;
+import 'redirect_in_closed_nested_router_test.dart'
+    as redirect_in_closed_nested_router;
 import 'redirect_lifecycle_test.dart' as redirect_lifecycle;
 import 'redirect_loop_test.dart' as redirect_loop;
 import 'redirect_param_name_prefix_test.dart' as redirect_param_name_prefix;
@@ -390,6 +392,7 @@ void main() {
   rapid_pops.main();
   redirect_cycle.main();
   redirect_history.main();
+  redirect_in_closed_nested_router.main();
   redirect_lifecycle.main();
   redirect_loop.main();
   redirect_param_name_prefix.main();

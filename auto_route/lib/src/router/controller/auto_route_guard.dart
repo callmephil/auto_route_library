@@ -376,6 +376,10 @@ class NavigationResolver {
     _redirectingResolvers[match.id] = this;
     await _completer.future;
     _isRedirecting = false;
+    // A router that left with its page, as when the user leaves a shell
+    // while its guard shows the redirect, took the redirect route with it:
+    // nothing is taken off a disposed router, and the url keeps no mark.
+    if (scope._isDisposed) return;
     final routeData = scope.stackData.firstWhereOrNull(
       (e) => e.matchId == match.id,
     );
