@@ -3286,12 +3286,16 @@ abstract class StackRouter extends RoutingController {
   /// Removes any route that satisfied the [predicate].
   ///
   /// Note: [removeRoute] does not respect PopScopes
+  ///
+  /// Calls [notifyAll] once, after the last route is removed, if [notify] is
+  /// true. With [notify] false no listener is told and the url stays as it
+  /// was until the caller's next change notifies.
   bool removeWhere(RouteDataPredicate predicate, {bool notify = true}) {
     var didRemove = false;
     for (final entry in List<AutoRoutePage<Object?>>.unmodifiable(_pages)) {
       if (predicate(entry.routeData)) {
         didRemove = true;
-        removeRoute(entry.routeData);
+        removeRoute(entry.routeData, notify: false);
       }
     }
     if (notify) {
