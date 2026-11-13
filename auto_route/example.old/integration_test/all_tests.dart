@@ -110,6 +110,8 @@ import 'navigate_nested_update_test.dart' as navigate_nested_update;
 import 'navigate_open_shell_no_children_test.dart'
     as navigate_open_shell_no_children;
 import 'navigate_over_pageless_route_test.dart' as navigate_over_pageless_route;
+import 'navigate_reaches_nested_router_in_call_test.dart'
+    as navigate_reaches_nested_router_in_call;
 import 'navigate_rejected_keeps_stack_test.dart'
     as navigate_rejected_keeps_stack;
 import 'navigate_root_from_nested_test.dart' as navigate_root_from_nested;
@@ -455,6 +457,7 @@ void main() {
   navigate_nested_update.main();
   navigate_open_shell_no_children.main();
   navigate_over_pageless_route.main();
+  navigate_reaches_nested_router_in_call.main();
   navigate_rejected_keeps_stack.main();
   navigate_root_from_nested.main();
   navigate_to_active_tab_while_guard_decides.main();

@@ -546,6 +546,14 @@ abstract class RoutingController with ChangeNotifier {
   /// [back] name the whole state: with no page named for a nested router,
   /// they empty it.
   ///
+  /// When no guard makes [route] or its children wait, the nested router or
+  /// the tabs of the page it reaches show those children as this call
+  /// returns, as its own stack holds its page then, see [StackRouter.push]:
+  /// a call made right after it on that nested router or those tabs acts on
+  /// them as they then are. The same holds for [navigatePath] and
+  /// [StackRouter.replaceAll]. The nested router of a page that is new is
+  /// built with the page, and opens its children then.
+  ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
   Future<T?> navigate<T extends Object?>(
@@ -4434,7 +4442,14 @@ abstract class StackRouter extends RoutingController {
                 keptScreens = _takeScreensKeptByReplaceAll(replacing),
           ),
         );
-        await Future.any([pushed.future, popped]);
+        // No pause when the last page went on in the call, as it does when
+        // no guard makes the routes wait: the nested router or the tabs of
+        // that page are reached in the same call, so a call made right after
+        // this one acts on them as they then are. A reevaluation takes its
+        // turns as before.
+        if (isReevaluating || !pushed.isCompleted) {
+          await Future.any([pushed.future, popped]);
+        }
         if (!isReevaluating && !isLastRouteAdded) {
           // A guard rejected the routes, or a later link took over: the
           // nested router of a page they reach again keeps its children.
