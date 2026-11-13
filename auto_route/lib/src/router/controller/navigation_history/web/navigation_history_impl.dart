@@ -5,8 +5,7 @@ import 'dart:ui_web' as ui_web;
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/utils.dart';
 import 'package:flutter/foundation.dart' show LocalKey;
-import 'package:flutter/scheduler.dart' show SchedulerBinding;
-import 'package:flutter/widgets.dart' show Router;
+import 'package:flutter/widgets.dart' show RouteInformation, Router;
 import 'package:web/web.dart';
 
 /// An implementation of [NavigationHistory]
@@ -33,31 +32,31 @@ class NavigationHistoryImpl extends NavigationHistory {
   // reports it.
   String? _ownMoveUrl;
 
+  // Whether a pop is going back to an entry the browser holds: the change
+  // takes that entry, and records none of its own.
   bool _isSteppingBack = false;
 
   // The entry a step back after a pop waits to move the browser to, or null.
+  // Used only while no frame is accounted for (see [_startFrame]).
   int? _stepBackTarget;
 
   bool _doesAddEntryWithSameUrl = false;
 
-  // What this frame has done to the browser so far, until the frame ends. The
-  // router writes the url once a frame, after it: only the app's entry, and
-  // with one kind for the whole frame, since the Router keeps the first
-  // neglect or navigate it is given. These tell what that one write can't do.
-  //
-  // The entry the browser stands on once the entries written so far this
-  // frame are in, or null outside a frame.
-  int? _frameBrowserIndex;
+  // The browser's entries as this turn found them, by serial count, or null
+  // outside a turn's changes. During a turn every change only records the
+  // entries the app's pages ask for; when the turn ends, [_reconcile] brings
+  // the browser from these to those in one go.
+  Map<int, UrlState>? _frameStartEntries;
 
-  // The entry this frame recorded that only the router's write will put in,
-  // or null.
-  int? _pendingIndex;
+  // The entry the browser stood on when this turn's changes started.
+  int _frameStartIndex = 0;
 
-  // Whether the router writes this frame's url over the browser's entry, as
-  // a change it reported as a replace makes it, or as a new entry, as a page
-  // pushed over one with the same url makes it.
-  bool _doesFrameReplace = false;
-  bool _doesFrameNavigate = false;
+  // Whether the end of this turn's account is scheduled.
+  bool _isEndScheduled = false;
+
+  // What to write once the browser reports the step back that the end of a
+  // turn made, each with whether it replaces the entry the browser is on.
+  List<(UrlState, bool)> _writesAfterMove = const [];
 
   @override
   bool get addsEntryWithSameUrl => _doesAddEntryWithSameUrl;
@@ -81,191 +80,241 @@ class NavigationHistoryImpl extends NavigationHistory {
         !isPushedOverSameUrl &&
         _isSameUrl(browserPath, newState.url) &&
         (isNewUrl || browserIndex != _appIndex);
-    // While stepping back, the browser reports the new url once it gets
-    // there. A notification now would make the router write it as a new
-    // entry.
-    final doesNotify = notify && !_isSteppingBack;
-    final records =
-        doesNotify && !didBrowserMoveFirst && (isNewUrl || isPushedOverSameUrl);
-    final backTo = records && !newState.shouldReplace
-        ? _entryUnderUnshownPage(newState)
-        : null;
-    final index =
-        backTo ??
-        ((_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1));
-    final reported = backTo != null
-        ? _stepBackTo(backTo, newState)
-        : records
-        ? _placeEntry(newState, index)
-        : newState;
+    // A page with the same url as the app entry's page, which has left, takes
+    // its place, as pushAndPopUntil's new page that of the pages it closed. A
+    // page that some entry holds already, as when the browser went back to the
+    // closed page's entry, needs none of its own.
+    final appEntryPage = _entries[_appIndex]?.topMatch?.id;
+    final newPage = newState.topMatch?.id;
+    final isNewPage =
+        !_entries.values.any((entry) => entry.topMatch?.id == newPage) &&
+        !isNewUrl &&
+        appEntryPage != null &&
+        newPage != null &&
+        newPage != appEntryPage &&
+        _isSameUrl(_entries[_appIndex]?.url, newState.url) &&
+        controllerOfPage(appEntryPage) == null;
+    final hasFrame = notify && _startFrame();
+    // Outside a frame, a step back moves the browser itself, which reports the
+    // url once it gets there; a notification now would make the router write
+    // it as a new entry. Within a frame, the end of the frame makes the move.
+    final doesNotify = notify && (!_isSteppingBack || hasFrame);
     _doesAddEntryWithSameUrl = doesNotify && isPushedOverSameUrl;
     try {
-      super.onNewUrlState(reported, notify: doesNotify);
+      super.onNewUrlState(newState, notify: doesNotify);
     } finally {
       _doesAddEntryWithSameUrl = false;
-    }
-    if (doesNotify) {
-      _noteReport(reported, isPushedOverSameUrl: isPushedOverSameUrl);
     }
     if (_isSteppingBack) return;
     if (didBrowserMoveFirst) {
       _entries[browserIndex] = newState;
       _appIndex = browserIndex;
-      if (_frameBrowserIndex != null) _frameBrowserIndex = browserIndex;
-    } else if (records) {
-      _recordEntry(reported, index);
+      // The browser holds this entry already, and stands on it.
+      _frameStartEntries?[browserIndex] = newState;
+      if (_frameStartEntries != null) _frameStartIndex = browserIndex;
+    } else if (notify && (isNewUrl || isPushedOverSameUrl || isNewPage)) {
+      _record(
+        newState,
+        (_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1),
+      );
     }
   }
 
-  // Readies the browser for the entry [newState] at [index], before the router
-  // hears of it, and returns the state to report: with the kind the router's
-  // one write needs, a replace when [index] is the entry the browser stands
-  // on, a new entry when it is the next one. Every pair of changes in a frame
-  // comes down to these, as the history API's calls one after another do: an
-  // entry recorded earlier in the frame is written now, and a pop of the frame
-  // that this entry follows needs no step back of its own.
-  UrlState _placeEntry(UrlState newState, int index) {
-    if (!_startFrame()) return newState;
-    final pending = _pendingIndex;
-    if (pending != null && pending != index) _writeEntryNow(pending);
-    final standsOn = _frameBrowserIndex!;
-    if (_stepBackTarget != null && index == standsOn) {
-      // A pop and a push in one turn are a replace for the browser.
-      _stepBackTarget = null;
-      _ownMoveUrl = null;
-    }
-    if (index != standsOn && index != standsOn + 1) return newState;
-    final replaces = index == standsOn;
-    // The router writes a new entry if any change of the frame asked for a
-    // navigation; a replace can't be made of it, so this one stays as it is.
-    if (replaces && _doesFrameNavigate) return newState;
-    // The router writes a replace if any change of the frame did; a new entry
-    // then goes in now, and the router's write repeats it in place.
-    return newState.copyWith(shouldReplace: replaces || _doesFrameReplace);
-  }
-
-  // The entry under this frame's unwritten entry, when [newState] shows that
-  // entry's page again and the page of the unwritten entry has left without
-  // being shown, as a page replaced and popped in one turn. A page never shown
-  // needs no entry, so the change goes back to the entry under. Null
-  // otherwise.
-  int? _entryUnderUnshownPage(UrlState newState) {
-    final pending = _pendingIndex;
-    if (pending == null || pending != _appIndex || pending == 0) return null;
-    final leftPage = _entries[pending]?.topMatch?.id;
-    final pageId = newState.topMatch?.id;
-    if (leftPage == null ||
-        pageId == null ||
-        controllerOfPage(leftPage) != null ||
-        _entries[pending - 1]?.topMatch?.id != pageId) {
-      return null;
-    }
-    return pending - 1;
-  }
-
-  // Goes back to the browser's entry [target] for [newState], stepping the
-  // browser back to it when it stands after it, and returns the state to
-  // report: a replace of that entry, which repeats what it holds.
-  UrlState _stepBackTo(int target, UrlState newState) {
-    _pendingIndex = null;
-    final standsOn = _frameBrowserIndex;
-    if (standsOn != null && standsOn > target) {
-      _ownMoveUrl = newState.url;
-      _scheduleStepBack(target);
-    }
-    _frameBrowserIndex = target;
-    return newState.copyWith(shouldReplace: true);
-  }
-
-  // Records [newState] as the app's entry at [index]; an entry after it is
-  // gone, as the browser drops those after a new one.
-  void _recordEntry(UrlState newState, int index) {
+  // Records [newState] as the entry the app's pages ask for at [index], over
+  // the app's entry or as the next one; the entries after it are gone, as the
+  // browser drops those after a new one.
+  void _record(UrlState newState, int index) {
+    _startFrame();
     _entries.removeWhere((key, _) => key >= index);
     _entries[index] = newState;
     _appIndex = index;
-    final standsOn = _frameBrowserIndex;
-    if (standsOn != null && index == standsOn + 1 && _doesFrameReplace) {
-      // The router writes this frame's url as a replace: the new entry goes
-      // in now, and that write repeats it in place.
-      _pendingIndex = null;
-      _writeEntryNow(index);
-    } else if (standsOn != null) {
-      _pendingIndex = index;
-    }
   }
 
-  // Notes the kind of write that reporting [reported] asks the router for:
-  // AutoRouterDelegate reports a replace as neglected and a page pushed over
-  // one with the same url as a navigation.
-  void _noteReport(UrlState reported, {required bool isPushedOverSameUrl}) {
-    if (!_startFrame()) return;
-    if (reported.shouldReplace) {
-      _doesFrameReplace = true;
-    } else if (isPushedOverSameUrl) {
-      _doesFrameNavigate = true;
-    }
-  }
-
-  // Starts this frame's account of the browser, unless it has started, and
-  // returns whether there is one. Only the Router writes the url, so before
-  // a Router shows this history there is no frame to account for, as when an
-  // app navigates before runApp, and maybe no binding to tell the frame's end.
+  // Starts this turn's account of the browser, unless it has started, and
+  // returns whether there is one. The router writes the url once a frame,
+  // after it: only the app's entry, with one kind for the whole frame, since
+  // the Router keeps the first neglect or navigate it is given. So the history
+  // writes the entries of a turn's changes itself when the turn ends, and the
+  // router's own write of them is then left out, which only
+  // AutoRouteInformationProvider can do. Before a Router shows this history
+  // there is nothing to account for, as when an app navigates before runApp.
   bool _startFrame() {
-    if (_frameBrowserIndex != null) return true;
-    if (!isShownByRouter) return false;
-    // The browser stands on the app's entry once the router has written the
-    // frames before, though the browser may not show it yet; a pop's step
-    // back still to be made leaves it where it is until then.
-    _frameBrowserIndex = _stepBackTarget != null
-        ? _currentIndex
-        : (_appIndex ?? _currentIndex);
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _frameBrowserIndex = null;
-      _pendingIndex = null;
-      _doesFrameReplace = false;
-      _doesFrameNavigate = false;
-    });
+    if (_frameStartEntries == null) {
+      if (!isShownByRouter || _ownProvider == null) return false;
+      _frameStartEntries = Map.of(_entries);
+      _frameStartIndex = _appIndex ?? _currentIndex;
+    }
+    if (!_isEndScheduled) {
+      _isEndScheduled = true;
+      scheduleMicrotask(_endFrame);
+    }
     return true;
   }
 
-  // Writes the entry recorded at [index] to the browser now, over the entry it
-  // stands on or as the next one, through the Router's own parser and
-  // provider, so neglectWhen still applies. Only while a stack still holds its
-  // page, as the first of two pushes stays under the second: a page that left
-  // before it showed, such as a guarded page that redirected at once, gets no
-  // entry. Does nothing before the router is built.
-  void _writeEntryNow(int index) {
-    final entry = _entries[index];
-    final standsOn = _frameBrowserIndex;
-    final pageId = entry?.topMatch?.id;
+  // The route information provider of the Router that shows this history,
+  // when it is AutoRouteInformationProvider.
+  AutoRouteInformationProvider? get _ownProvider {
     final context = router.navigatorKey.currentContext;
-    if (entry == null ||
-        standsOn == null ||
-        (index != standsOn && index != standsOn + 1) ||
-        context == null ||
-        pageId == null ||
-        controllerOfPage(pageId) == null) {
+    if (context == null) return null;
+    final provider = Router.maybeOf<Object?>(context)?.routeInformationProvider;
+    return provider is AutoRouteInformationProvider ? provider : null;
+  }
+
+  // Ends this turn's account: brings the browser to the entries the app's
+  // pages ask for, and has the router's write of the same url left out.
+  void _endFrame() {
+    _isEndScheduled = false;
+    // While the app shows no page, as between the pages pushAndPopUntil takes
+    // off and the one it puts on, the account stays open for the next turn.
+    if (!urlState.hasSegments) return;
+    final provider = _ownProvider;
+    if (_ownMoveUrl != null && provider != null) {
+      // A step back of an earlier turn is still on its way: this turn's
+      // account waits for the browser to land (see consumeOwnBrowserMove), and
+      // the router's write of the url meanwhile is left out.
+      provider.reportToSkip = _informationOf(urlState);
       return;
     }
-    final shownBy = Router.maybeOf<Object?>(context);
+    final start = _frameStartEntries;
+    _frameStartEntries = null;
+    if (start == null) return;
+    if (provider == null || !_reconcile(start, _frameStartIndex, provider)) {
+      return;
+    }
+    final top = _entries[_appIndex];
+    final information = top == null ? null : _informationOf(top);
+    provider.reportToSkip = information;
+  }
+
+  // Brings the browser from the entries it held at the frame's start, [start],
+  // standing on [standsOn], to the entries the app's pages ask for now, in one
+  // place, so that any calls in one turn end where the same calls a frame
+  // apart end: it keeps what the two share from the bottom, steps back over
+  // what is no longer there, writes what is new, and writes the top as a
+  // replace when only the entry on top changed. An entry this frame added
+  // whose page is gone again was never shown, and gets none. Returns whether
+  // it moved or wrote anything.
+  bool _reconcile(
+    Map<int, UrlState> start,
+    int standsOn,
+    AutoRouteInformationProvider provider,
+  ) {
+    final appIndex = _appIndex;
+    if (appIndex == null) return false;
+    // The entries the app's pages ask for, from the bottom; null for an entry
+    // of the browser's that the history doesn't know and keeps as it is.
+    final wanted = <UrlState?>[];
+    for (var i = 0; i <= appIndex; i++) {
+      final entry = _entries[i];
+      final isKept = i <= standsOn && _isSameEntry(entry, start[i]);
+      if (entry == null) {
+        if (isKept) wanted.add(null);
+        continue;
+      }
+      if (!isKept) {
+        final pageId = entry.topMatch?.id;
+        final location = entry.url.isEmpty ? '/' : entry.uri.toString();
+        final isGone = pageId == null || controllerOfPage(pageId) == null;
+        if (isGone || (provider.neglectIf?.call(location) ?? false)) continue;
+        // A new entry that repeats the one under it adds nothing; one that
+        // takes the place of an entry the browser holds stays a replace.
+        if (i > standsOn && _isSameEntry(wanted.lastOrNull, entry)) continue;
+      }
+      wanted.add(entry);
+    }
+    final top = wanted.length - 1;
+    var shared = 0;
+    for (final (index, entry) in wanted.indexed) {
+      if (index > standsOn || !_isSameEntry(entry, start[index])) break;
+      shared++;
+    }
+    if (top < 0 || (shared == wanted.length && top == standsOn)) return false;
+
+    // From where the browser stands: a step back, if any, then the writes,
+    // and the entries the browser then holds, from the bottom.
+    var moveTo = standsOn;
+    var replacesFirst = false;
+    final holds = wanted;
+    if (shared > top) {
+      // What the app asks for is what the browser holds under where it stands.
+      moveTo = top;
+    } else if (shared == standsOn) {
+      // Only the entry on top changed.
+      replacesFirst = true;
+    } else if (shared == 0) {
+      // Nothing is shared: a step back to the bottom entry, which the first
+      // entry the app asks for replaces.
+      moveTo = 0;
+      replacesFirst = true;
+    } else if (shared < standsOn) {
+      // A step back to the last entry they share, then each new entry in turn,
+      // which drops the browser's entries after it, as new entries do.
+      moveTo = shared - 1;
+    }
+    final writes = [
+      for (final (index, entry) in wanted.indexed.skip(shared))
+        if (entry != null) (entry, replacesFirst && index == shared),
+    ];
+
+    // A new entry drops those after it; a step back or a replace keeps them
+    // ahead, for the browser's forward button.
+    final keepsAhead = writes.every((write) => write.$2);
+    _entries
+      ..clear()
+      ..addAll({
+        for (final MapEntry(:key, :value) in start.entries)
+          if (keepsAhead && key >= holds.length) key: value,
+        for (final (index, entry) in holds.indexed)
+          index: ?(entry ?? start[index]),
+      });
+    _appIndex = holds.length - 1;
+
+    if (moveTo < standsOn) {
+      _ownMoveUrl = start[moveTo]?.url;
+      _writesAfterMove = writes;
+      _history.go(moveTo - _currentIndex);
+    } else {
+      writes.forEach(_write);
+    }
+    return true;
+  }
+
+  // Whether [a] and [b] are the same browser entry: the same url, page on top
+  // and path state.
+  bool _isSameEntry(UrlState? a, UrlState? b) {
+    if (a == null || b == null) return identical(a, b);
+    return _isSameUrl(a.url, b.url) &&
+        a.topMatch?.id == b.topMatch?.id &&
+        a.pathState == b.pathState;
+  }
+
+  // Writes [write]'s entry to the browser, over the entry it stands on or as
+  // a new one, through the Router's own parser and provider, so neglectWhen
+  // still applies.
+  void _write((UrlState, bool) write) {
+    final (entry, replaces) = write;
     // The entry's own replace mark would make the provider replace.
-    final information = shownBy?.routeInformationParser
-        ?.restoreRouteInformation(
-          entry.copyWith(shouldReplace: index == standsOn),
-        );
+    final information = _informationOf(entry.copyWith(shouldReplace: replaces));
     if (information == null) return;
-    shownBy!.routeInformationProvider?.routerReportsNewRouteInformation(
+    _ownProvider?.reportFromHistory(
       information,
-      type: index == standsOn ? .neglect : .navigate,
+      type: replaces ? .neglect : .navigate,
     );
-    _frameBrowserIndex = index;
+  }
+
+  // The route information the Router's own parser makes of [entry].
+  RouteInformation? _informationOf(UrlState entry) {
+    final context = router.navigatorKey.currentContext;
+    if (context == null) return null;
+    return Router.maybeOf<Object?>(context)?.routeInformationParser
+        ?.restoreRouteInformation(entry);
   }
 
   @override
   // The browser can't delete an entry, so a page popped from under the page
   // on top keeps its entry here. A page taken off the stack without a pop,
   // with no [poppedPageId], as by pushAndPopUntil, steps back one entry at
-  // most, at once.
+  // most.
   void rebuildUrlAfterPop({LocalKey? poppedPageId}) {
     final isPop = poppedPageId != null;
     final popped = urlState;
@@ -273,10 +322,11 @@ class NavigationHistoryImpl extends NavigationHistory {
     final newUrl = newState.url;
     final isSameUrl = newUrl == popped.url;
     _recordCurrentEntry();
-    // The pops of one popUntil come one after another, before the browser has
-    // made the step back of the one before; that step's entry counts as
+    final hasFrame = _startFrame();
+    // The pops of one turn come one after another, before the browser has
+    // made the step back of the one before: the app's entry counts as
     // current.
-    final index = isPop && _stepBackTarget != null
+    final index = hasFrame || (isPop && _stepBackTarget != null)
         ? (_appIndex ?? _currentIndex)
         : _currentIndex;
     // Whether the entry at index i holds the page on top of [state]; two pages
@@ -301,14 +351,14 @@ class NavigationHistoryImpl extends NavigationHistory {
         _isSteppingBack = false;
       }
       _appIndex = target;
+      // Within a frame its end steps the browser back; outside one, the step
+      // is made here.
+      if (hasFrame) return;
       _ownMoveUrl = newUrl;
       if (isPop) {
         _scheduleStepBack(target);
       } else {
         _history.back();
-        // A navigation later in this frame starts from the entry the browser
-        // is stepping back to.
-        if (_startFrame()) _frameBrowserIndex = target;
       }
       return;
     }
@@ -325,8 +375,8 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   // Steps the browser back to [target] once the pops being made now are done,
   // in one move: the browser makes a move later, and reports each one. A later
-  // pop of the same turn moves the target on; a push of the same turn that
-  // takes the browser's entry needs no step (see [_placeEntry]).
+  // pop of the same turn moves the target on. Only outside a frame; within
+  // one, [_reconcile] makes the move.
   void _scheduleStepBack(int target) {
     final isScheduled = _stepBackTarget != null;
     _stepBackTarget = target;
@@ -355,8 +405,19 @@ class NavigationHistoryImpl extends NavigationHistory {
   @override
   bool consumeOwnBrowserMove(UrlState configuration) {
     final ownMoveUrl = _ownMoveUrl;
+    final writes = _writesAfterMove;
     _ownMoveUrl = null;
-    return ownMoveUrl != null && _isSameUrl(configuration.url, ownMoveUrl);
+    _writesAfterMove = const [];
+    final isOwn =
+        ownMoveUrl != null && _isSameUrl(configuration.url, ownMoveUrl);
+    // The step back of a turn's end has landed; the entries after it follow,
+    // then the account of a later turn that waited for it.
+    if (isOwn) writes.forEach(_write);
+    if (_frameStartEntries != null && !_isEndScheduled) {
+      _isEndScheduled = true;
+      scheduleMicrotask(_endFrame);
+    }
+    return isOwn;
   }
 
   @override
@@ -520,10 +581,9 @@ class NavigationHistoryImpl extends NavigationHistory {
     );
     if (newState == urlState) return;
     final index = (_appIndex ?? _currentIndex) + 1;
-    final reported = _placeEntry(newState, index);
-    onNewUrlState(reported);
+    onNewUrlState(newState);
     // The url stays the same, so onNewUrlState records no entry for it.
-    _recordEntry(reported, index);
+    _record(newState, index);
   }
 
   // The browser moved to an entry whose page the app already shows, as its

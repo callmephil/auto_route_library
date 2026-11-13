@@ -29,6 +29,7 @@ RootStackRouter _router() => .build(
       ('ARoute', '/a'),
       ('BRoute', '/b'),
       ('CRoute', '/c'),
+      ('DRoute', '/d'),
     ])
       NamedRouteDef(name: name, path: path, builder: (_, _) => Text(name)),
     NamedRouteDef(
@@ -60,6 +61,10 @@ RootStackRouter _router() => .build(
 final _onA = <void Function(RootStackRouter router)>[
   (router) => unawaited(router.push(const NamedRoute('ARoute'))),
 ];
+
+// Opens B over the page on top.
+void _openB(RootStackRouter router) =>
+    unawaited(router.push(const NamedRoute('BRoute')));
 
 // The browser's entry, counted from [home]'s, its url, and the names on the
 // router's stack.
@@ -349,6 +354,92 @@ void main() {
       (router) {
         unawaited(router.replace(const NamedRoute('BRoute')));
         router.pop();
+      },
+      [(0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
+  // From A over Home, a replace of A with B, a push of C and a pop, in one
+  // turn. Was: the browser held '/', '/b', '/c', '/b', and back showed C.
+  testWidgets('On web, a replace, a push and a pop in one turn end on the '
+      "replacing page's entry", (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.replace(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+        router.pop();
+      },
+      [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
+
+  // From A over Home, a replace of A with B, a pop and a push of C, in one
+  // turn. Was: C went over Home's entry, and back had nowhere to go.
+  testWidgets('On web, a replace, a pop and a push in one turn give the pushed '
+      'page an entry of its own', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.replace(const NamedRoute('BRoute')));
+        router.pop();
+        unawaited(router.push(const NamedRoute('CRoute')));
+      },
+      [(1, '/c', 'HomeRoute CRoute'), (0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
+
+  // From B over A over Home, two popAndPush, of C and then of D, in one turn.
+  // Was: D took A's entry, and back from D skipped A.
+  testWidgets('On web, two popAndPush in one turn keep the entry of the page '
+      'under', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.popAndPush(const NamedRoute('CRoute')));
+        unawaited(router.popAndPush(const NamedRoute('DRoute')));
+      },
+      [
+        (2, '/d', 'HomeRoute ARoute DRoute'),
+        (1, '/a', 'HomeRoute ARoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+      opens: [..._onA, _openB],
+    );
+  });
+
+  // From B over A over Home, popUntilRoot and two pushes, of C and D, in one
+  // turn. Was: back from D reopened A, a page popUntilRoot had closed.
+  testWidgets('On web, popUntilRoot and two pushes in one turn leave no entry '
+      'of a closed page', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        router.popUntilRoot();
+        unawaited(router.push(const NamedRoute('CRoute')));
+        unawaited(router.push(const NamedRoute('DRoute')));
+      },
+      [
+        (2, '/d', 'HomeRoute CRoute DRoute'),
+        (1, '/c', 'HomeRoute CRoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+      opens: [..._onA, _openB],
+    );
+  });
+
+  // From A over Home, two pushes, of B and C, and popUntilRoot, in one turn.
+  // Was: the browser stood on a fourth entry, with A's, B's and C's under it.
+  testWidgets('On web, two pushes and popUntilRoot in one turn end on the '
+      'entry of Home', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+        router.popUntilRoot();
       },
       [(0, '/', 'HomeRoute')],
       opens: _onA,
