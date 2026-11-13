@@ -1147,6 +1147,9 @@ class TabsRouter extends RoutingController {
   int get activeIndex => _activeIndex;
 
   /// The index of previous active page
+  ///
+  /// When the tabs change, it follows that tab to its new index, as
+  /// [activeIndex] does, and is null once that tab is gone or is active.
   int? get previousIndex => _previousIndex;
 
   /// Updates [_activeIndex] and triggers a rebuild
@@ -1660,6 +1663,10 @@ class TabsRouter extends RoutingController {
     _listedTabArgs = [for (final route in routesToPush) route.args];
     final previousTabs = List.of(_pages);
     final previousActivePage = previousTabs.elementAtOrNull(fromIndex);
+    final previousTabPage = switch (_previousIndex) {
+      final index? => previousTabs.elementAtOrNull(index),
+      null => null,
+    };
     final previousPages = List.of(_pages);
     final previousHistory = [
       for (final index in _tabHistory) ?_pages.elementAtOrNull(index),
@@ -1690,6 +1697,12 @@ class TabsRouter extends RoutingController {
     // previous tab. Each tabs view loads the active tab when it rebuilds with
     // the new routes.
     _activeIndex = targetIndex;
+    // The previous tab is followed the same way, so both indexes name tabs of
+    // the new routes. None when it is gone or is the one now active.
+    final previousTab = _tabIndexAfterChange(previousTabPage);
+    _previousIndex = previousTab == -1 || previousTab == _activeIndex
+        ? null
+        : previousTab;
     _tabHistory
       ..clear()
       ..addAll(
