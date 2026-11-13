@@ -51,7 +51,16 @@ class NavigationHistoryImpl extends NavigationHistory {
   }
 
   @override
-  void rebuildUrlAfterPop() {
+  void rebuildUrlAfterPop({LocalKey? poppedPageId}) {
+    if (poppedPageId != null) {
+      // A page popped from under the page on top, as popUntil pops the pages
+      // in between, leaves the url as it was, so the last entry stays; the
+      // entries that showed the popped page go, or back() would reopen it.
+      final last = _entries.lastOrNull;
+      _entries.removeWhere(
+        (entry) => !identical(entry, last) && entry.showsPage(poppedPageId),
+      );
+    }
     _isRebuildingAfterPop = true;
     try {
       rebuildUrl();
@@ -162,6 +171,10 @@ class _HistoryEntry {
 
   // The id of the page on top, which tells apart two pages with the same url.
   final LocalKey pageId;
+
+  // Whether this entry showed the page with [id], on top or holding the
+  // router of the page on top.
+  bool showsPage(LocalKey id) => route.flattened.any((match) => match.id == id);
 
   @override
   bool operator ==(Object other) =>

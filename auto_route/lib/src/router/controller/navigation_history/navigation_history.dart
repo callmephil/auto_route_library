@@ -43,10 +43,15 @@ abstract class NavigationHistory with ChangeNotifier {
   /// the browser back to it (see [consumeOwnBrowserMove]); otherwise it gives
   /// the popped page's entry to the page now on top.
   ///
+  /// [poppedPageId] is the id of the popped page's route. A page can be popped
+  /// from under the page on top, as [StackRouter.popUntil] pops the pages in
+  /// between; the url then stays the same, and the native history drops the
+  /// popped page's entries by this id.
+  ///
   /// Like [rebuildUrl], notifies listeners only if the url changed, which it
   /// does not when the popped page was not part of the visible url.
   @internal
-  void rebuildUrlAfterPop() => rebuildUrl();
+  void rebuildUrlAfterPop({LocalKey? poppedPageId}) => rebuildUrl();
 
   /// Whether [configuration], a route the platform just reported, only
   /// confirms a move through the browser history that this history made itself.

@@ -2462,7 +2462,7 @@ abstract class StackRouter extends RoutingController {
     _pages.remove(page);
     _shareTopPathData();
     notifyListeners();
-    navigationHistory.rebuildUrlAfterPop();
+    navigationHistory.rebuildUrlAfterPop(poppedPageId: page.routeData.matchId);
   }
 
   void _removeRoute(RouteMatch<Object?> route, {bool notify = true}) {

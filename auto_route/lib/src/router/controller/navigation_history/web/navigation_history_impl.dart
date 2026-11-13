@@ -2,6 +2,7 @@ import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart' show LocalKey;
 import 'package:web/web.dart';
 
 /// An implementation of [NavigationHistory]
@@ -77,7 +78,9 @@ class NavigationHistoryImpl extends NavigationHistory {
   }
 
   @override
-  void rebuildUrlAfterPop() {
+  // The browser can't delete an entry, so a page popped from under the page
+  // on top keeps its entry here.
+  void rebuildUrlAfterPop({LocalKey? poppedPageId}) {
     final popped = urlState;
     final newState = UrlState.fromSegments(router.currentSegments);
     final newUrl = newState.url;
