@@ -27,6 +27,8 @@ import 'custom_route_transition_test.dart' as custom_route_transition;
 import 'custom_route_underneath_test.dart' as custom_route_underneath;
 import 'declarative_hero_controller_test.dart' as declarative_hero_controller;
 import 'declarative_initial_routes_test.dart' as declarative_initial_routes;
+import 'declarative_leading_button_after_pop_test.dart'
+    as declarative_leading_button_after_pop;
 import 'declarative_on_navigate_once_test.dart' as declarative_on_navigate_once;
 import 'declarative_push_message_test.dart' as declarative_push_message;
 import 'declarative_router_key_test.dart' as declarative_router_key;
@@ -326,6 +328,7 @@ void main() {
   custom_route_underneath.main();
   declarative_hero_controller.main();
   declarative_initial_routes.main();
+  declarative_leading_button_after_pop.main();
   declarative_on_navigate_once.main();
   declarative_push_message.main();
   declarative_router_key.main();

@@ -76,7 +76,32 @@ class _DeclarativeAutoRouterState extends State<_DeclarativeAutoRouter>
       // Before the navigator's first build: the routes callback reads the
       // routes the url names from the handler.
       _controller!.setupInitialRoutes();
+      _updateRoutes();
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeclarativeAutoRouter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _updateRoutes();
+  }
+
+  // The list the routes callback returned last.
+  List<PageRouteInfo>? _routes;
+
+  // Hands the router the app's list when it changed. Done here, before
+  // [build] reads the router's state for the scopes, so the widgets that
+  // watch the router see the pages the navigator is about to show.
+  void _updateRoutes() {
+    final routes = widget.routesBuilder(_controller!.pendingRoutesHandler);
+    if (const ListEquality<Object?>().equals(routes, _routes)) return;
+    _routes = routes;
+    _controller!.updateDeclarativeRoutes(routes);
+    // Read now: this widget may be gone by the end of the frame.
+    final delegate = AutoRouterDelegate.of(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      delegate.notifyUrlChanged();
+    });
   }
 
   @override
@@ -92,12 +117,10 @@ class _DeclarativeAutoRouterState extends State<_DeclarativeAutoRouter>
   @override
   Widget build(BuildContext context) {
     assert(_controller != null, 'The router controller is not set up yet.');
-    final stateHash = controller!.stateHash;
     final navigator = AutoRouteNavigator(
       router: _controller!,
       clipBehavior: widget.clipBehavior,
       key: GlobalObjectKey(_controller.hashCode),
-      declarativeRoutesBuilder: widget.routesBuilder,
       navRestorationScopeId: widget.navRestorationScopeId,
       navigatorObservers: _navigatorObservers,
       didPop: widget.onPopRoute,
@@ -105,19 +128,29 @@ class _DeclarativeAutoRouterState extends State<_DeclarativeAutoRouter>
       routeTraversalEdgeBehavior: widget.traversalEdgeBehavior,
     );
     final heroController = _heroController;
-    return RouterScope(
-      key: _controller!.globalRouterKey,
-      controller: _controller!,
-      inheritableObserversBuilder: _inheritableObserversBuilder,
-      navigatorObservers: _navigatorObservers,
-      stateHash: stateHash,
-      child: StackRouterScope(
-        controller: _controller!,
-        stateHash: stateHash,
-        child: heroController == null
-            ? navigator
-            : HeroControllerScope(controller: heroController, child: navigator),
-      ),
+    // A pop changes the router's state without a new list: the scopes
+    // rebuild with it, and the navigator, which already took the page off,
+    // stays as it is.
+    return ListenableBuilder(
+      listenable: _controller!,
+      builder: (_, child) {
+        final stateHash = _controller!.stateHash;
+        return RouterScope(
+          key: _controller!.globalRouterKey,
+          controller: _controller!,
+          inheritableObserversBuilder: _inheritableObserversBuilder,
+          navigatorObservers: _navigatorObservers,
+          stateHash: stateHash,
+          child: StackRouterScope(
+            controller: _controller!,
+            stateHash: stateHash,
+            child: child!,
+          ),
+        );
+      },
+      child: heroController == null
+          ? navigator
+          : HeroControllerScope(controller: heroController, child: navigator),
     );
   }
 
