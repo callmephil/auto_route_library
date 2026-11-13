@@ -36,17 +36,17 @@ abstract class RootStackRouter extends StackRouter {
   // cancels no link before it, as a refused navigation changes nothing.
   int _letInLink = 0;
 
-  // Holds, in the zone a link's navigation runs in, the count of that link.
-  static final _linkZone = Object();
-
   // What each link does once it is let in, by its count, until a guarded
-  // navigation of that link takes it, see [_takeLinkAcceptedStep].
+  // navigation of that link takes it, see [_takeLinkStep].
   final _linkSteps = <int, VoidCallback>{};
 
   // Runs [open], which starts the navigation of a new link, as that link's.
   // The navigation starts before [open] returns, up to its first guard, and
-  // what it does later, such as navigating the nested router of a page
-  // already open or a tabs router, runs in a zone that names the link.
+  // knows its link from [_startingLink] then. What it goes on to later, such
+  // as the nested router of a page already open or a tabs router after a
+  // guard's wait, is handed the link as an argument by the batch that causes
+  // it; a navigation the app starts is never a link's, whatever code it runs
+  // from, such as a listener a guard set up while a link opened.
   // [onAccepted] runs once the guards that navigation asks let the link in,
   // so a link the app turns down changes nothing else; when it asks no
   // guard, such as a link to the page already open, once it ends.
@@ -65,7 +65,7 @@ abstract class RootStackRouter extends StackRouter {
     };
     final Future<void> navigation;
     try {
-      navigation = runZoned(open, zoneValues: {_linkZone: link});
+      navigation = open();
     } finally {
       _startingLink = null;
     }
@@ -81,27 +81,19 @@ abstract class RootStackRouter extends StackRouter {
     return navigation;
   }
 
-  // The count of the link whose navigation runs now, or null.
-  int? get _currentLink => _startingLink ?? Zone.current[_linkZone] as int?;
-
   // Whether a link that started after [link] has been let in.
   bool _isLinkOvertaken(int link) => _letInLink > link;
 
-  // The step the link whose navigation runs takes once it is let in, for
-  // the guarded navigation it starts to run; null for any other navigation
-  // and once taken.
-  VoidCallback? _takeLinkAcceptedStep() {
-    final link = _currentLink;
-    return link == null ? null : _linkSteps.remove(link);
-  }
+  // The step [link] takes once it is let in, for the guarded navigation of
+  // that link to run; null once taken.
+  VoidCallback? _takeLinkStep(int link) => _linkSteps.remove(link);
 
-  // Makes [step] the step of the link whose navigation runs now, for the
-  // guarded navigation it starts next to take, as when a tab change hands
-  // it on to the tab's nested router, after any step that waits already.
-  // Drops it when a later link has been let in.
-  void _handLinkStepOn(VoidCallback step) {
-    final link = _currentLink;
-    if (link == null || _isLinkOvertaken(link)) return;
+  // Makes [step] the step of [link], for the guarded navigation of that
+  // link that starts next to take, as when a tab change hands it on to the
+  // tab's nested router, after any step that waits already. Drops it when a
+  // later link has been let in.
+  void _handLinkStepOn(int link, VoidCallback step) {
+    if (_isLinkOvertaken(link)) return;
     final waiting = _linkSteps[link];
     _linkSteps[link] = waiting == null
         ? step
@@ -111,13 +103,12 @@ abstract class RootStackRouter extends StackRouter {
           };
   }
 
-  // Whether [step] waits for the link whose navigation runs now to be let
-  // in, as it does while a guard of that link has yet to answer; it then
-  // runs with the link's own step, or not at all if the link is turned down.
-  bool _deferToLinkAccepted(VoidCallback step) {
-    final link = _currentLink;
-    final linkStep = link == null ? null : _linkSteps[link];
-    if (link == null || linkStep == null) return false;
+  // Whether [step] waits for [link] to be let in, as it does while a guard
+  // of that link has yet to answer; it then runs with the link's own step,
+  // or not at all if the link is turned down.
+  bool _deferToLinkAccepted(int link, VoidCallback step) {
+    final linkStep = _linkSteps[link];
+    if (linkStep == null) return false;
     _linkSteps[link] = () {
       linkStep();
       step();

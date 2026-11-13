@@ -26,6 +26,8 @@ import '../router_test_utils.dart';
 // requires every page to have its own key.
 void main() {
   Completer<bool>? slowAnswer;
+  // While set, Mail's own guard waits for it before it lets a link in.
+  Completer<void>? mailCheck;
 
   RootStackRouter build() => .build(
     routes: [
@@ -37,6 +39,12 @@ void main() {
       NamedRouteDef(
         name: 'MailRoute',
         path: '/mail',
+        guards: [
+          AutoRouteGuard.simple((resolver, _) async {
+            await mailCheck?.future;
+            resolver.next();
+          }),
+        ],
         builder: (_, _) => const Scaffold(body: AutoRouter()),
         children: [
           NamedRouteDef(
@@ -63,7 +71,10 @@ void main() {
     ],
   );
 
-  setUp(() => slowAnswer = null);
+  setUp(() {
+    slowAnswer = null;
+    mailCheck = null;
+  });
 
   Future<RootStackRouter> openMessage42(WidgetTester tester) async {
     final router = build();
@@ -118,5 +129,34 @@ void main() {
     expect(ids(router), ['13']);
     expect(find.text('Mail 13'), findsOneWidget);
     expect(router.currentUrl, '/mail/13');
+  });
+
+  // The batch of the nested router starts only once Mail's own guard has
+  // answered, after the call that handed the link over: it knows its link
+  // only because the root's batch hands it down.
+  testWidgets('The later of two links stays on screen when the first goes on '
+      'into the nested router after a guard of the page above waited', (
+    tester,
+  ) async {
+    final router = await openMessage42(tester);
+
+    final check = mailCheck = Completer<void>();
+    await tester.binding.handlePushRoute('/mail/13');
+    await tester.pumpAndSettle();
+    check.complete();
+    mailCheck = null;
+    await tester.pumpAndSettle();
+    expect(slowAnswer, isNotNull);
+    await tester.binding.handlePushRoute('/mail/14');
+    await tester.pumpAndSettle();
+    final shownBefore = ids(router);
+    expect(shownBefore, ['14']);
+
+    slowAnswer!.complete(true);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(ids(router), shownBefore);
+    expect(router.currentUrl, '/mail/14');
   });
 }

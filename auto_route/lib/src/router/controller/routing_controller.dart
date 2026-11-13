@@ -953,11 +953,16 @@ abstract class RoutingController with ChangeNotifier {
   // asks: a route given no children says nothing about them. A path, a link
   // and a history entry name the whole state, so without it such a router is
   // emptied.
+  //
+  // [link] is the count of the link whose navigation this is, handed down by
+  // the batch of the router above; without it, the link whose navigation
+  // the delegate is starting in this call, if any.
   Future<T?> _navigateAll<T extends Object?>(
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
+    int? link,
   });
 
   Future<void> _navigateAllRoutes(
@@ -1201,6 +1206,7 @@ class TabsRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     bool remember = true,
     bool keepsUnnamedPages = false,
+    int? link,
   }) {
     if (_activeIndex == index) return _TabChange.done;
     // A view asks again for the tab it moved to while its guards decide.
@@ -1209,7 +1215,7 @@ class TabsRouter extends RoutingController {
     if (match == null) return _TabChange.done;
     final change = ++_tabChanges;
     // What a link that changes the tab does once the tab's guards let it in.
-    final onLinkAccepted = root._takeLinkAcceptedStep();
+    final onLinkAccepted = link == null ? null : root._takeLinkStep(link);
     final checked = _checkTabGuards(
       match,
       onFailure: onFailure,
@@ -1222,6 +1228,7 @@ class TabsRouter extends RoutingController {
         match,
         checked,
         onLinkAccepted: onLinkAccepted,
+        link: link,
         notify: notify,
         update: route != null,
         onFailure: onFailure,
@@ -1238,6 +1245,7 @@ class TabsRouter extends RoutingController {
         match,
         result,
         onLinkAccepted: onLinkAccepted,
+        link: link,
         update: route != null,
         onFailure: onFailure,
         remember: remember,
@@ -1279,6 +1287,7 @@ class TabsRouter extends RoutingController {
     RouteMatch<Object?> match,
     ResolverResult result, {
     VoidCallback? onLinkAccepted,
+    int? link,
     bool notify = true,
     bool update = false,
     OnNavigationFailure? onFailure,
@@ -1299,12 +1308,14 @@ class TabsRouter extends RoutingController {
     // page already open does: one they reject leaves the tab on screen and
     // the open dialogs as they were.
     if (onLinkAccepted != null &&
+        link != null &&
         isUpdated &&
         (result.route.children ?? const []).isNotEmpty) {
       _showTabOnceLinkLetIn(
         change,
         index,
         result.route,
+        link: link,
         onLinkAccepted: onLinkAccepted,
         show: () => _showTab(index, notify: notify, remember: remember),
         onFailure: onFailure,
@@ -1327,6 +1338,7 @@ class TabsRouter extends RoutingController {
           updated,
           onFailure: onFailure,
           keepsUnnamedPages: keepsUnnamedPages,
+          link: link,
         ),
       );
     }
@@ -1368,6 +1380,7 @@ class TabsRouter extends RoutingController {
     int change,
     int index,
     RouteMatch<Object?> route, {
+    required int link,
     required VoidCallback onLinkAccepted,
     required VoidCallback show,
     OnNavigationFailure? onFailure,
@@ -1378,11 +1391,11 @@ class TabsRouter extends RoutingController {
     }
 
     void openInside(RouteMatch<Object?> tab) {
-      root._handLinkStepOn(onLetIn);
-      unawaited(_navigateInsideTab(tab, onFailure: onFailure));
+      root._handLinkStepOn(link, onLetIn);
+      unawaited(_navigateInsideTab(tab, onFailure: onFailure, link: link));
       // A nested router whose navigation asks no guard, such as a
       // declarative one, leaves the step: the tab shows at once.
-      root._takeLinkAcceptedStep()?.call();
+      root._takeLinkStep(link)?.call();
     }
 
     final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
@@ -1398,11 +1411,11 @@ class TabsRouter extends RoutingController {
         _navigateInsideTab(
           firstPage.copyWith(children: children),
           onFailure: onFailure,
+          link: link,
         ),
       );
       return;
     }
-    // The future's callback runs in the zone of the link's navigation.
     unawaited(
       SchedulerBinding.instance.endOfFrame.then((_) {
         if (_isDisposed || change != _tabChanges) return;
@@ -1889,7 +1902,9 @@ class TabsRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
+    int? link,
   }) async {
+    final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
     for (final mayUpdateRoute in routesToProcess) {
       final pageToUpdateIndex = _tabIndexOf(mayUpdateRoute);
@@ -1901,6 +1916,7 @@ class TabsRouter extends RoutingController {
             route: mayUpdateRoute,
             onFailure: onFailure,
             keepsUnnamedPages: keepsUnnamedPages,
+            link: ofLink,
           );
         } else {
           // A navigation to the tab on screen is the latest choice: it calls
@@ -1930,6 +1946,7 @@ class TabsRouter extends RoutingController {
                   onFailure: onFailure,
                   isReevaluating: isReevaluating,
                   keepsUnnamedPages: keepsUnnamedPages,
+                  link: ofLink,
                 );
           if (isReevaluating) {
             await inside;
@@ -2074,6 +2091,7 @@ class TabsRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
+    int? link,
   }) {
     // By match id: a tab sharing its route with another has its own nested
     // router.
@@ -2082,6 +2100,7 @@ class TabsRouter extends RoutingController {
       onFailure: onFailure,
       isReevaluating: isReevaluating,
       keepsUnnamedPages: keepsUnnamedPages,
+      link: link,
     );
   }
 
@@ -3022,6 +3041,7 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     _PagesReplacement? replacement,
+    int? link,
   }) {
     // replaceAll reaches no page again: [replacement] takes every page off
     // once every guard has let [matches] through, and their pages go on in
@@ -3035,6 +3055,7 @@ abstract class StackRouter extends RoutingController {
         pushed: pushed,
         onLastRouteAdded: onLastRouteAdded,
         replacement: replacement,
+        link: link,
       );
     }
     final (:kept, :end) = isReevaluating
@@ -3068,6 +3089,7 @@ abstract class StackRouter extends RoutingController {
       isReevaluating: isReevaluating,
       pushed: pushed,
       onLastRouteAdded: onLastRouteAdded,
+      link: link,
       onFirstRouteAccepted: () {
         // A page popped while the guards decided has left already. And a
         // later navigation to the same page, let in while these guards
@@ -3979,6 +4001,7 @@ abstract class StackRouter extends RoutingController {
     ValueChanged<RouteMatch<Object?>>? onLastRouteAdded,
     VoidCallback? onFirstRouteAccepted,
     _PagesReplacement? replacement,
+    int? link,
   }) async {
     assert(!managedByWidget, _managedByWidgetMessage);
 
@@ -4023,10 +4046,11 @@ abstract class StackRouter extends RoutingController {
     // keeps no history: their callers wait until the batch ends; see
     // [_endWaitOfTakenOff].
     final takenOff = <AutoRoutePage<Object?>>[];
-    // The link whose navigation runs this batch, also in a nested router.
-    final link = root._currentLink;
+    // The link whose navigation runs this batch: handed down to a nested
+    // router's batch, or the one the delegate starts in this call.
+    final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     // What the link that starts this batch does once its guards let it in.
-    final onLinkAccepted = root._takeLinkAcceptedStep();
+    final onLinkAccepted = ofLink == null ? null : root._takeLinkStep(ofLink);
     // The page that takes over the screen on top opens its children in that
     // screen's nested router only once every page is in, as the screens
     // replaceAll keeps below the top do, see [_openChildrenInKeptScreens].
@@ -4137,7 +4161,7 @@ abstract class StackRouter extends RoutingController {
         // A later link was let in while a guard decided. The pages this
         // link's guard set aside for its own page come back, unless a page
         // was replaced meanwhile, as when the later link replaced the stack.
-        if (link != null && root._isLinkOvertaken(link)) {
+        if (ofLink != null && root._isLinkOvertaken(ofLink)) {
           replacement?.onRejected();
           break;
         }
@@ -4162,7 +4186,7 @@ abstract class StackRouter extends RoutingController {
             if (onLinkAccepted != null) {
               _innerControllerOfMatch(match.id) != null &&
                       (match.children?.isNotEmpty ?? false)
-                  ? root._handLinkStepOn(onLinkAccepted)
+                  ? root._handLinkStepOn(ofLink!, onLinkAccepted)
                   : onLinkAccepted();
             }
             // With [replacement], the routes go on as it returns them, after
@@ -4594,6 +4618,7 @@ abstract class StackRouter extends RoutingController {
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
     _PagesReplacement? replacement,
+    int? link,
   }) async {
     // A reevaluation closes the pages its guards reject, and a guard may show
     // a page of its own meanwhile, so the pages it closes are reported once
@@ -4617,6 +4642,9 @@ abstract class StackRouter extends RoutingController {
     if (managedByWidget) _onNavigate(routes);
     Future<T?>? popped;
     if (routes.isNotEmpty) {
+      // Read in the call, before the first wait: the link the delegate is
+      // starting is known only then.
+      final ofLink = isReevaluating ? null : (link ?? root._startingLink);
       var mayUpdateRoute = routes.last;
       var keptScreens = _takeScreensKeptByReplaceAll(routes);
       if (!managedByWidget) {
@@ -4640,6 +4668,7 @@ abstract class StackRouter extends RoutingController {
             (replacing) =>
                 keptScreens = _takeScreensKeptByReplaceAll(replacing),
           ),
+          link: ofLink,
         );
         // No pause when the last page went on in the call, as it does when
         // no guard makes the routes wait: the nested router or the tabs of
@@ -4669,7 +4698,7 @@ abstract class StackRouter extends RoutingController {
             if (!_isDisposed) notifyAll();
           }
         } else if (pushed.isCompleted) {
-          _closePagelessRoutesOverTop();
+          _closePagelessRoutesOverTop(link: ofLink);
           _openChildrenInKeptScreens(keptScreens, onFailure: onFailure);
         }
       }
@@ -4706,6 +4735,7 @@ abstract class StackRouter extends RoutingController {
           newChildren,
           onFailure: onFailure,
           keepsUnnamedPages: keepsUnnamedPages,
+          link: ofLink,
         );
       }
     } else if (!managedByWidget && !keepsUnnamedPages) {
@@ -4763,9 +4793,12 @@ abstract class StackRouter extends RoutingController {
   // Navigator.push, such as dialogs, would stay on screen. They close: those
   // on top are popped, those under pages leaving now are removed unseen.
   // A guard reevaluation keeps them, since a guard may be showing one.
-  void _closePagelessRoutesOverTop() {
+  void _closePagelessRoutesOverTop({int? link}) {
     // A link that goes on into a nested router closes them once let in.
-    if (root._deferToLinkAccepted(_closePagelessRoutesOverTop)) return;
+    if (link != null &&
+        root._deferToLinkAccepted(link, _closePagelessRoutesOverTop)) {
+      return;
+    }
     final top = _pages.lastOrNull;
     if (top == null) return;
     final shownRoute = pagelessRoutesObserver.routeWhere(
