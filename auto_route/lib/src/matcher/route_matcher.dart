@@ -386,8 +386,11 @@ class RouteMatcher {
       final subRoutes = routes.subCollectionOf(route.routeName);
       if (route.hasChildren) {
         for (final childRoute in route.initialChildren!) {
+          // A url has one fragment: the child's own, else its parent's.
           final match = _matchByRoute(
-            childRoute.copyWith(fragment: route.fragment),
+            childRoute.fragment.isNotEmpty
+                ? childRoute
+                : childRoute.copyWith(fragment: route.fragment),
             subRoutes,
           );
           if (match == null) {
