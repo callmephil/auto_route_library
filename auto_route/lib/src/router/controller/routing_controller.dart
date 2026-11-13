@@ -1222,10 +1222,7 @@ class TabsRouter extends RoutingController {
       );
     }
     _pendingTab = index;
-    // A view that moved to the tab, e.g. a page view swiped to it, shows the
-    // active one until the guards let the tab in.
-    if (notify) notifyListeners();
-    return _pendingChange = checked.then(
+    final pending = _pendingChange = checked.then(
       (result) => _endTabChange(
         change,
         // The tabs may have changed meanwhile: replaceAll moves the tab.
@@ -1241,6 +1238,11 @@ class TabsRouter extends RoutingController {
       onError: (Object error, StackTrace stackTrace) =>
           _failTabChange(change, error, stackTrace),
     );
+    // A view that moved to the tab, e.g. a page view swiped to it, shows the
+    // active one until the guards let the tab in. Told once the change is
+    // set, so a listener that asks for the tab again gets this change.
+    if (notify) notifyListeners();
+    return pending;
   }
 
   // Ends the change [change] whose guard threw: the tab stays out, the next

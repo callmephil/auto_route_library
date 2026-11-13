@@ -93,6 +93,8 @@ import 'leading_button_nested_pageless_route_test.dart'
 import 'leading_button_pop_test.dart' as leading_button_pop;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
 import 'list_query_param_test.dart' as list_query_param;
+import 'listener_asks_for_waiting_tab_test.dart'
+    as listener_asks_for_waiting_tab;
 import 'login_state_test.dart' as login_state;
 import 'logout_redirect_back_test.dart' as logout_redirect_back;
 import 'moved_router_keeps_pages_test.dart' as moved_router_keeps_pages;
@@ -408,6 +410,7 @@ void main() {
   leading_button_pop.main();
   link_during_initial_guard.main();
   list_query_param.main();
+  listener_asks_for_waiting_tab.main();
   login_state.main();
   logout_redirect_back.main();
   moved_router_keeps_pages.main();
