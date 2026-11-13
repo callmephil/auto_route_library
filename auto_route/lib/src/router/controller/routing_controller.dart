@@ -8,6 +8,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/matcher/route_matcher.dart';
 import 'package:auto_route/src/route/auto_route.dart';
 import 'package:auto_route/src/router/transitions/auto_page_route_builder.dart';
+import 'package:auto_route/src/utils.dart';
 import 'package:auto_route/src/utils/collection.dart';
 import 'package:collection/collection.dart' hide ListExtensions;
 import 'package:flutter/foundation.dart';

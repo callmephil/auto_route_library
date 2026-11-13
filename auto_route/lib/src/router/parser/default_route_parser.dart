@@ -511,7 +511,11 @@ class UrlState {
       return null;
     }
     if (value is Iterable) {
-      return value.map((el) => el?.toString()).toList();
+      // An empty entry is left out: read back, it would be absent anyway.
+      return [
+        for (final each in value)
+          if (each != null && each.toString().isNotEmpty) each.toString(),
+      ];
     }
     final text = value is String ? value : value.toString();
     if (text.isEmpty) {

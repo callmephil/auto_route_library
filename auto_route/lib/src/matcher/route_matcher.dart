@@ -447,7 +447,7 @@ class RouteMatcher {
       redirectedFrom: route.redirectedFrom,
       children: childMatches,
       params: Parameters(route.rawPathParams),
-      queryParams: Parameters(route.rawQueryParams),
+      queryParams: Parameters(withoutEmptyQueryValues(route.rawQueryParams)),
     );
   }
 
@@ -488,7 +488,9 @@ class RouteMatcher {
             fragment: route.fragment,
             redirectedFrom: route.redirectedFrom,
             params: Parameters(route.rawPathParams),
-            queryParams: Parameters(route.rawQueryParams),
+            queryParams: Parameters(
+              withoutEmptyQueryValues(route.rawQueryParams),
+            ),
             children: children == null || children.isEmpty ? null : children,
           ),
         );

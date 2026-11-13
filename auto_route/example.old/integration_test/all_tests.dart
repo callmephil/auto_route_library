@@ -61,6 +61,7 @@ import 'duplicate_path_test.dart' as duplicate_path;
 import 'eager_tabs_test.dart' as eager_tabs;
 import 'empty_list_query_param_test.dart' as empty_list_query_param;
 import 'empty_nested_router_test.dart' as empty_nested_router;
+import 'empty_query_value_test.dart' as empty_query_value;
 import 'encoded_deep_link_test.dart' as encoded_deep_link;
 import 'encoded_link_back_test.dart' as encoded_link_back;
 import 'encoded_path_params_test.dart' as encoded_path_params;
@@ -429,6 +430,7 @@ void main() {
   eager_tabs.main();
   empty_list_query_param.main();
   empty_nested_router.main();
+  empty_query_value.main();
   encoded_deep_link.main();
   encoded_link_back.main();
   encoded_path_params.main();

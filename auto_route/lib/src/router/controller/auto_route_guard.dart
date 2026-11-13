@@ -598,7 +598,10 @@ class RouteOverrides {
     }
     return route.copyWith(
       args: args,
-      queryParams: queryParams == null ? null : Parameters(queryParams),
+      queryParams: switch (queryParams) {
+        final query? => Parameters(withoutEmptyQueryValues(query)),
+        null => null,
+      },
       children: matches.isEmpty ? null : matches,
       fragment: fragment,
     );
