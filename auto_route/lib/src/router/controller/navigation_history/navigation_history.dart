@@ -147,6 +147,20 @@ abstract class NavigationHistory with ChangeNotifier {
   /// only works for web
   Object? get pathState;
 
+  /// Whether a Router writes this history's urls to the platform, which it
+  /// does once it has built the router's [AutoRouterDelegate].
+  ///
+  /// Until then the app may navigate, as before runApp, with no Router and no
+  /// binding yet; the web history keeps no account of the frames in which the
+  /// Router writes.
+  @internal
+  bool get isShownByRouter => _isShownByRouter;
+  bool _isShownByRouter = false;
+
+  /// Marks that a Router writes this history's urls; see [isShownByRouter].
+  @internal
+  void markShownByRouter() => _isShownByRouter = true;
+
   bool _isUrlStateMarkedForReplace = false;
 
   /// Whether next browser entry update should replace current

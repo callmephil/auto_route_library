@@ -569,15 +569,19 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   }
 
   @override
-  Widget build(BuildContext context) => _AutoRootRouter(
-    router: controller,
-    navigatorObservers: _navigatorObservers,
-    navigatorObserversBuilder: navigatorObservers,
-    navRestorationScopeId: navRestorationScopeId,
-    placeholderBuilder: placeholder,
-    clipBehavior: clipBehavior,
-    routeTraversalEdgeBehavior: routeTraversalEdgeBehavior,
-  );
+  Widget build(BuildContext context) {
+    // A Router builds this delegate: it writes the history's urls from now on.
+    controller.navigationHistory.markShownByRouter();
+    return _AutoRootRouter(
+      router: controller,
+      navigatorObservers: _navigatorObservers,
+      navigatorObserversBuilder: navigatorObservers,
+      navRestorationScopeId: navRestorationScopeId,
+      placeholderBuilder: placeholder,
+      clipBehavior: clipBehavior,
+      routeTraversalEdgeBehavior: routeTraversalEdgeBehavior,
+    );
+  }
 
   // A listener returns nothing, so the reevaluation runs on its own.
   void _reevaluateGuards() => unawaited(controller.reevaluateGuards());

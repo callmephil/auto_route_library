@@ -117,7 +117,7 @@ class NavigationHistoryImpl extends NavigationHistory {
   // entry recorded earlier in the frame is written now, and a pop of the frame
   // that this entry follows needs no step back of its own.
   UrlState _placeEntry(UrlState newState, int index) {
-    _startFrame();
+    if (!_startFrame()) return newState;
     final pending = _pendingIndex;
     if (pending != null && pending != index) _writeEntryNow(pending);
     final standsOn = _frameBrowserIndex!;
@@ -148,7 +148,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       // in now, and that write repeats it in place.
       _pendingIndex = null;
       _writeEntryNow(index);
-    } else {
+    } else if (standsOn != null) {
       _pendingIndex = index;
     }
   }
@@ -157,7 +157,7 @@ class NavigationHistoryImpl extends NavigationHistory {
   // AutoRouterDelegate reports a replace as neglected and a page pushed over
   // one with the same url as a navigation.
   void _noteReport(UrlState reported, {required bool isPushedOverSameUrl}) {
-    _startFrame();
+    if (!_startFrame()) return;
     if (reported.shouldReplace) {
       _doesFrameReplace = true;
     } else if (isPushedOverSameUrl) {
@@ -165,8 +165,13 @@ class NavigationHistoryImpl extends NavigationHistory {
     }
   }
 
-  void _startFrame() {
-    if (_frameBrowserIndex != null) return;
+  // Starts this frame's account of the browser, unless it has started, and
+  // returns whether there is one. Only the Router writes the url, so before
+  // a Router shows this history there is no frame to account for, as when an
+  // app navigates before runApp, and maybe no binding to tell the frame's end.
+  bool _startFrame() {
+    if (_frameBrowserIndex != null) return true;
+    if (!isShownByRouter) return false;
     // The browser stands on the app's entry once the router has written the
     // frames before, though the browser may not show it yet; a pop's step
     // back still to be made leaves it where it is until then.
@@ -179,6 +184,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       _doesFrameReplace = false;
       _doesFrameNavigate = false;
     });
+    return true;
   }
 
   // Writes the entry recorded at [index] to the browser now, over the entry it
@@ -261,8 +267,7 @@ class NavigationHistoryImpl extends NavigationHistory {
         _history.back();
         // A navigation later in this frame starts from the entry the browser
         // is stepping back to.
-        _startFrame();
-        _frameBrowserIndex = target;
+        if (_startFrame()) _frameBrowserIndex = target;
       }
       return;
     }
