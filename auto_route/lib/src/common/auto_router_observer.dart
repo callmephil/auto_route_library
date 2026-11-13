@@ -4,6 +4,7 @@
 // ignore_for_file: no-empty-block
 
 import 'package:auto_route/auto_route.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/widgets.dart';
 
 /// An extended version of  [NavigatorObserver] to support
@@ -135,57 +136,99 @@ mixin AutoRouteAwareStateMixin<T extends StatefulWidget> on State<T>
 /// `RouteObserver<PageRoute>` will inform subscribed [AutoRouteAware]s whenever
 /// the user navigates away from the current page route to another page route.
 class AutoRouteObserver extends AutoRouterObserver {
+  // Subscribers of the pages in this observer's navigator, keyed by the route
+  // that shows each page, as Flutter's RouteObserver keys them. Two pages of
+  // one route, such as /item/1 under /item/2, share the route's key, but each
+  // has a route of its own.
+  final Map<Route<Object?>, Set<AutoRouteAware>> _routeListeners = {};
+
+  // Subscribers of tab pages, which have no navigator route, keyed by the
+  // route's key. A tabs router shows each of its routes once.
   final Map<LocalKey, Set<AutoRouteAware>> _listeners =
       <LocalKey, Set<AutoRouteAware>>{};
 
   // Subscribers of routes inside nested routers, keyed by the route in this
   // observer's navigator that hosts them, each with the route it subscribed to.
-  final Map<LocalKey, Map<AutoRouteAware, RouteData<Object?>>>
+  final Map<Route<Object?>, Map<AutoRouteAware, RouteData<Object?>>>
   _nestedListeners = {};
 
   // The observers of ancestor navigators each subscriber was added to.
   final Map<AutoRouteAware, Set<AutoRouteObserver>> _ancestorObservers = {};
 
+  // The route each stack page's subscriber was filed under. A page that is
+  // closing can subscribe again, as when its State depends on something that
+  // changes on the pop, after its route is forgotten; the subscriber is known
+  // here, so it isn't taken for a new page.
+  final Map<AutoRouteAware, Route<Object?>> _routeOfSubscriber = {};
+
+  // The key each tab page's subscriber was filed under.
+  final Map<AutoRouteAware, LocalKey> _tabKeyOfSubscriber = {};
+
   /// Subscribe [AutoRouteAware] to be informed about changes to [route].
   ///
   /// Going forward, [AutoRouteAware] will be informed about qualifying changes
   /// to [route], e.g. when [route] is covered by another route or when [route]
-  /// is popped off the [Navigator] stack.
+  /// is popped off the [Navigator] stack. Each page is told only its own
+  /// changes, also when two pages of one route are in the stack.
   ///
   /// When [route] is inside a nested router, [AutoRouteAware] is also informed
   /// while [route] shows inside its host route, when the host route is covered,
   /// uncovered or popped in an ancestor navigator that has an
   /// [AutoRouteObserver].
+  ///
+  /// Subscribing [AutoRouteAware] again while it is subscribed does nothing.
   void subscribe(AutoRouteAware routeAware, RouteData<Object?> route) {
-    final subscribers = _listeners.putIfAbsent(
-      route.key,
-      () => <AutoRouteAware>{},
-    );
-    if (subscribers.add(routeAware)) {
-      _subscribeToAncestors(routeAware, route);
-      final router = route.router;
-      if (router is TabsRouter) {
-        final previousIndex = router.previousIndex;
-        final previous = previousIndex == null || previousIndex < 0
-            ? null
-            : router.stackData.elementAtOrNull(previousIndex);
-        if (previousIndex != null && previous != null) {
-          final previousRoute = TabPageRoute(
-            routeInfo: previous.route,
-            index: previousIndex,
-          );
-          routeAware.didInitTabRoute(previousRoute);
-        } else {
-          routeAware.didInitTabRoute(null);
-        }
-      } else {
-        routeAware.didPush();
-        // A page built while covered, as under a deep link's top page, missed
-        // the push that covered it: the navigator reported it before this
-        // page existed to subscribe.
-        if (_isCovered(routeAware, route)) routeAware.didPushNext();
-      }
+    if (_routeOfSubscriber.containsKey(routeAware) ||
+        _tabKeyOfSubscriber.containsKey(routeAware)) {
+      return;
     }
+    switch (_routeOf(route)) {
+      case final shown?:
+        _routeListeners.putIfAbsent(shown, () => {}).add(routeAware);
+        _routeOfSubscriber[routeAware] = shown;
+      case null:
+        _listeners.putIfAbsent(route.key, () => {}).add(routeAware);
+        _tabKeyOfSubscriber[routeAware] = route.key;
+    }
+    _subscribeToAncestors(routeAware, route);
+    final router = route.router;
+    if (router is TabsRouter) {
+      final previousIndex = router.previousIndex;
+      final previous = previousIndex == null || previousIndex < 0
+          ? null
+          : router.stackData.elementAtOrNull(previousIndex);
+      if (previousIndex != null && previous != null) {
+        final previousRoute = TabPageRoute(
+          routeInfo: previous.route,
+          index: previousIndex,
+        );
+        routeAware.didInitTabRoute(previousRoute);
+      } else {
+        routeAware.didInitTabRoute(null);
+      }
+    } else {
+      routeAware.didPush();
+      // A page built while covered, as under a deep link's top page, missed
+      // the push that covered it: the navigator reported it before this page
+      // existed to subscribe.
+      if (_isCovered(routeAware, route)) routeAware.didPushNext();
+    }
+  }
+
+  // The route the navigator of [data]'s router shows its page with, or null
+  // for a page no navigator shows, such as a tab page. The router's own
+  // observer tracks the routes, so this doesn't depend on a subclass of this
+  // observer calling super, and forgets those of a navigator that was disposed.
+  static Route<Object?>? _routeOf(RouteData<Object?> data) {
+    final router = data.router;
+    if (router is! StackRouter) return null;
+    return router.pagelessRoutesObserver.routeWhere(
+      (route) => switch (route.settings) {
+        final AutoRoutePage<Object?> page =>
+          page.routeData.matchId == data.matchId,
+        _ => false,
+      },
+    );
   }
 
   // Whether another page covers [route] in its own router, or covers a host
@@ -200,13 +243,15 @@ class AutoRouteObserver extends AutoRouterObserver {
       host != null && host.parent != null;
       host = host.parent
     ) {
-      if (!_isBelowTop(host)) continue;
-      final hostKey = host.key;
-      if (ancestorObservers.any(
-        (observer) =>
-            observer._nestedListeners[hostKey]?.containsKey(routeAware) ??
-            false,
-      )) {
+      final hostData = host;
+      if (!_isBelowTop(hostData)) continue;
+      final hostRoute = _routeOf(hostData);
+      if (hostRoute != null &&
+          ancestorObservers.any(
+            (observer) =>
+                observer._nestedListeners[hostRoute]?.containsKey(routeAware) ??
+                false,
+          )) {
         return true;
       }
     }
@@ -217,7 +262,7 @@ class AutoRouteObserver extends AutoRouterObserver {
     final router = route.router;
     return router is StackRouter &&
         switch (router.stackData.lastOrNull) {
-          final top? => top.key != route.key,
+          final top? => top.matchId != route.matchId,
           null => false,
         };
   }
@@ -229,17 +274,38 @@ class AutoRouteObserver extends AutoRouterObserver {
   /// (once) from each type.
 
   void unsubscribe(AutoRouteAware routeAware) {
-    for (final route in _listeners.keys) {
-      final subscribers = _listeners[route];
-      subscribers?.remove(routeAware);
+    // A route or key left with no subscribers is dropped, so a navigator
+    // that was disposed, which reports no removal, leaves nothing behind once
+    // its pages are gone.
+    if (_routeOfSubscriber.remove(routeAware) case final route?) {
+      _removeSubscriber(_routeListeners, route, routeAware);
+    }
+    if (_tabKeyOfSubscriber.remove(routeAware) case final key?) {
+      _removeSubscriber(_listeners, key, routeAware);
     }
     for (final observer
         in _ancestorObservers.remove(routeAware) ??
             const <AutoRouteObserver>{}) {
-      for (final nestedSubscribers in observer._nestedListeners.values) {
+      for (final hostRoute in observer._nestedListeners.keys.toList()) {
+        final nestedSubscribers = observer._nestedListeners[hostRoute];
+        if (nestedSubscribers == null) continue;
         nestedSubscribers.remove(routeAware);
+        if (nestedSubscribers.isEmpty) {
+          observer._nestedListeners.remove(hostRoute);
+        }
       }
     }
+  }
+
+  static void _removeSubscriber<K extends Object>(
+    Map<K, Set<AutoRouteAware>> listeners,
+    K key,
+    AutoRouteAware routeAware,
+  ) {
+    final subscribers = listeners[key];
+    if (subscribers == null) return;
+    subscribers.remove(routeAware);
+    if (subscribers.isEmpty) listeners.remove(key);
   }
 
   // Adds [routeAware] to the observers of the navigators that hold the host
@@ -256,13 +322,14 @@ class AutoRouteObserver extends AutoRouterObserver {
       host = host.parent
     ) {
       final router = host.router;
-      if (router is! StackRouter) continue;
+      final hostRoute = _routeOf(host);
+      if (router is! StackRouter || hostRoute == null) continue;
       final observers =
           router.navigatorKey.currentState?.widget.observers ??
           const <NavigatorObserver>[];
       for (final observer in observers.whereType<AutoRouteObserver>()) {
         if (identical(observer, this)) continue;
-        observer._nestedListeners.putIfAbsent(host.key, () => {})[routeAware] =
+        observer._nestedListeners.putIfAbsent(hostRoute, () => {})[routeAware] =
             route;
         _ancestorObservers.putIfAbsent(routeAware, () => {}).add(observer);
       }
@@ -273,11 +340,13 @@ class AutoRouteObserver extends AutoRouterObserver {
   // with [hostKey], skipping those covered in their own router or in an
   // inactive tab.
   void _notifyNested(
-    LocalKey hostKey,
+    Route<Object?> hostRoute,
     void Function(AutoRouteAware routeAware) notify,
   ) {
-    final nestedSubscribers = _nestedListeners[hostKey];
-    if (nestedSubscribers == null) return;
+    final nestedSubscribers = _nestedListeners[hostRoute];
+    final hostPage = hostRoute.settings;
+    if (nestedSubscribers == null || hostPage is! AutoRoutePage) return;
+    final hostKey = hostPage.routeKey;
     for (final MapEntry(key: routeAware, value: route)
         in nestedSubscribers.entries.toList()) {
       if (_isShownInHost(route, hostKey)) notify(routeAware);
@@ -316,8 +385,10 @@ class AutoRouteObserver extends AutoRouterObserver {
   }
 
   @override
-  void didPop(Route<Object?> route, Route<Object?>? previousRoute) =>
-      _notifyPop(route, previousRoute);
+  void didPop(Route<Object?> route, Route<Object?>? previousRoute) {
+    _notifyPop(route, previousRoute);
+    _forget(route);
+  }
 
   @override
   void didRemove(Route<Object?> route, Route<Object?>? previousRoute) {
@@ -327,50 +398,54 @@ class AutoRouteObserver extends AutoRouterObserver {
     if (previousRoute != null && previousRoute.isCurrent) {
       _notifyPop(route, previousRoute);
     }
+    _forget(route);
   }
 
   void _notifyPop(Route<Object?> route, Route<Object?>? previousRoute) {
     if (route.settings is AutoRoutePage &&
-        previousRoute?.settings is AutoRoutePage) {
+        previousRoute != null &&
+        previousRoute.settings is AutoRoutePage) {
       // The page that leaves hears first, then the page that shows again, as
       // on a push, where the covered page hears didPushNext before the new
       // page subscribes and hears didPush.
-      final key = (route.settings as AutoRoutePage).routeKey;
-      final subscribers = _listeners[key]?.toList();
-
-      if (subscribers != null) {
-        for (final routeAware in subscribers) {
-          routeAware.didPop();
-        }
+      for (final routeAware
+          in _routeListeners[route]?.toList() ?? const <AutoRouteAware>[]) {
+        routeAware.didPop();
       }
-      _notifyNested(key, (routeAware) => routeAware.didPop());
+      _notifyNested(route, (routeAware) => routeAware.didPop());
 
-      final previousKey = (previousRoute!.settings as AutoRoutePage).routeKey;
-      final previousSubscribers = _listeners[previousKey]?.toList();
-
-      if (previousSubscribers != null) {
-        for (final routeAware in previousSubscribers) {
-          routeAware.didPopNext();
-        }
+      for (final routeAware
+          in _routeListeners[previousRoute]?.toList() ??
+              const <AutoRouteAware>[]) {
+        routeAware.didPopNext();
       }
-      _notifyNested(previousKey, (routeAware) => routeAware.didPopNext());
+      _notifyNested(previousRoute, (routeAware) => routeAware.didPopNext());
     }
+  }
+
+  // Forgets [route] once its navigator no longer shows it.
+  void _forget(Route<Object?> route) {
+    _routeListeners.remove(route);
+    _nestedListeners.remove(route);
   }
 
   @override
   void didPush(Route<Object?> route, Route<Object?>? previousRoute) {
     if (route.settings is AutoRoutePage &&
-        previousRoute?.settings is AutoRoutePage) {
-      final previousKey = (previousRoute!.settings as AutoRoutePage).routeKey;
-      final previousSubscribers = _listeners[previousKey];
-
-      if (previousSubscribers != null) {
-        for (final routeAware in previousSubscribers) {
-          routeAware.didPushNext();
-        }
+        previousRoute != null &&
+        previousRoute.settings is AutoRoutePage) {
+      for (final routeAware
+          in _routeListeners[previousRoute]?.toList() ??
+              const <AutoRouteAware>[]) {
+        routeAware.didPushNext();
       }
-      _notifyNested(previousKey, (routeAware) => routeAware.didPushNext());
+      _notifyNested(previousRoute, (routeAware) => routeAware.didPushNext());
     }
+  }
+
+  @override
+  void didReplace({Route<Object?>? newRoute, Route<Object?>? oldRoute}) {
+    if (oldRoute != null) _forget(oldRoute);
   }
 }
 
