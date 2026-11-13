@@ -1978,10 +1978,16 @@ class TabsRouter extends RoutingController {
     );
   }
 
-  // The tab [route] opens, or -1. Two tabs share a route when both are
-  // children of the same parent route, each with its own nested router; the
-  // one meant holds the route's first child, open or waiting to open.
+  // The tab [route] opens, or -1. A route with the match id of a tab's page,
+  // as each route of a reevaluation has, is that tab's. Two tabs share a
+  // route when both are children of the same parent route, such as one tab
+  // per list item; the one meant holds the route's first child, open or
+  // waiting to open.
   int _tabIndexOf(RouteMatch<Object?> route) {
+    final ownTab = _pages.indexWhere(
+      (page) => page.routeData.matchId == route.id,
+    );
+    if (ownTab != -1) return ownTab;
     final tabs = [
       for (var i = 0; i < _pages.length; i++)
         if (_pages[i].routeKey == route.key) i,

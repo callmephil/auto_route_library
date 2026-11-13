@@ -283,6 +283,7 @@ import 'route_not_found_tree_test.dart' as route_not_found_tree;
 import 'routes_change_while_guard_decides_test.dart'
     as routes_change_while_guard_decides;
 import 'same_route_tabs_keep_active_test.dart' as same_route_tabs_keep_active;
+import 'same_route_tabs_reevaluation_test.dart' as same_route_tabs_reevaluation;
 import 'screen_reached_again_keeps_caller_test.dart'
     as screen_reached_again_keeps_caller;
 import 'screen_reached_again_keeps_leave_listener_test.dart'
@@ -600,6 +601,7 @@ void main() {
   route_not_found_tree.main();
   routes_change_while_guard_decides.main();
   same_route_tabs_keep_active.main();
+  same_route_tabs_reevaluation.main();
   screen_reached_again_keeps_caller.main();
   screen_reached_again_keeps_leave_listener.main();
   set_query_param.main();
