@@ -1876,6 +1876,23 @@ abstract class StackRouter extends RoutingController {
   /// Whether a reevaluation is in progress
   bool _isReevaluating = false;
 
+  // Whether the reevaluation in progress is one that asks again, see
+  // [_isAskingAgainDue].
+  var _isReevaluatingAgain = false;
+
+  // Whether the listenable changed while a guard of the reevaluation in
+  // progress ran its check. That guard read the state before the change, so
+  // its answer may be stale: once the reevaluation ends, the guards are asked
+  // again, so the last change wins, as Flutter's Router drops the answer of
+  // an older route parse when newer route information arrives. A change
+  // during that second round is not followed by a third: a guard that
+  // notifies the listenable from its own check would be asked without end.
+  var _isAskingAgainDue = false;
+
+  // How many times [_isAskingAgainDue] was set, for the call that set it to
+  // tell.
+  var _askAgainRequests = 0;
+
   // The pages as the last report of leaves saw them, bottom first.
   var _pagesAtLastLeaveReport = <AutoRoutePage<Object?>>[];
 
@@ -2008,7 +2025,13 @@ abstract class StackRouter extends RoutingController {
   /// returns without an answer, and without
   /// [NavigationResolver.redirectUntil], holds its page back until it gives
   /// one.
-  Future<void> reevaluateGuards() async {
+  ///
+  /// Called again while a guard still runs its check, it asks the guards once
+  /// more when that round ends, so the last change wins.
+  Future<void> reevaluateGuards() => _reevaluateGuards(isAskingAgain: false);
+
+  Future<void> _reevaluateGuards({required bool isAskingAgain}) async {
+    final requestsBefore = _askAgainRequests;
     final composed = await _composeMatchesForReevaluate();
     if (_isDisposed) return;
     // A page removed while the stack was composed, e.g. by a replaceAll called
@@ -2016,13 +2039,43 @@ abstract class StackRouter extends RoutingController {
     final matches = composed
         .where((match) => _pages.contains(match.currentPage))
         .toList();
-    if (matches.isNotEmpty && !_isReevaluating) {
+    // This change found a guard of the reevaluation in progress at its check:
+    // that reevaluation asks the guards again once it ends, also when it has
+    // ended by now. This call took the stale answer for its own, so it asks
+    // no guard itself.
+    final isLeftToNextRound = _askAgainRequests != requestsBefore;
+    if (matches.isNotEmpty && !_isReevaluating && !isLeftToNextRound) {
       _isReevaluating = true;
+      _isReevaluatingAgain = isAskingAgain;
       await _navigateAll(matches, isReevaluating: true);
       _isReevaluating = false;
+      _isReevaluatingAgain = false;
+      if (_isAskingAgainDue) {
+        _isAskingAgainDue = false;
+        if (!_isDisposed) await _reevaluateGuards(isAskingAgain: true);
+        return;
+      }
     }
     if (_isDisposed) return;
     notifyAll();
+  }
+
+  // Has the reevaluation in progress, of this router or of one above it, ask
+  // its guards again once it ends; see [_isAskingAgainDue].
+  void _askAgainAfterReevaluation() {
+    for (
+      RoutingController? router = this;
+      router != null;
+      router = router._parent
+    ) {
+      if (router is StackRouter &&
+          router._isReevaluating &&
+          !router._isReevaluatingAgain) {
+        router
+          .._isAskingAgainDue = true
+          .._askAgainRequests += 1;
+      }
+    }
   }
 
   @override
@@ -2037,6 +2090,12 @@ abstract class StackRouter extends RoutingController {
       final entry = activeGuardObserver.value[i];
       final resolver = entry._resolver;
       if (resolver.isResolved) continue;
+      // The guard of a page being reevaluated is running its check, which
+      // began before this change.
+      if (resolver._waitingCompleter != null &&
+          resolver.route is ReevaluatableRouteMatch) {
+        _askAgainAfterReevaluation();
+      }
       resolver._isReevaluating = true;
 
       final result = await resolver.checkGuard(entry.guard, this);

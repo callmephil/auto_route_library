@@ -13,6 +13,7 @@ import 'batch_rejected_keeps_caller_test.dart' as batch_rejected_keeps_caller;
 import 'batch_rejected_keeps_stack_test.dart' as batch_rejected_keeps_stack;
 import 'bool_query_param_test.dart' as bool_query_param;
 import 'camel_case_path_test.dart' as camel_case_path;
+import 'change_during_guard_check_test.dart' as change_during_guard_check;
 import 'current_hierarchy_test.dart' as current_hierarchy;
 import 'current_url_test.dart' as current_url;
 import 'custom_route_barrier_dismissible_test.dart'
@@ -259,6 +260,7 @@ void main() {
   batch_rejected_keeps_stack.main();
   bool_query_param.main();
   camel_case_path.main();
+  change_during_guard_check.main();
   current_hierarchy.main();
   current_url.main();
   custom_route_barrier_dismissible.main();

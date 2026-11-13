@@ -1727,6 +1727,8 @@ In the above example, we assigned our `AuthProvider` to `reevaluateListenable` d
 
 While a guard's check runs, for example while it awaits a request, its page stays on screen with its state, and so do the pages above it. Only the guard's answer closes a page: `resolver.reject()` closes it with the pages above it. A guard that returns without an answer, and without `resolver.redirectUntil`, holds its page back until it gives one.
 
+If the listenable notifies again while a guard is still running its check, the guards are asked once more when that round ends, so the last change wins. A change during that extra round isn't followed by another, so a guard that notifies the listenable from its own check doesn't run without end.
+
 **Note**: When the Stack is re-evaluated, the whole existing hierarchy will be re-pushed, so if you want to stop re-evaluating routes at some point, pass `reevaluateNext: false`: `resolver.overrideNext(reevaluateNext: false)` continues without re-pushing the routes after the current one, and `resolver.reject(reevaluateNext: false)` stops.
 
 ```dart
