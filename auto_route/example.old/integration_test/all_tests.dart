@@ -155,6 +155,7 @@ import 'page_view_zero_duration_test.dart' as page_view_zero_duration;
 import 'pageless_push_rebuild_test.dart' as pageless_push_rebuild;
 import 'param_converter_test.dart' as param_converter;
 import 'parent_pages_build_test.dart' as parent_pages_build;
+import 'path_key_link_then_navigate_test.dart' as path_key_link_then_navigate;
 import 'path_state_after_replace_test.dart' as path_state_after_replace;
 import 'path_state_browser_back_test.dart' as path_state_browser_back;
 import 'platform_link_over_launch_page_test.dart'
@@ -477,6 +478,7 @@ void main() {
   pageless_push_rebuild.main();
   param_converter.main();
   parent_pages_build.main();
+  path_key_link_then_navigate.main();
   path_state_after_replace.main();
   path_state_browser_back.main();
   platform_link_over_launch_page.main();

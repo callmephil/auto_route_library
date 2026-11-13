@@ -266,6 +266,22 @@ class RouteMatcher {
         });
   }
 
+  // The key of a page whose route uses its path as key. A page opened from a
+  // url and the same page opened from a route write its path differently:
+  // the link's own escapes, such as '%40' for '@' or '%3A' for ':', against
+  // the text the route expands. Each segment is decoded and written again as
+  // a route writes it, so a page has one key however it was opened.
+  static ValueKey<String> _pathKey(String path) => .new(
+    path
+        .split('/')
+        .map(
+          (segment) =>
+              Uri(pathSegments: ['', decodeUrlComponent(segment)]).path
+                  .substring(1),
+        )
+        .join('/'),
+  );
+
   // Splits a url's path at each '/': the root '/' first when the path has one,
   // then each segment that isn't empty. Escapes stay as they are, so an
   // encoded '/' stays inside its segment. A url's separator is '/' on every
@@ -351,7 +367,7 @@ class RouteMatcher {
     final stringMatch = _join(extractedSegments);
     return RouteMatch(
       config: config,
-      key: ValueKey(config.usesPathAsKey ? stringMatch : config.name),
+      key: config.usesPathAsKey ? _pathKey(stringMatch) : ValueKey(config.name),
       stringMatch: stringMatch,
       segments: extractedSegments,
       redirectedFrom: redirectedFrom,
@@ -423,7 +439,9 @@ class RouteMatcher {
       config: config,
       segments: _split(stringMatch),
       args: route.args,
-      key: ValueKey(config.usesPathAsKey ? stringMatch : route.routeName),
+      key: config.usesPathAsKey
+          ? _pathKey(stringMatch)
+          : ValueKey(route.routeName),
       stringMatch: stringMatch,
       fragment: route.fragment,
       redirectedFrom: route.redirectedFrom,
@@ -463,7 +481,9 @@ class RouteMatcher {
             config: config,
             segments: _split(stringMatch),
             args: route.args,
-            key: ValueKey(config.usesPathAsKey ? stringMatch : route.routeName),
+            key: config.usesPathAsKey
+                ? _pathKey(stringMatch)
+                : ValueKey(route.routeName),
             stringMatch: stringMatch,
             fragment: route.fragment,
             redirectedFrom: route.redirectedFrom,
@@ -488,7 +508,9 @@ class RouteMatcher {
           RouteMatch(
             config: config,
             segments: _split(stringMatch),
-            key: ValueKey(config.usesPathAsKey ? stringMatch : config.name),
+            key: config.usesPathAsKey
+                ? _pathKey(stringMatch)
+                : ValueKey(config.name),
             stringMatch: stringMatch,
             params: Parameters(ancestorParams),
             autoFilled: true,
