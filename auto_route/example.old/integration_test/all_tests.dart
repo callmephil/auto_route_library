@@ -185,6 +185,7 @@ import 'reject_go_back_link_keeps_stack_test.dart'
 import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
 import 'rejected_link_keeps_dialog_test.dart' as rejected_link_keeps_dialog;
 import 'rejected_link_url_running_test.dart' as rejected_link_url_running;
+import 'relative_path_colon_test.dart' as relative_path_colon;
 import 'reload_guard_test.dart' as reload_guard;
 import 'reload_hero_test.dart' as reload_hero;
 import 'remove_last_then_push_same_test.dart' as remove_last_then_push_same;
@@ -456,6 +457,7 @@ void main() {
   reevaluation_nested_tabs.main();
   reevaluation_redirect.main();
   reject_go_back_link_keeps_stack.main();
+  relative_path_colon.main();
   reload_guard.main();
   reload_hero.main();
   remove_last_then_push_same.main();

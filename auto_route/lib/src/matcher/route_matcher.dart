@@ -13,14 +13,32 @@ class RouteMatcher {
   final RouteCollection collection;
 
   /// Parses a [Uri] from [rawPath] then maps call to [_match]
+  ///
+  /// A relative path whose first segment holds a ':', such as 'user:5' or
+  /// '12:30', is read as a path, not as a url whose scheme is the text before
+  /// the ':'.
   List<RouteMatch<Object?>>? match(
     String rawPath, {
     bool includePrefixMatches = false,
   }) {
     return _matchFromTop(
-      Uri.parse(rawPath),
+      _parsePath(rawPath),
       shouldIncludePrefixMatches: includePrefixMatches,
     );
+  }
+
+  // RFC 3986 section 4.2: a relative path whose first segment holds a ':'
+  // reads as a scheme and the rest, or fails to parse when that text can't be
+  // a scheme. A scheme with neither a host nor a path from the root names no
+  // page, so such a path is read with a '/' before it, which is then dropped.
+  static Uri _parsePath(String rawPath) {
+    final uri = Uri.tryParse(rawPath);
+    if (uri != null &&
+        (!uri.hasScheme || uri.hasAuthority || uri.hasAbsolutePath)) {
+      return uri;
+    }
+    final rooted = Uri.parse('/$rawPath');
+    return rooted.replace(path: rooted.path.substring(1));
   }
 
   /// Matches a uri against the config-entries in [collection]
