@@ -16,6 +16,8 @@ import 'batch_slow_guard_test.dart' as batch_slow_guard;
 import 'bool_query_param_test.dart' as bool_query_param;
 import 'camel_case_path_test.dart' as camel_case_path;
 import 'change_during_guard_check_test.dart' as change_during_guard_check;
+import 'cupertino_page_pop_scope_with_drawer_test.dart'
+    as cupertino_page_pop_scope_with_drawer;
 import 'cupertino_title_after_page_update_test.dart'
     as cupertino_title_after_page_update;
 import 'current_hierarchy_test.dart' as current_hierarchy;
@@ -327,6 +329,7 @@ void main() {
   bool_query_param.main();
   camel_case_path.main();
   change_during_guard_check.main();
+  cupertino_page_pop_scope_with_drawer.main();
   cupertino_title_after_page_update.main();
   current_hierarchy.main();
   current_url.main();

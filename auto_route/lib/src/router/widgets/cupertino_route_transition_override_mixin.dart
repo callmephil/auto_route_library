@@ -52,14 +52,6 @@ mixin CupertinoRouteTransitionOverrideMixin<T> on PageRoute<T> {
   // fixes https://github.com/flutter/flutter/issues/105738
   @override
   Color? get barrierColor => null;
-
-  @override
-  RoutePopDisposition get popDisposition {
-    if (willHandlePopInternally) {
-      return .pop;
-    }
-    return super.popDisposition;
-  }
 }
 
 /// Provides an iOS-style page transition animation.
