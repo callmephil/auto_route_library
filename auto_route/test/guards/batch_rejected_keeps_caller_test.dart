@@ -170,8 +170,12 @@ void main() {
     await expectCallerWaits(tester, 'NoticeRoute');
   });
 
-  testWidgets('A page that keeps no history keeps its caller waiting when '
-      'the login of a later guard is canceled', (tester) async {
+  // The login page a later guard shows goes on over Notice before any page
+  // of the batch does, and takes it off as any page pushed over a page that
+  // keeps no history does: Notice has left for good, as an Android activity
+  // with noHistory is finished once the user leaves it for another one.
+  testWidgets('A page that keeps no history leaves under the login a later '
+      'guard shows, and answers its caller', (tester) async {
     _guard = .showsLogin;
     await openAndWait(tester, 'NoticeRoute');
 
@@ -182,10 +186,15 @@ void main() {
       ]),
     );
     await tester.pumpAndSettle();
+
+    expect(_names(router), ['HomeRoute', 'LoginRoute']);
+    expect(caller.isAnswered, isTrue);
+    expect(caller.result, isNull);
+
     await cancelLogin(tester);
 
-    expect(_names(router), ['HomeRoute', 'NoticeRoute']);
-    await expectCallerWaits(tester, 'NoticeRoute');
+    expect(_names(router), ['HomeRoute']);
+    expectTopPage(router, 'HomeRoute');
   });
 
   // The batch's shell takes over the screen of the shell it takes off, with

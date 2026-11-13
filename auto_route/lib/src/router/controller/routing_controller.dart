@@ -1904,14 +1904,15 @@ abstract class StackRouter extends RoutingController {
   // guards keep, so leaves wait for its end.
   var _leaveReportHolds = 0;
 
-  // The pages a batch took off the stack while a guard may still reject a
-  // later route of the batch, which puts them back: their callers wait until
-  // the batch ends, see [_pushAllGuarded].
+  // The pages a batch took off the stack as it put on the pages of the routes
+  // before its last: their callers wait until the batch ends, when a page of
+  // the batch may hold the screen and the wait of one of them, see
+  // [_endWaitOfTakenOff].
   final _takenOffByOpenBatches = <AutoRoutePage<Object?>>{};
 
   // Whether a batch is putting on the page of a route before its last; a page
   // taken off meanwhile answers its caller only once the batch ends.
-  var _isBatchStepUndoable = false;
+  var _isBatchStepRunning = false;
 
   void _markLeaving(
     Iterable<AutoRoutePage<Object?>> pages,
@@ -2392,8 +2393,8 @@ abstract class StackRouter extends RoutingController {
     if (pageIndex != -1) {
       final page = _pages.removeAt(pageIndex);
       // Removed pages may be disposed without a pop callback from Navigator.
-      // A page a batch takes off waits for the batch, which may put it back.
-      if (!_isBatchStepUndoable) page.routeData.onPopInvoked(null);
+      // A page a batch takes off waits for the batch to end.
+      if (!_isBatchStepRunning) page.routeData.onPopInvoked(null);
     }
     _shareTopPathData();
     if (notify) {
@@ -2706,8 +2707,9 @@ abstract class StackRouter extends RoutingController {
   /// Adds the corresponding pages to given [routes] list to the [_pages] stack
   /// at once
   ///
-  /// A guard that rejects one of [routes] rejects them all: the stack stays
-  /// as it was.
+  /// The pages go on in one step, once the guards of every one of [routes]
+  /// have let it through; until then the stack stays as it is. A guard that
+  /// rejects one of [routes] rejects them all: the stack stays as it was.
   ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
@@ -3244,13 +3246,23 @@ abstract class StackRouter extends RoutingController {
       _pages.removeWhere((page) => leaving.contains(page.routeData));
     }
 
-    // What the routes the guards let through did to the stack, undone when a
-    // guard rejects a later route; see [_undoRejectedBatch]. The pages they
-    // took off, such as a top page that keeps no history, keep their callers
-    // waiting until the batch ends; see [_endWaitOfTakenOff].
-    final added = <AutoRoutePage<Object?>>[];
+    // A batch over pages already on screen, such as pushAll or a link with
+    // the pages below its own, goes in as one step: the stack stays as it is
+    // on screen until every guard has answered, and a guard that rejects a
+    // route rejects the whole batch, with nothing to undo. Flutter's
+    // Navigator takes a new list of pages as one update, Android applies a
+    // fragment transaction as one atomic set of operations, and on the web a
+    // canceled navigation leaves the url and the current entry as they were.
+    // A batch that begins on an empty stack, as when the app starts at a
+    // link, puts each page on as its guards accept and keeps those pages when
+    // a later guard rejects: a page a guard shows meanwhile, such as a login,
+    // has them under it, as Android keeps the screens it puts under a linked
+    // screen. A reevaluation decides page by page.
+    final isHeld = goesInAtOnce || (!isReevaluating && _pages.isNotEmpty);
+    // The pages the routes before the last took off, such as a top page that
+    // keeps no history: their callers wait until the batch ends; see
+    // [_endWaitOfTakenOff].
     final takenOff = <AutoRoutePage<Object?>>[];
-    final wasStackEmpty = _pages.isEmpty;
     final link = root._startingLink;
     // The page that takes over the screen on top opens its children in that
     // screen's nested router only once every page is in, as the screens
@@ -3265,12 +3277,18 @@ abstract class StackRouter extends RoutingController {
     // Puts on the page of the route at [index], one before the last, which
     // its guards let through as [match].
     void putOn(int index, RouteMatch<Object?> match) {
-      if (index == 0) onFirstRouteAccepted?.call();
-      if (match is ReevaluatableRouteMatch) {
-        _addReevaluatedPage(match, notify: false);
-      } else {
-        unawaited(_addNewPage<T>(match, notify: false, takeovers: takeovers));
-      }
+      final pagesBefore = List.of(_pages);
+      _runBatchStep(() {
+        if (index == 0) onFirstRouteAccepted?.call();
+        if (match is ReevaluatableRouteMatch) {
+          _addReevaluatedPage(match, notify: false);
+        } else {
+          unawaited(_addNewPage<T>(match, notify: false, takeovers: takeovers));
+        }
+      });
+      final left = pagesBefore.whereNot(_pages.contains).toList();
+      takenOff.addAll(left);
+      _takenOffByOpenBatches.addAll(left);
     }
 
     // Puts on the page of the last route, which its guards let through as
@@ -3296,12 +3314,9 @@ abstract class StackRouter extends RoutingController {
       return popped;
     }
 
-    // With [goesInAtOnce], the routes before the last that the guards let
-    // through, which wait for the guards of the routes after them: the stack
-    // stays as it is on screen until every guard has answered, and the pages
-    // then go on in one step, as Flutter's Navigator takes a new list of
-    // pages as one update. A guard that rejects a route leaves nothing to
-    // undo.
+    // In a batch that goes in as one step, the routes before the last that
+    // the guards let through, which wait for the guards of the routes after
+    // them.
     final held = <RouteMatch<Object?>>[];
 
     try {
@@ -3340,24 +3355,17 @@ abstract class StackRouter extends RoutingController {
         }
         if (result.continueNavigation) {
           final isLast = i == routes.length - 1;
-          if (goesInAtOnce) {
-            if (!isLast) {
-              held.add(match);
-              continue;
-            }
+          if (isHeld && !isLast) {
+            held.add(match);
+            continue;
+          }
+          if (isLast) {
             // With [replacement], the routes go on as it returns them, after
             // what it does to the stack.
             final accepted = [...held, match];
             final going = replacement?.onAllAccepted(accepted) ?? accepted;
             going.take(going.length - 1).forEachIndexed(putOn);
             final popped = putOnLast(going.lastOrNull ?? match);
-            return returnLastRouteCompleter ? await popped : null;
-          }
-          // Before anything the route does to the stack once its guards
-          // accept.
-          final pagesBefore = List.of(_pages);
-          if (isLast) {
-            final popped = putOnLast(match);
             if (popped != null) {
               // Every guard let the batch through.
               _endWaitOfTakenOff(takenOff);
@@ -3365,12 +3373,8 @@ abstract class StackRouter extends RoutingController {
               return returnLastRouteCompleter ? await popped : null;
             }
           } else {
-            _runUndoableBatchStep(() => putOn(i, match));
+            putOn(i, match);
           }
-          added.addAll(_pages.whereNot(pagesBefore.contains));
-          final left = pagesBefore.whereNot(_pages.contains).toList();
-          takenOff.addAll(left);
-          _takenOffByOpenBatches.addAll(left);
 
           if (isReevaluating && !result.reevaluateNext) {
             takeOffPagesFrom(i + 1);
@@ -3386,11 +3390,12 @@ abstract class StackRouter extends RoutingController {
             markUrlStateForReplace();
           } else if (replacement != null) {
             replacement.onRejected();
-          } else if (!isReevaluating && !wasStackEmpty) {
-            _undoRejectedBatch(
-              added: added,
-              takenOff: takenOff.whereNot(added.contains).toList(),
-            );
+          } else if (held.isNotEmpty) {
+            // The stack stays as it was. A link that brought the batch has
+            // set its own url meanwhile: the url goes back to the page on
+            // screen.
+            markUrlStateForReplace();
+            notifyAll(forceUrlRebuild: true);
           }
           break;
         }
@@ -3401,26 +3406,25 @@ abstract class StackRouter extends RoutingController {
     return null;
   }
 
-  // Runs [step], which puts on the page of a route before a batch's last. A
-  // guard may still reject a later route of the batch, which puts back the
-  // pages [step] takes off, so they keep their callers waiting.
-  void _runUndoableBatchStep(VoidCallback step) {
-    _isBatchStepUndoable = true;
+  // Runs [step], which puts on the page of a route before a batch's last.
+  // The pages [step] takes off keep their callers waiting until the batch
+  // ends, see [_endWaitOfTakenOff].
+  void _runBatchStep(VoidCallback step) {
+    _isBatchStepRunning = true;
     try {
       step();
     } finally {
-      _isBatchStepUndoable = false;
+      _isBatchStepRunning = false;
     }
   }
 
-  // Ends the wait of the callers of [pages], which a batch took off, once a
-  // guard has decided on every route of the batch. A page whose route data is
-  // back on the stack, as a rejected batch puts it back or a reevaluation
-  // builds it anew with new args, keeps its caller waiting, as does one whose
-  // screen and wait a page on the stack took over, see [_addNewPage]. The
-  // others left for good and answer null, as removed pages do. Clears [pages],
-  // so the call that waits on the batch's last page doesn't hold the pages
-  // that left.
+  // Ends the wait of the callers of [pages], which a batch took off, once the
+  // batch has ended. A page whose route data is back on the stack, as a
+  // reevaluation builds it anew with new args, keeps its caller waiting, as
+  // does one whose screen and wait a page on the stack took over, see
+  // [_addNewPage]. The others left for good and answer null, as removed pages
+  // do. Clears [pages], so the call that waits on the batch's last page
+  // doesn't hold the pages that left.
   void _endWaitOfTakenOff(List<AutoRoutePage<Object?>> pages) {
     if (pages.isEmpty) return;
     _takenOffByOpenBatches.removeAll(pages);
@@ -3434,63 +3438,6 @@ abstract class StackRouter extends RoutingController {
       ),
     );
     pages.clear();
-  }
-
-  // A guard that rejects a route of a batch, such as pushAll or a link with
-  // the pages below its own, rejects the whole batch: the pages the routes
-  // before it put on the stack leave, and the pages they took off, such as a
-  // top page that keeps no history, come back where they were. Pages others
-  // put on meanwhile, such as a guard's login page, stay, and a screen they
-  // put back, as the back() of reject(goBack: true) does, is back once.
-  // Flutter's Navigator
-  // takes a new list of pages as one update, Android applies a fragment
-  // transaction as one atomic set of operations, and on the web a canceled
-  // navigation leaves the url and the current entry as they were. A batch
-  // that began on an empty stack, as when the app starts at a link, has no
-  // stack to go back to, so it keeps the pages its guards let through, as
-  // Android keeps the screens it puts under a linked screen; replaceAll puts
-  // its own stack back.
-  void _undoRejectedBatch({
-    required List<AutoRoutePage<Object?>> added,
-    required List<AutoRoutePage<Object?>> takenOff,
-  }) {
-    final leaving = _pages.where(added.contains).toList();
-    // The screens on the stack once the batch's pages leave. A page taken off
-    // whose screen another navigation put back meanwhile stays off: the page
-    // that holds the screen now keeps it, with its route and the wait of its
-    // caller, see [_addNewPage], and two pages of one screen would share its
-    // key.
-    final shownIds = {
-      for (final page in _pages)
-        if (!leaving.contains(page)) page.routeData.matchId,
-    };
-    final comingBack = takenOff
-        .whereNot((page) => shownIds.contains(page.routeData.matchId))
-        .toList();
-    if (leaving.isEmpty && comingBack.isEmpty) return;
-    // Where the batch's pages begin, so pages put on meanwhile stay on top.
-    final firstLeaving = leaving.firstOrNull;
-    final index = firstLeaving == null
-        ? _pages.length
-        : _pages.indexOf(firstLeaving);
-    _markLeaving(leaving, .removed);
-    _pages
-      ..removeWhere(leaving.contains)
-      ..insertAll(index, comingBack);
-    // A page of the batch that took over the screen of a page it took off
-    // gave that screen's nested router its own data, see [_createRouteData].
-    // The router belongs to the page put back.
-    for (final page in comingBack) {
-      final data = page.routeData;
-      for (final ctr in _childControllers) {
-        if (ctr.matchId == data.matchId && ctr.routeData != data) {
-          ctr.updateRouteData(data);
-        }
-      }
-    }
-    _shareTopPathData();
-    markUrlStateForReplace();
-    notifyAll(forceUrlRebuild: true);
   }
 
   void _addReevaluatedPage(

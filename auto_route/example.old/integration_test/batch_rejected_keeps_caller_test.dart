@@ -81,11 +81,10 @@ void main() {
       ],
     );
 
-    // Opens Notice with push<int>, then runs pushAll([First, Second]), which
-    // Second's guard rejects at once or once the login it shows is canceled.
-    // Notice is back on screen and in the url, its caller still waits, and
-    // tapping 'Answer 7' gives the caller 7.
-    Future<void> expectCallerWaitsThroughRejectedBatch(
+    // Opens Notice with push<int>, then runs pushAll([First, Second]), whose
+    // guard on Second rejects at once or shows a login page. Returns the
+    // router and what the code that opened Notice got so far.
+    Future<(RootStackRouter, String Function())> pushAllOverNotice(
       WidgetTester tester,
     ) async {
       final router = buildRouter();
@@ -105,24 +104,7 @@ void main() {
         ]),
       );
       await tester.pumpAndSettle();
-      if (isLoginShown) {
-        await tester.tap(find.text('Cancel login'));
-        await tester.pumpAndSettle();
-      }
-
-      expect(router.stack.map((e) => e.routeData.name), [
-        'HomeRoute',
-        'NoticeRoute',
-      ]);
-      expect(find.text('Answer 7'), findsOneWidget);
-      await expectBrowserUrl('/notice');
-      expect(result, 'waiting');
-
-      await tester.tap(find.text('Answer 7'));
-      await tester.pumpAndSettle();
-
-      expectTopPage(router, 'HomeRoute');
-      expect(result, 'got 7');
+      return (router, () => result);
     }
 
     // Steps: open Home, push Notice and wait for its result, push First and
@@ -134,18 +116,47 @@ void main() {
       'guard rejects the batch over it',
       (tester) async {
         isLoginShown = false;
-        await expectCallerWaitsThroughRejectedBatch(tester);
+        final (router, result) = await pushAllOverNotice(tester);
+
+        expect(router.stack.map((e) => e.routeData.name), [
+          'HomeRoute',
+          'NoticeRoute',
+        ]);
+        expect(find.text('Answer 7'), findsOneWidget);
+        await expectBrowserUrl('/notice');
+        expect(result(), 'waiting');
+
+        await tester.tap(find.text('Answer 7'));
+        await tester.pumpAndSettle();
+
+        expectTopPage(router, 'HomeRoute');
+        expect(result(), 'got 7');
       },
     );
 
     // Steps: as above, while Second's guard shows a login page; tap 'Cancel
-    // login', then 'Answer 7'.
+    // login'. The login page goes on over Notice before any page of the batch
+    // does, and takes it off as any page pushed over a page that keeps no
+    // history does, as an Android activity with noHistory is finished once
+    // the user leaves it for another one.
     testWidgets(
-      'A page that keeps no history keeps its caller waiting when the login '
-      'a later guard shows is canceled',
+      'A page that keeps no history leaves under the login a later guard '
+      'shows, and answers its caller',
       (tester) async {
         isLoginShown = true;
-        await expectCallerWaitsThroughRejectedBatch(tester);
+        final (router, result) = await pushAllOverNotice(tester);
+
+        expect(router.stack.map((e) => e.routeData.name), [
+          'HomeRoute',
+          'LoginRoute',
+        ]);
+        expect(result(), 'got null');
+
+        await tester.tap(find.text('Cancel login'));
+        await tester.pumpAndSettle();
+
+        expectTopPage(router, 'HomeRoute');
+        expect(router.stack.map((e) => e.routeData.name), ['HomeRoute']);
       },
     );
   });

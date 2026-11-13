@@ -11,6 +11,7 @@ import 'back_same_url_test.dart' as back_same_url;
 import 'back_twice_test.dart' as back_twice;
 import 'batch_rejected_keeps_caller_test.dart' as batch_rejected_keeps_caller;
 import 'batch_rejected_keeps_stack_test.dart' as batch_rejected_keeps_stack;
+import 'batch_slow_guard_test.dart' as batch_slow_guard;
 import 'bool_query_param_test.dart' as bool_query_param;
 import 'camel_case_path_test.dart' as camel_case_path;
 import 'change_during_guard_check_test.dart' as change_during_guard_check;
@@ -258,6 +259,7 @@ void main() {
   back_twice.main();
   batch_rejected_keeps_caller.main();
   batch_rejected_keeps_stack.main();
+  batch_slow_guard.main();
   bool_query_param.main();
   camel_case_path.main();
   change_during_guard_check.main();
