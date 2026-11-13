@@ -320,10 +320,15 @@ class AutoTabViewState extends State<AutoTabView> {
       if (!_isGuarded(currentPage)) {
         _controller.index = currentPage;
       }
-      _controller.offset = (_pageController.page! - _controller.index).clamp(
-        -1.0,
-        1.0,
-      );
+      // A change of index above can make the tab bar animate back to the
+      // active tab, when the tab reached was guarded and its guard rejected:
+      // TabController takes no offset while it animates.
+      if (!_controller.indexIsChanging) {
+        _controller.offset = (_pageController.page! - _controller.index).clamp(
+          -1.0,
+          1.0,
+        );
+      }
       // The page grows toward the next tab whatever the axis or the text
       // direction, so it tells which neighbor a drag uncovers.
       if (notification.dragDetails != null) {
@@ -341,7 +346,8 @@ class AutoTabViewState extends State<AutoTabView> {
         // Until its guards let the tab in, the active one shows. The scroll
         // that ended settles first.
         if (_router.activeIndex != currentPage) {
-          _controller.offset = 0;
+          // Unless the rejection already has the tab bar animating back.
+          if (!_controller.indexIsChanging) _controller.offset = 0;
           scheduleMicrotask(() {
             if (mounted) {
               unawaited(
