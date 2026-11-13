@@ -234,6 +234,8 @@ import 'replace_rejected_test.dart' as replace_rejected;
 import 'replace_same_route_children_test.dart' as replace_same_route_children;
 import 'replace_while_animating_out_test.dart' as replace_while_animating_out;
 import 'replace_with_new_children_test.dart' as replace_with_new_children;
+import 'replaced_change_skips_later_guards_test.dart'
+    as replaced_change_skips_later_guards;
 import 'replaced_push_future_test.dart' as replaced_push_future;
 import 'required_args_test.dart' as required_args;
 import 'restore_args_test.dart' as restore_args;
@@ -523,6 +525,7 @@ void main() {
   replace_same_route_children.main();
   replace_while_animating_out.main();
   replace_with_new_children.main();
+  replaced_change_skips_later_guards.main();
   replaced_push_future.main();
   required_args.main();
   restore_args.main();

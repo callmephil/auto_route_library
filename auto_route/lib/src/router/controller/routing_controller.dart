@@ -1199,7 +1199,11 @@ class TabsRouter extends RoutingController {
     final change = ++_tabChanges;
     // What a link that changes the tab does once the tab's guards let it in.
     final onLinkAccepted = root._takeLinkAcceptedStep();
-    final checked = _checkTabGuards(match, onFailure: onFailure);
+    final checked = _checkTabGuards(
+      match,
+      onFailure: onFailure,
+      change: change,
+    );
     if (checked is ResolverResult) {
       return _endTabChange(
         change,
@@ -1316,9 +1320,11 @@ class TabsRouter extends RoutingController {
   // stack asks before it shows a page. The app's global guards, in
   // RootStackRouter.guards, are for stack routes only. Answers at once when
   // every guard does, so a tab change that no guard delays stays
-  // synchronous.
+  // synchronous. Once [change] is replaced by a later change, or the tabs
+  // are disposed, no further guard is asked: the change won't happen.
   FutureOr<ResolverResult> _checkTabGuards(
     RouteMatch<Object?> route, {
+    required int change,
     OnNavigationFailure? onFailure,
     int from = 0,
   }) {
@@ -1341,8 +1347,10 @@ class TabsRouter extends RoutingController {
         onFailure?.call(RejectedByGuardFailure(result.route, guard));
         return result;
       }
+      if (_isDisposed || change != _tabChanges) return result;
       return _checkTabGuards(
         result.route,
+        change: change,
         onFailure: onFailure,
         from: from + 1,
       );
@@ -1482,6 +1490,8 @@ class TabsRouter extends RoutingController {
       [..., final last] => last,
       _ => outgoing?._activePage?.routeData.route,
     };
+    // The change that shows a guarded tab, if one does.
+    final change = ++_tabChanges;
     var guardedIndex = -1;
     Future<ResolverResult>? guarding;
     if (preMatchedRoute != null) {
@@ -1495,7 +1505,7 @@ class TabsRouter extends RoutingController {
       final checked =
           correspondingRouteIndex <= 0 || !_routeData.hasPendingChildren
           ? null
-          : _checkTabGuards(preMatchedRoute);
+          : _checkTabGuards(preMatchedRoute, change: change);
       if (checked is Future<ResolverResult>) {
         guardedIndex = correspondingRouteIndex;
         guarding = checked;
@@ -1518,7 +1528,6 @@ class TabsRouter extends RoutingController {
     if (guarding != null) {
       final index = guardedIndex;
       final match = preMatchedRoute!;
-      final change = ++_tabChanges;
       _pendingTab = index;
       _pendingChange = guarding.then(
         (result) {
