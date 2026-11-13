@@ -559,7 +559,8 @@ abstract class RoutingController with ChangeNotifier {
   /// see [RouteMatcher.matchUri]
   ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
-  /// it otherwise they'll be thrown
+  /// it otherwise they'll be thrown. A guard's rejection reaches it as a
+  /// [RejectedByGuardFailure].
   Future<void> navigatePath(
     String path, {
     bool includePrefixMatches = false,
@@ -571,7 +572,7 @@ abstract class RoutingController with ChangeNotifier {
       onFailure: onFailure,
     );
     if (scope != null) {
-      return scope.router._navigateAll(scope.matches);
+      return scope.router._navigateAll(scope.matches, onFailure: onFailure);
     }
     return SynchronousFuture(null);
   }
@@ -2774,7 +2775,8 @@ abstract class StackRouter extends RoutingController {
   /// then rejects.
   ///
   /// If [onFailure] is given, navigation errors are passed to it; otherwise
-  /// they are thrown.
+  /// they are thrown. A guard's rejection reaches it as a
+  /// [RejectedByGuardFailure].
   Future<void> replaceAll(
     List<PageRouteInfo> routes, {
     OnNavigationFailure? onFailure,
@@ -2799,6 +2801,7 @@ abstract class StackRouter extends RoutingController {
       await _replaceAllMatches(
         matches,
         updateExistingRoutes: updateExistingRoutes,
+        onFailure: onFailure,
       );
     }
   }
@@ -2823,6 +2826,7 @@ abstract class StackRouter extends RoutingController {
   Future<void> _replaceAllMatches(
     List<RouteMatch<Object?>> matches, {
     required bool updateExistingRoutes,
+    OnNavigationFailure? onFailure,
   }) {
     // Let go once replaceAll has its answer, so the call that waits on the
     // last new page doesn't hold the pages that left.
@@ -2831,6 +2835,7 @@ abstract class StackRouter extends RoutingController {
     var setAside = const <AutoRoutePage<Object?>>[];
     return _navigateAll(
       matches,
+      onFailure: onFailure,
       replacement: _PagesReplacement(
         onGuardHolds: () {
           final leaving = [...?pagesBefore?.where(_pages.contains)];
@@ -3610,7 +3615,13 @@ abstract class StackRouter extends RoutingController {
     );
     data.pendingChildren.clear();
     if (inner is StackRouter && !inner.managedByWidget) {
-      unawaited(inner._replaceAllMatches(children, updateExistingRoutes: true));
+      unawaited(
+        inner._replaceAllMatches(
+          children,
+          updateExistingRoutes: true,
+          onFailure: onFailure,
+        ),
+      );
     } else {
       unawaited(inner._navigateAll(children, onFailure: onFailure));
     }
