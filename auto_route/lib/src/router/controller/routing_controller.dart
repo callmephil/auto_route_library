@@ -1599,9 +1599,11 @@ class TabsRouter extends RoutingController {
   void replaceAll(List<PageRouteInfo>? routes, int fromIndex) {
     final routesToPush = _resolveRoutes(routes);
     _listedTabArgs = [for (final route in routesToPush) route.args];
-    final previousActiveRoute = stackData.elementAtOrNull(fromIndex);
+    final previousActivePage = _pages.elementAtOrNull(fromIndex);
     final previousPages = List.of(_pages);
-    final previousHistory = _tabHistoryNames;
+    final previousHistory = [
+      for (final index in _tabHistory) ?_pages.elementAtOrNull(index),
+    ];
 
     _pages.clear();
     for (final route in routesToPush) {
@@ -1619,9 +1621,7 @@ class TabsRouter extends RoutingController {
     }
     final keptMatchIds = _pages.map((p) => p.routeData.matchId).toSet();
     _childControllers.removeWhere((c) => !keptMatchIds.contains(c.matchId));
-    var targetIndex = routesToPush.indexWhere(
-      (r) => r.name == previousActiveRoute?.name,
-    );
+    var targetIndex = _tabIndexAfterChange(previousActivePage);
     if (targetIndex == -1) {
       targetIndex = _homeTab == -1 ? 0 : _homeTab;
     }
@@ -1632,7 +1632,20 @@ class TabsRouter extends RoutingController {
     _activeIndex = targetIndex;
     _tabHistory
       ..clear()
-      ..addAll(_historyOf(previousHistory, routesToPush));
+      ..addAll(
+        {for (final page in previousHistory) _tabIndexAfterChange(page)}
+            .where((index) => index != -1 && index != _activeIndex),
+      );
+  }
+
+  // Where the tab of [page], one of the tabs before they changed, is now:
+  // its own page when it was kept, so of tabs that share a route the one
+  // meant is found, else the first tab of its route. -1 when there is none.
+  int _tabIndexAfterChange(AutoRoutePage<Object?>? page) {
+    if (page == null) return -1;
+    final kept = _pages.indexOf(page);
+    if (kept != -1) return kept;
+    return _pages.indexWhere((p) => p.routeData.name == page.routeData.name);
   }
 
   List<String> get _tabHistoryNames => [
@@ -1640,8 +1653,9 @@ class TabsRouter extends RoutingController {
       if (_pages.elementAtOrNull(index) case final page?) page.routeData.name,
   ];
 
-  // The tab history over [routes] that [names] give, found by name as the
-  // active tab is: the tabs still there, each once, without the active one.
+  // The tab history over [routes] that [names] give, found by name, as the
+  // tabs of another router can't be found by their pages: the tabs still
+  // there, each once, without the active one.
   List<int> _historyOf(List<String> names, List<RouteMatch<Object?>> routes) =>
       {for (final name in names) routes.indexWhere((r) => r.name == name)}
           .where((index) => index != -1 && index != _activeIndex)
