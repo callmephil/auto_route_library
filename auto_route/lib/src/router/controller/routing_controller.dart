@@ -2230,6 +2230,7 @@ abstract class StackRouter extends RoutingController {
       ..._pages,
       ..._takenOffByOpenBatches,
       ..._takenOffForNewPage,
+      ..._setAsideByReplaceAll,
     });
   }
 
@@ -2345,8 +2346,11 @@ abstract class StackRouter extends RoutingController {
   }
 
   // The pages that replaceAll calls set aside for a page that went on in
-  // their place while a guard decides. They may come back, so no new page
-  // takes over the screen of one of them, see [_shownTopTakenOverBy].
+  // their place while a guard decides. They come back if the guard rejects,
+  // so until it answers no new page takes over the screen of one of them,
+  // see [_shownTopTakenOverBy], and the code that opened one goes on waiting
+  // for its result: it hears null once the page is gone for good, as the
+  // guard lets the new pages in or the app replaces the page in their place.
   final _setAsideByReplaceAll = <AutoRoutePage<Object?>>{};
 
   // The replaceAll calls on this stack whose guards have not all answered,
@@ -2435,7 +2439,8 @@ abstract class StackRouter extends RoutingController {
         (page) =>
             !stillShown.contains(page.routeData) &&
             !shownWaits.contains(page.routeData._popCompleter) &&
-            !_takenOffByOpenBatches.contains(page),
+            !_takenOffByOpenBatches.contains(page) &&
+            !_setAsideByReplaceAll.contains(page),
       ),
     );
   }
@@ -3371,8 +3376,10 @@ abstract class StackRouter extends RoutingController {
   /// when the guard asks for a sign-in: back from that page shows none of
   /// them, and they come back only if the guard then rejects. They stay gone
   /// once the app replaces the guard's page with another one, with [replace]
-  /// or another [replaceAll]. A guard that shows no page keeps them until it
-  /// answers.
+  /// or another [replaceAll]. Until the guard answers, the code that opened
+  /// one of them goes on waiting: it gets the page's result if the page came
+  /// back, and `null` once the page is gone for good. A guard that shows no
+  /// page keeps them until it answers.
   ///
   /// If [onFailure] is given, navigation errors are passed to it; otherwise
   /// they are thrown. A guard's rejection reaches it as a
@@ -3510,6 +3517,7 @@ abstract class StackRouter extends RoutingController {
         onAllAccepted: (accepted) {
           pagesBefore = null;
           _setAsideByReplaceAll.removeAll(setAside);
+          _completeFuturesOf(setAside);
           setAside = const [];
           isGuardWaiting = false;
           isPlaceOpen = false;
@@ -3541,6 +3549,7 @@ abstract class StackRouter extends RoutingController {
           // good. A replace of another page, as of one the login page
           // opened, changes nothing for them.
           if (placeTaker?._isReplaced ?? false) {
+            _completeFuturesOf(setAside);
             setAside = const [];
             return;
           }
