@@ -1483,6 +1483,26 @@ class TabsRouter extends RoutingController {
         : change.then(hasShownNext);
   }
 
+  // The index in [routes], the tabs as listed, of the tab [route] names, or
+  // -1: of the tabs of its route, the first with the path it names, such as
+  // 'item/2', else the first.
+  static int _listedTabOf(
+    List<RouteMatch<Object?>> routes,
+    RouteMatch<Object?> route,
+  ) {
+    final sameRoute = [
+      for (final (index, listed) in routes.indexed)
+        if (listed.key == route.key) (index, listed),
+    ];
+    final (index, _) =
+        sameRoute
+            .where((tab) => tab.$2.stringMatch == route.stringMatch)
+            .firstOrNull ??
+        sameRoute.firstOrNull ??
+        (-1, null);
+    return index;
+  }
+
   /// Pushes given [routes] to [_pages] stack
   /// after match validation and deciding initial index
   void setupRoutes(List<PageRouteInfo>? routes) {
@@ -1492,7 +1512,7 @@ class TabsRouter extends RoutingController {
     // The last pending one is the active tab.
     final pendingChildren = _routeData.pendingChildren;
     for (final (pendingIndex, pending) in pendingChildren.indexed) {
-      final index = routesToPush.indexWhere((r) => r.key == pending.key);
+      final index = _listedTabOf(routesToPush, pending);
       if (index != -1) {
         final withArgs = _withTabArgs(
           pending,
@@ -1514,8 +1534,9 @@ class TabsRouter extends RoutingController {
     var guardedIndex = -1;
     Future<ResolverResult>? guarding;
     if (preMatchedRoute != null) {
-      final correspondingRouteIndex = routesToPush.indexWhere(
-        (r) => r.key == preMatchedRoute.key,
+      final correspondingRouteIndex = _listedTabOf(
+        routesToPush,
+        preMatchedRoute,
       );
       // A tab named by a url, a navigation or a restore shows once the guards
       // of its route let it in, and the first tab shows meanwhile or instead.
@@ -1983,17 +2004,27 @@ class TabsRouter extends RoutingController {
   // The tab [route] opens, or -1. A route with the match id of a tab's page,
   // as each route of a reevaluation has, is that tab's. Two tabs share a
   // route when both are children of the same parent route, such as one tab
-  // per list item; the one meant holds the route's first child, open or
-  // waiting to open.
+  // per list item. The one meant has the path the route names, such as
+  // 'item/2', when some tabs have it and others don't; then the one that
+  // holds the route's first child, open or waiting to open.
   int _tabIndexOf(RouteMatch<Object?> route) {
     final ownTab = _pages.indexWhere(
       (page) => page.routeData.matchId == route.id,
     );
     if (ownTab != -1) return ownTab;
-    final tabs = [
+    final sameRoute = [
       for (var i = 0; i < _pages.length; i++)
         if (_pages[i].routeKey == route.key) i,
     ];
+    if (sameRoute.length < 2) return sameRoute.firstOrNull ?? -1;
+    final samePath = sameRoute
+        .where(
+          (index) =>
+              _pages.elementAtOrNull(index)?.routeData._route.stringMatch ==
+              route.stringMatch,
+        )
+        .toList();
+    final tabs = samePath.isEmpty ? sameRoute : samePath;
     if (tabs.length < 2) return tabs.firstOrNull ?? -1;
     final childName = route.children?.firstOrNull?.name;
     bool doesHoldChild(int index) {
