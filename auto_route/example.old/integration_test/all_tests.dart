@@ -214,6 +214,7 @@ import 'screen_reached_again_keeps_leave_listener_test.dart'
     as screen_reached_again_keeps_leave_listener;
 import 'set_query_param_test.dart' as set_query_param;
 import 'simultaneous_taps_test.dart' as simultaneous_taps;
+import 'slow_link_builder_order_test.dart' as slow_link_builder_order;
 import 'state_after_reload_test.dart' as state_after_reload;
 import 'swipe_init_tab_test.dart' as swipe_init_tab;
 import 'switch_routers_test.dart' as switch_routers;
@@ -428,6 +429,7 @@ void main() {
   rejected_link_keeps_dialog.main();
   rebuild_stack_rejected_link.main();
   rejected_link_url_running.main();
+  slow_link_builder_order.main();
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
   replace_all_slow_guard.main();

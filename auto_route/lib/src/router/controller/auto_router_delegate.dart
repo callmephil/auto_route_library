@@ -160,6 +160,12 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   // setInitialRoutePath, setNewRoutePath or setRestoredRoutePath.
   bool _wasGivenRoute = false;
 
+  // Numbers the links handed to the delegate, in the order they came.
+  int _handedOverLinks = 0;
+
+  // The number of the link handed over last of those that started opening.
+  int _lastOpenedLink = 0;
+
   @override
   Future<void> setInitialRoutePath(UrlState configuration) async {
     _wasGivenRoute = true;
@@ -175,15 +181,27 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       _launchWatch = AppLifecycleListener(onHide: _endLaunch);
     }
     final platformDeepLink = PlatformDeepLink._(configuration, true);
+    final handover = ++_handedOverLinks;
     if (deepLinkBuilder != null) {
-      await _handleDeepLink(await deepLinkBuilder!(platformDeepLink));
+      final resolvedLink = await deepLinkBuilder!(platformDeepLink);
+      if (_wasOvertaken(handover)) return;
+      await _handleDeepLink(resolvedLink, handover: handover);
       return _reportRejectedLaunch();
     } else if (platformDeepLink.isValid) {
-      await _handleDeepLink(platformDeepLink);
+      await _handleDeepLink(platformDeepLink, handover: handover);
       return _reportRejectedLaunch();
     }
     throw FlutterError(_unresolvedMessage(platformDeepLink));
   }
+
+  // Whether a link handed over after the link numbered [handover] started
+  // opening while deepLinkBuilder answered for it. The later link wins, as a
+  // route whose parse ends after a newer one was reported is dropped in
+  // Flutter's Router; unless the app shows no page yet, as when the later
+  // link was rejected. A link the app ignores starts nothing, so it drops no
+  // link before it.
+  bool _wasOvertaken(int handover) =>
+      _isDisposed || (_lastOpenedLink > handover && controller.hasEntries);
 
   // The app opened at a link that put no page in, as when a guard rejected it.
   // currentConfiguration stays null until a page is in, so the Router would
@@ -200,11 +218,13 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     notifyListeners();
   }
 
-  // Opens [deepLink]. The pageless routes in [closing], such as a dialog the
-  // link came over, close only once its guards let it in, when [onAccepted]
-  // runs too: a link the app turns down changes nothing on screen.
+  // Opens [deepLink], the link numbered [handover] as it was handed over.
+  // The pageless routes in [closing], such as a dialog the link came over,
+  // close only once its guards let it in, when [onAccepted] runs too: a link
+  // the app turns down changes nothing on screen.
   Future<void> _handleDeepLink(
     DeepLink deepLink, {
+    required int handover,
     bool replacesLaunchPage = false,
     bool rebuildsStack = false,
     List<Route<Object?>> closing = const [],
@@ -213,6 +233,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     if (deepLink is _IgnoredDeepLink) return SynchronousFuture(null);
 
     if (!deepLink.isValid) throw FlutterError(_unresolvedMessage(deepLink));
+    if (handover > _lastOpenedLink) _lastOpenedLink = handover;
     return controller.root._openLink(
       () => _openDeepLink(
         deepLink,
@@ -461,23 +482,28 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
             : configuration.copyWith(segments: entryRoutes),
         false,
       );
+      final handover = ++_handedOverLinks;
       final resolvedLink = deepLinkBuilder == null
           ? platLink
           : await deepLinkBuilder!(platLink);
+      if (_wasOvertaken(handover)) return;
       final replacesLaunchPage = _doesLinkReplaceLaunchPage(resolvedLink);
       _endLaunch();
       var isAccepted = false;
       final opening = _handleDeepLink(
         resolvedLink,
+        handover: handover,
         replacesLaunchPage: replacesLaunchPage,
         rebuildsStack: rebuildStackOnDeepLink,
         closing: pageless,
         onAccepted: () => isAccepted = true,
       );
-      final link = controller.root._linkCount;
+      // The count of this link, or of the one before for a link the app
+      // ignores.
+      final count = controller.root._linkCount;
       await opening;
       // A later link reports its own url.
-      if (!isAccepted && !_isDisposed && link == controller.root._linkCount) {
+      if (!isAccepted && !_isDisposed && count == controller.root._linkCount) {
         return _reportTurnedDownLink();
       }
     }
