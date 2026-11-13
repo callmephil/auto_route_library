@@ -226,6 +226,8 @@ import 'remove_where_same_route_test.dart' as remove_where_same_route;
 import 'repeated_query_key_number_test.dart' as repeated_query_key_number;
 import 'repeated_query_key_test.dart' as repeated_query_key;
 import 'replace_all_from_deep_stack_test.dart' as replace_all_from_deep_stack;
+import 'replace_all_from_redirect_page_test.dart'
+    as replace_all_from_redirect_page;
 import 'replace_all_guard_page_test.dart' as replace_all_guard_page;
 import 'replace_all_keeps_screen_below_top_test.dart'
     as replace_all_keeps_screen_below_top;
@@ -525,6 +527,7 @@ void main() {
   repeated_query_key.main();
   repeated_query_key_number.main();
   replace_all_from_deep_stack.main();
+  replace_all_from_redirect_page.main();
   replace_all_guard_page.main();
   replace_all_keeps_screen_below_top.main();
   replace_all_kept_screen_shows_new_children.main();

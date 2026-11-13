@@ -3857,7 +3857,20 @@ abstract class StackRouter extends RoutingController {
             // With [replacement], the routes go on as it returns them, after
             // what it does to the stack.
             final accepted = [...held, match];
+            final replaced = replacement == null
+                ? const <AutoRoutePage<Object?>>[]
+                : List.of(_pages);
             final going = replacement?.onAllAccepted(accepted) ?? accepted;
+            // The pages replaceAll takes off answer their callers in this
+            // step, once the new pages are on and it is known whose screen
+            // and wait a new page took over, as Flutter's Navigator ends the
+            // wait of every route that leaves its pages, whatever else is
+            // pending. Not at the next report of leaves: a reevaluation
+            // holds that report back until it ends, and one that waits
+            // behind a guard's redirect page would wait for that page's
+            // caller to be answered.
+            takenOff.addAll(replaced);
+            _takenOffByOpenBatches.addAll(replaced);
             going.take(going.length - 1).forEachIndexed(putOn);
             final popped = putOnLast(going.lastOrNull ?? match);
             if (popped != null) {
