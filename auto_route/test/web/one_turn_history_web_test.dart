@@ -445,4 +445,21 @@ void main() {
       opens: _onA,
     );
   });
+  // From A over Home, a pop, a push of A again and a pop, in one turn. Was:
+  // the browser held '/', '/a', '/', and back showed A, a page already
+  // closed: the push of A, whose url the browser still showed, was taken for
+  // the browser's own move.
+  testWidgets('On web, a pop, a push of the same page again and a pop in one '
+      'turn end on the entry of Home', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        router.pop();
+        unawaited(router.push(const NamedRoute('ARoute')));
+        router.pop();
+      },
+      [(0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
 }

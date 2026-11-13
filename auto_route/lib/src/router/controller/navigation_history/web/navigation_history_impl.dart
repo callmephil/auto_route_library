@@ -75,11 +75,14 @@ class NavigationHistoryImpl extends NavigationHistory {
         !_isPageOfEntry(browserIndex, newState) &&
         _isPushedOverSameUrl(newState);
     // The browser moved first, by its own buttons or the address bar; with
-    // the same url, to the entry of another page that has it.
+    // the same url, to the entry of another page that has it. While a turn's
+    // changes wait for its end, the browser still shows the url it showed when
+    // the turn began, which a page pushed again may share; that is no move.
     final didBrowserMoveFirst =
         !isPushedOverSameUrl &&
         _isSameUrl(browserPath, newState.url) &&
-        (isNewUrl || browserIndex != _appIndex);
+        (isNewUrl || browserIndex != _appIndex) &&
+        (_frameStartEntries == null || browserIndex != _frameStartIndex);
     // A page with the same url as the app entry's page, which has left, takes
     // its place, as pushAndPopUntil's new page that of the pages it closed. A
     // page that some entry holds already, as when the browser went back to the
