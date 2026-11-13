@@ -32,7 +32,10 @@ class DeferredWidget extends StatefulWidget {
   /// Creates the actual widget after it's loaded
   final DeferredWidgetBuilder createWidget;
 
-  /// The widget is displayed until [libraryLoader] is done loading
+  /// The widget is displayed until [libraryLoader] is done loading.
+  ///
+  /// Left out, the router's placeholder ([AutoRouterDelegate.placeholder])
+  /// shows, or a progress indicator.
   final Widget? placeholder;
   static final Map<LibraryLoader, Future<void>> _moduleLoaders = {};
   static final Set<LibraryLoader> _loadedModules = {};
@@ -112,9 +115,9 @@ class _DeferredWidgetState extends State<DeferredWidget> {
       _loadedChild = _loadedBuilder!();
     }
 
-    final placeHolder =
+    return _loadedChild ??
+        widget.placeholder ??
         AutoRouterDelegate.of(context).placeholder?.call(context) ??
         const DeferredLoadingPlaceholder();
-    return _loadedChild ?? placeHolder;
   }
 }

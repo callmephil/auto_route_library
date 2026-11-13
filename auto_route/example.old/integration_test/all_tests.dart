@@ -43,6 +43,8 @@ import 'deferred_and_eager_page_test.dart' as deferred_and_eager_page;
 import 'deferred_page_failed_load_retry_test.dart'
     as deferred_page_failed_load_retry;
 import 'deferred_page_popped_test.dart' as deferred_page_popped;
+import 'deferred_widget_own_placeholder_test.dart'
+    as deferred_widget_own_placeholder;
 import 'dialog_args_route_information_test.dart'
     as dialog_args_route_information;
 import 'dialog_then_page_animates_test.dart' as dialog_then_page_animates;
@@ -345,6 +347,7 @@ void main() {
   deferred_and_eager_page.main();
   deferred_page_failed_load_retry.main();
   deferred_page_popped.main();
+  deferred_widget_own_placeholder.main();
   dialog_args_route_information.main();
   dialog_then_page_animates.main();
   dialog_then_page_pop.main();
