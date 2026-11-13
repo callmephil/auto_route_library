@@ -50,6 +50,7 @@ import 'encoded_link_back_test.dart' as encoded_link_back;
 import 'encoded_path_params_test.dart' as encoded_path_params;
 import 'encoded_url_test.dart' as encoded_url;
 import 'enum_query_param_test.dart' as enum_query_param;
+import 'fragment_question_mark_url_test.dart' as fragment_question_mark_url;
 import 'generic_page_test.dart' as generic_page;
 import 'guard_answers_at_once_test.dart' as guard_answers_at_once;
 import 'guard_throws_test.dart' as guard_throws;
@@ -338,6 +339,7 @@ void main() {
   encoded_path_params.main();
   encoded_url.main();
   enum_query_param.main();
+  fragment_question_mark_url.main();
   generic_page.main();
   guard_answers_at_once.main();
   guard_throws.main();

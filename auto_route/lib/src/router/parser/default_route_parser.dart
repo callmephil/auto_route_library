@@ -353,12 +353,13 @@ class UrlState {
 
   static String _readable(String encoded) {
     if (!encoded.contains('%')) return encoded;
-    final queryStart = encoded.indexOf('?');
     final fragmentStart = encoded.indexOf('#');
-    final pathEnd = queryStart >= 0
-        ? queryStart
-        : (fragmentStart >= 0 ? fragmentStart : encoded.length);
     final queryEnd = fragmentStart >= 0 ? fragmentStart : encoded.length;
+    // A '?' after the '#' belongs to the fragment.
+    final queryStart = encoded.indexOf('?');
+    final pathEnd = queryStart >= 0 && queryStart < queryEnd
+        ? queryStart
+        : queryEnd;
     return _decodeExcept(encoded.substring(0, pathEnd), '/?#%') +
         _decodeExcept(encoded.substring(pathEnd, queryEnd), '&=+#%') +
         _decodeExcept(encoded.substring(queryEnd), '%');
