@@ -79,6 +79,7 @@ void main() {
 
     expect(stackNames(router), ['HomeRoute', 'DetailsRoute']);
     expect(find.text('DetailsRoute'), findsOneWidget);
+    expect(router.currentUrl, '/details');
   });
 
   testWidgets('A link deepLinkBuilder turns into a rejected path keeps the '

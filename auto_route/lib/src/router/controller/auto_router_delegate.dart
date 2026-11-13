@@ -201,13 +201,14 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   }
 
   // Opens [deepLink]. The pageless routes in [closing], such as a dialog the
-  // link came over, close only once its guards let it in: a link the app
-  // turns down changes nothing on screen.
+  // link came over, close only once its guards let it in, when [onAccepted]
+  // runs too: a link the app turns down changes nothing on screen.
   Future<void> _handleDeepLink(
     DeepLink deepLink, {
     bool replacesLaunchPage = false,
     bool rebuildsStack = false,
     List<Route<Object?>> closing = const [],
+    VoidCallback? onAccepted,
   }) {
     if (deepLink is _IgnoredDeepLink) return SynchronousFuture(null);
 
@@ -218,8 +219,33 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         replacesLaunchPage: replacesLaunchPage,
         rebuildsStack: rebuildsStack,
       ),
-      onAccepted: () => _closePagelessRoutes(closing),
+      onAccepted: () {
+        _closePagelessRoutes(closing);
+        onAccepted?.call();
+      },
     );
+  }
+
+  // The running app turned down the link it was handed, as when a guard
+  // rejected it or deepLinkBuilder answered DeepLink.none. The link's url,
+  // set before its guards ran, gives way to that of the pages the app shows,
+  // reported over the link's browser entry, as [_reportRejectedLaunch] does
+  // for the launch.
+  void _reportTurnedDownLink() {
+    final shown = UrlState.fromSegments(
+      controller.currentSegments,
+      shouldReplace: true,
+    );
+    // A url state the link left alone keeps its path state.
+    if (!const ListEquality<Object?>().equals(
+      urlState.segments,
+      shown.segments,
+    )) {
+      controller.navigationHistory.onNewUrlState(shown, notify: false);
+    }
+    final context = controller.navigatorKey.currentContext;
+    if (context == null) return notifyListeners();
+    Router.neglect(context, notifyListeners);
   }
 
   // The dialogs, sheets and other pageless routes over the top page of the
@@ -440,12 +466,20 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
           : await deepLinkBuilder!(platLink);
       final replacesLaunchPage = _doesLinkReplaceLaunchPage(resolvedLink);
       _endLaunch();
-      await _handleDeepLink(
+      var isAccepted = false;
+      final opening = _handleDeepLink(
         resolvedLink,
         replacesLaunchPage: replacesLaunchPage,
         rebuildsStack: rebuildStackOnDeepLink,
         closing: pageless,
+        onAccepted: () => isAccepted = true,
       );
+      final link = controller.root._linkCount;
+      await opening;
+      // A later link reports its own url.
+      if (!isAccepted && !_isDisposed && link == controller.root._linkCount) {
+        return _reportTurnedDownLink();
+      }
     }
 
     // The link's navigation ends when its page leaves the stack, which
