@@ -208,11 +208,11 @@ class AutoRouteObserver extends AutoRouterObserver {
       }
     } else {
       routeAware.didPush();
-      // A page built while covered, as under a deep link's top page, missed
-      // the push that covered it: the navigator reported it before this page
-      // existed to subscribe.
-      if (_isCovered(routeAware, route)) routeAware.didPushNext();
     }
+    // A page built while covered, as under a deep link's top page, missed
+    // the push that covered it: the navigator reported it before this page
+    // existed to subscribe. A tab page is covered when its tabs are.
+    if (_isCovered(routeAware, route)) routeAware.didPushNext();
   }
 
   // The route the navigator of [data]'s router shows its page with, or null
@@ -233,7 +233,7 @@ class AutoRouteObserver extends AutoRouterObserver {
 
   // Whether another page covers [route] in its own router, or covers a host
   // route of it in an ancestor router whose observer tells [routeAware] when
-  // that host shows again.
+  // that host shows again, as it does while [route] shows in that host.
   bool _isCovered(AutoRouteAware routeAware, RouteData<Object?> route) {
     if (_isBelowTop(route)) return true;
     final ancestorObservers =
@@ -244,7 +244,9 @@ class AutoRouteObserver extends AutoRouterObserver {
       host = host.parent
     ) {
       final hostData = host;
-      if (!_isBelowTop(hostData)) continue;
+      if (!_isBelowTop(hostData) || !_isShownInHost(route, hostData.key)) {
+        continue;
+      }
       final hostRoute = _routeOf(hostData);
       if (hostRoute != null &&
           ancestorObservers.any(
