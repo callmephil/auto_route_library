@@ -1339,6 +1339,7 @@ class TabsRouter extends RoutingController {
     }
     final router = _guardRouter;
     final resolver = NavigationResolver(router, Completer(), route);
+    _tabRoutesOfResolvers[resolver] = matcher;
     final entry = GuardEntry(guard, resolver);
     router.activeGuardObserver._add(entry);
     FutureOr<ResolverResult> onResult(ResolverResult result) {

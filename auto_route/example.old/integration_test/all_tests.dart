@@ -274,6 +274,7 @@ import 'tab_bar_drag_during_tab_change_test.dart'
 import 'tab_bar_indicator_test.dart' as tab_bar_indicator;
 import 'tab_bar_zero_duration_guard_test.dart' as tab_bar_zero_duration_guard;
 import 'tab_cached_context_test.dart' as tab_cached_context;
+import 'tab_guard_override_children_test.dart' as tab_guard_override_children;
 import 'tab_guards_test.dart' as tab_guards;
 import 'tab_history_back_rebuild_test.dart' as tab_history_back_rebuild;
 import 'tab_history_back_test.dart' as tab_history_back;
@@ -558,6 +559,7 @@ void main() {
   tab_bar_indicator.main();
   tab_bar_zero_duration_guard.main();
   tab_cached_context.main();
+  tab_guard_override_children.main();
   tab_guards.main();
   tab_history_back_rebuild.main();
   tab_history_back.main();

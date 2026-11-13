@@ -189,6 +189,10 @@ final _redirectingResolvers = Expando<NavigationResolver>(
   'redirectingResolvers',
 );
 
+// The routes of the tabs, by the resolver of a tab's guard: the guarded
+// route is one of them, not of the stack router the guard runs on.
+final _tabRoutesOfResolvers = Expando<RouteMatcher>('tabRoutesOfResolvers');
+
 /// Represents a guarded navigation event
 /// which can be either continued or aborted
 /// used in [AutoRouteGuard.onNavigation]
@@ -305,7 +309,10 @@ class NavigationResolver {
       queryParams: queryParams,
       fragment: fragment,
     );
-    final overriddenRoute = overrides.override(route, _router.matcher);
+    final overriddenRoute = overrides.override(
+      route,
+      _tabRoutesOfResolvers[this] ?? _router.matcher,
+    );
     _complete(
       ResolverResult(
         continueNavigation: true,
