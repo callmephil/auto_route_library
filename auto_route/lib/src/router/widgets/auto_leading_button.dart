@@ -124,6 +124,16 @@ class _AutoLeadingButtonState extends State<AutoLeadingButton> {
     super.dispose();
   }
 
+  // [router] and the pageless routes observers of it and of every router
+  // nested in it.
+  static Iterable<Listenable> _listenablesOf(RoutingController router) sync* {
+    yield router;
+    if (router is StackRouter) yield router.pagelessRoutesObserver;
+    for (final child in router.childControllers) {
+      yield* _listenablesOf(child);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scope = RouterScope.of(context, watch: true);
@@ -137,14 +147,16 @@ class _AutoLeadingButtonState extends State<AutoLeadingButton> {
     // canPop also reads the routers nested in the page and the routers
     // around it. The button rebuilds when the pages of any router change, as
     // each change reaches the root router, and when a pageless route, such
-    // as a dialog, opens or closes in its own router. The root is found
-    // through the app's Router, so a button built around a stand-in router,
-    // as in a widget test, reads nothing more of it.
+    // as a dialog or a page opened with pushWidget, opens or closes in any
+    // stack router. The routers are found again on each build, as they come
+    // and go with their pages. The root is found through the app's Router,
+    // so a button built around a stand-in router, as in a widget test, reads
+    // nothing more of it.
     _changes.listenTo({
       _pagelessRoutesObserver,
       if (Router.maybeOf(context)?.routerDelegate
           case final AutoRouterDelegate delegate)
-        delegate.controller,
+        ..._listenablesOf(delegate.controller),
     });
     Widget? leading;
     if (scope.controller.canPop(
