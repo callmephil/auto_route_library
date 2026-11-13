@@ -39,9 +39,11 @@ abstract class NavigationHistory with ChangeNotifier {
   /// entry in the history, so a later [back] returns to the page that was just
   /// popped. The native history instead drops the popped page's entry and
   /// keeps one entry for the page now on top. The web history cannot delete
-  /// browser entries: when the entry before holds the page now on top, it steps
-  /// the browser back to it (see [consumeOwnBrowserMove]); otherwise it gives
-  /// the popped page's entry to the page now on top.
+  /// browser entries: when an entry before holds the page now on top, and the
+  /// entries between hold only pages that are closed, as after
+  /// [StackRouter.popUntil], it steps the browser back to it (see
+  /// [consumeOwnBrowserMove]); otherwise it gives the popped page's entry to
+  /// the page now on top.
   ///
   /// [poppedPageId] is the id of the popped page's route. A page can be popped
   /// from under the page on top, as [StackRouter.popUntil] pops the pages in

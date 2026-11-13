@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
@@ -30,6 +31,9 @@ class NavigationHistoryImpl extends NavigationHistory {
   String? _ownMoveUrl;
 
   bool _isSteppingBack = false;
+
+  // Whether a step back after a pop waits to be made, to [_appIndex].
+  bool _isStepBackScheduled = false;
 
   bool _doesAddEntryWithSameUrl = false;
 
@@ -83,14 +87,22 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   @override
   // The browser can't delete an entry, so a page popped from under the page
-  // on top keeps its entry here.
+  // on top keeps its entry here. A page taken off the stack without a pop,
+  // with no [poppedPageId], as by pushAndPopUntil, steps back one entry at
+  // most, at once.
   void rebuildUrlAfterPop({LocalKey? poppedPageId}) {
+    final isPop = poppedPageId != null;
     final popped = urlState;
     final newState = UrlState.fromSegments(router.currentSegments);
     final newUrl = newState.url;
     final isSameUrl = newUrl == popped.url;
     _recordCurrentEntry();
-    final index = _currentIndex;
+    // The pops of one popUntil come one after another, before the browser has
+    // made the step back of the one before; that step's entry counts as
+    // current.
+    final index = isPop && _isStepBackScheduled
+        ? (_appIndex ?? _currentIndex)
+        : _currentIndex;
     // Whether the entry at index i holds the page on top of [state]; two pages
     // with the same url, pushed one over the other, are told apart by page.
     bool doesHold(int i, UrlState state) {
@@ -100,16 +112,25 @@ class NavigationHistoryImpl extends NavigationHistory {
           (!isSameUrl || entry.topMatch?.id == state.topMatch?.id);
     }
 
-    if (index > 0 && doesHold(index, popped) && doesHold(index - 1, newState)) {
+    final target = !doesHold(index, popped)
+        ? null
+        : isPop
+        ? _entryBeforeClosedPages(index, (i) => doesHold(i, newState))
+        : (index > 0 && doesHold(index - 1, newState) ? index - 1 : null);
+    if (target != null) {
       _isSteppingBack = true;
       try {
         rebuildUrl();
       } finally {
         _isSteppingBack = false;
       }
-      _appIndex = index - 1;
+      _appIndex = target;
       _ownMoveUrl = newUrl;
-      _history.back();
+      if (isPop) {
+        _scheduleStepBack();
+      } else {
+        _history.back();
+      }
       return;
     }
     if (isSameUrl) {
@@ -121,6 +142,30 @@ class NavigationHistoryImpl extends NavigationHistory {
     // the popped page's entry.
     markUrlStateForReplace();
     rebuildUrl();
+  }
+
+  // Steps the browser back to [_appIndex] once the pops being made now are
+  // done, in one move: the browser makes a move later, and reports each one.
+  void _scheduleStepBack() {
+    if (_isStepBackScheduled) return;
+    _isStepBackScheduled = true;
+    scheduleMicrotask(() {
+      _isStepBackScheduled = false;
+      final steps = (_appIndex ?? _currentIndex) - _currentIndex;
+      if (steps < 0) _history.go(steps);
+    });
+  }
+
+  // The nearest entry before [index] for which [isTarget] holds, when every
+  // entry between holds a page that no stack holds any more, as the pages
+  // StackRouter.popUntil closes at once leave them. Null otherwise.
+  int? _entryBeforeClosedPages(int index, bool Function(int i) isTarget) {
+    for (var i = index - 1; i >= 0; i--) {
+      if (isTarget(i)) return i;
+      final pageId = _entries[i]?.topMatch?.id;
+      if (pageId == null || controllerOfPage(pageId) != null) return null;
+    }
+    return null;
   }
 
   @override
