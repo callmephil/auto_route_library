@@ -1,0 +1,214 @@
+// Runs only in Chrome, `flutter test --platform chrome`: it needs the
+// browser's own history.
+@TestOn('browser')
+library;
+
+import 'dart:async';
+
+import 'package:auto_route/auto_route.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../router_test_utils.dart';
+import 'browser_history.dart';
+
+// On the web, several navigations in one turn leave the browser's history as
+// the same calls one after another would: each page still open has an entry,
+// and the browser's back button walks back through them. The router writes
+// the url once a frame, after it, so each pair of calls in one turn is a case
+// of its own for the web history.
+//
+// Native behavior this holds to: the HTML History API, whose pushState and
+// replaceState change the history at once, one call after another; and
+// Flutter's own Navigator with reportsRouteUpdateToEngine, which writes each
+// change to the engine as it flushes (Navigator._flushHistoryUpdates).
+RootStackRouter _router() => .build(
+  routes: [
+    for (final (name, path) in [
+      ('HomeRoute', '/'),
+      ('ARoute', '/a'),
+      ('BRoute', '/b'),
+      ('CRoute', '/c'),
+    ])
+      NamedRouteDef(name: name, path: path, builder: (_, _) => Text(name)),
+    NamedRouteDef(
+      name: 'ItemRoute',
+      path: '/item',
+      builder: (_, data) => Text('Item ${data.args ?? 'none'}'),
+    ),
+  ],
+);
+
+// The browser's entry, counted from [home]'s, its url, and the names on the
+// router's stack.
+(int, String, String) _shown(RootStackRouter router, int home) => (
+  browserSerialCount - home,
+  browserPath,
+  router.stack.map((page) => page.name).join(' '),
+);
+
+// Runs [calls] in one turn from Home, or with A open over Home when
+// [startsOnA], and checks what the browser and the router show after them.
+// Then it presses the browser's back button once for each further reading in
+// [expected], and checks those too. The first reading is checked before the
+// browser moves, since a back step from a missing entry would leave the test
+// page and nothing would ever answer.
+Future<void> _expectAfter(
+  WidgetTester tester,
+  void Function(RootStackRouter router) calls,
+  List<(int, String, String)> expected, {
+  bool startsOnA = false,
+  bool Function(String? location)? neglectWhen,
+}) async {
+  final [expectedAfterCalls, ...expectedAfterBacks] = expected;
+  final router = _router();
+  await pumpRouterConfigApp(tester, router.config(neglectWhen: neglectWhen));
+  await settleBrowser(tester);
+  final home = browserSerialCount;
+  if (startsOnA) {
+    unawaited(router.push(const NamedRoute('ARoute')));
+    await settleBrowser(tester);
+  }
+  calls(router);
+  await settleBrowser(tester);
+  final afterCalls = _shown(router, home);
+  // The Chrome runner doesn't print a failed expectation.
+  printOnFailure('after the calls: $afterCalls');
+  expect(afterCalls, expectedAfterCalls);
+
+  final afterBacks = <(int, String, String)>[];
+  for (var i = 0; i < expectedAfterBacks.length; i++) {
+    await pressBrowserBack(tester);
+    afterBacks.add(_shown(router, home));
+  }
+  printOnFailure('after each back: $afterBacks');
+  expect(afterBacks, expectedAfterBacks);
+}
+
+void main() {
+  useRealBrowserHistory();
+  setUp(rewindBrowserHistory);
+
+  testWidgets('On web, three pushes in one turn get an entry each', (
+    tester,
+  ) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('ARoute')));
+        unawaited(router.push(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+      },
+      [
+        (3, '/c', 'HomeRoute ARoute BRoute CRoute'),
+        (2, '/b', 'HomeRoute ARoute BRoute'),
+        (1, '/a', 'HomeRoute ARoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+    );
+  });
+
+  testWidgets('On web, a push, a pop and a push in one turn leave one entry '
+      'over Home', (tester) async {
+    await _expectAfter(tester, (router) {
+      unawaited(router.push(const NamedRoute('ARoute')));
+      router.pop();
+      unawaited(router.push(const NamedRoute('BRoute')));
+    }, [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')]);
+  });
+
+  testWidgets('On web, a push, a replace and a push in one turn get an entry '
+      'for each page left', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('ARoute')));
+        unawaited(router.replace(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+      },
+      [
+        (2, '/c', 'HomeRoute BRoute CRoute'),
+        (1, '/b', 'HomeRoute BRoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+    );
+  });
+
+  testWidgets('On web, two pages of one route with other arguments, pushed '
+      'in one turn, get an entry each', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('ItemRoute', args: 1)));
+        unawaited(router.push(const NamedRoute('ItemRoute', args: 2)));
+      },
+      [
+        (2, '/item', 'HomeRoute ItemRoute ItemRoute'),
+        (1, '/item', 'HomeRoute ItemRoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+    );
+  });
+
+  testWidgets('On web, a push and a pushPathState in one turn get an entry '
+      'each', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('BRoute')));
+        router.pushPathState('filter');
+      },
+      [
+        (2, '/b', 'HomeRoute BRoute'),
+        (1, '/b', 'HomeRoute BRoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+    );
+  });
+
+  testWidgets('On web, pushAndPopUntil down to Home takes the entry of the '
+      'page it closes', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) => unawaited(
+        router.pushAndPopUntil(
+          const NamedRoute('BRoute'),
+          predicate: (route) => route.settings.name == 'HomeRoute',
+        ),
+      ),
+      [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
+      startsOnA: true,
+    );
+  });
+
+  testWidgets('On web, two pushes and a pop in one turn leave an entry for '
+      'the page left on top', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+        router.pop();
+      },
+      [
+        (2, '/b', 'HomeRoute ARoute BRoute'),
+        (1, '/a', 'HomeRoute ARoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+      startsOnA: true,
+    );
+  });
+
+  testWidgets('On web, two pushes in one turn, the first to a url the app '
+      'keeps out of the address bar, get one entry', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('ARoute')));
+        unawaited(router.push(const NamedRoute('BRoute')));
+      },
+      [(1, '/b', 'HomeRoute ARoute BRoute'), (0, '/', 'HomeRoute')],
+      neglectWhen: (location) => location == '/a',
+    );
+  });
+}
