@@ -339,4 +339,19 @@ void main() {
       opens: _onA,
     );
   });
+  // From A over Home, a replace of A with B and a pop of B in one turn. Was:
+  // the pop of B, never shown, rebuilt Home's url as a new entry over A's,
+  // so the browser stood on a third entry, with A's still under it.
+  testWidgets('On web, a replace and a pop in one turn end on the entry of '
+      'the page under', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.replace(const NamedRoute('BRoute')));
+        router.pop();
+      },
+      [(0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
 }

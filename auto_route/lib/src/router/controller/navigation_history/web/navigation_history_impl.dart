@@ -87,9 +87,17 @@ class NavigationHistoryImpl extends NavigationHistory {
     final doesNotify = notify && !_isSteppingBack;
     final records =
         doesNotify && !didBrowserMoveFirst && (isNewUrl || isPushedOverSameUrl);
+    final backTo = records && !newState.shouldReplace
+        ? _entryUnderUnshownPage(newState)
+        : null;
     final index =
-        (_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1);
-    final reported = records ? _placeEntry(newState, index) : newState;
+        backTo ??
+        ((_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1));
+    final reported = backTo != null
+        ? _stepBackTo(backTo, newState)
+        : records
+        ? _placeEntry(newState, index)
+        : newState;
     _doesAddEntryWithSameUrl = doesNotify && isPushedOverSameUrl;
     try {
       super.onNewUrlState(reported, notify: doesNotify);
@@ -134,6 +142,39 @@ class NavigationHistoryImpl extends NavigationHistory {
     // The router writes a replace if any change of the frame did; a new entry
     // then goes in now, and the router's write repeats it in place.
     return newState.copyWith(shouldReplace: replaces || _doesFrameReplace);
+  }
+
+  // The entry under this frame's unwritten entry, when [newState] shows that
+  // entry's page again and the page of the unwritten entry has left without
+  // being shown, as a page replaced and popped in one turn. A page never shown
+  // needs no entry, so the change goes back to the entry under. Null
+  // otherwise.
+  int? _entryUnderUnshownPage(UrlState newState) {
+    final pending = _pendingIndex;
+    if (pending == null || pending != _appIndex || pending == 0) return null;
+    final leftPage = _entries[pending]?.topMatch?.id;
+    final pageId = newState.topMatch?.id;
+    if (leftPage == null ||
+        pageId == null ||
+        controllerOfPage(leftPage) != null ||
+        _entries[pending - 1]?.topMatch?.id != pageId) {
+      return null;
+    }
+    return pending - 1;
+  }
+
+  // Goes back to the browser's entry [target] for [newState], stepping the
+  // browser back to it when it stands after it, and returns the state to
+  // report: a replace of that entry, which repeats what it holds.
+  UrlState _stepBackTo(int target, UrlState newState) {
+    _pendingIndex = null;
+    final standsOn = _frameBrowserIndex;
+    if (standsOn != null && standsOn > target) {
+      _ownMoveUrl = newState.url;
+      _scheduleStepBack(target);
+    }
+    _frameBrowserIndex = target;
+    return newState.copyWith(shouldReplace: true);
   }
 
   // Records [newState] as the app's entry at [index]; an entry after it is

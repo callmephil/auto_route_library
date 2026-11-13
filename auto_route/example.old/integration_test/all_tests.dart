@@ -256,6 +256,7 @@ import 'replace_changed_path_param_test.dart' as replace_changed_path_param;
 import 'replace_path_rejected_test.dart' as replace_path_rejected;
 import 'replace_rejected_test.dart' as replace_rejected;
 import 'replace_same_route_children_test.dart' as replace_same_route_children;
+import 'replace_then_pop_test.dart' as replace_then_pop;
 import 'replace_while_animating_out_test.dart' as replace_while_animating_out;
 import 'replace_with_new_children_test.dart' as replace_with_new_children;
 import 'replaced_change_skips_later_guards_test.dart'
@@ -565,6 +566,7 @@ void main() {
   rebuild_stack_rejected_link.main();
   rejected_link_url_running.main();
   replace_all_then_push.main();
+  replace_then_pop.main();
   rewritten_link_back.main();
   set_query_param_read.main();
   slow_link_builder_order.main();
