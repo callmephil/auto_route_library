@@ -30,11 +30,25 @@ class _AutoTabsRouterBuilderState
     _controller!.setupRoutes(widget.routes);
     widget.onRouterReady?.call(_controller!);
     _didInitTabRoute(_controller!.activeIndex);
+    _activeTab = _activeTabId;
     _controller!.addListener(_onTabsChanged);
   }
 
+  // The active tab last reported, by page, not index: a change of the tabs
+  // list can move it to another index. The tabs router also notifies when a
+  // guard decides or rejects, or the active tab gets new params: no tab
+  // changed.
+  LocalKey? _activeTab;
+
+  LocalKey? get _activeTabId => _controller!.stack
+      .elementAtOrNull(_controller!.activeIndex)
+      ?.routeData
+      .matchId;
+
   void _onTabsChanged() {
-    if (_controller!.activeIndex != _controller!.previousIndex) {
+    final activeTab = _activeTabId;
+    if (activeTab != _activeTab) {
+      _activeTab = activeTab;
       _didChangeTabRoute(
         _controller!.activeIndex,
         _controller!.previousIndex ?? 0,
@@ -60,6 +74,8 @@ class _AutoTabsRouterBuilderState
       oldWidget.routes,
     )) {
       _controller!.replaceAll(widget.routes, _controller!.activeIndex);
+      // Like the default tabs, a change of the list reports no tab change.
+      _activeTab = _activeTabId;
       widget.onNavigate?.call(_controller!);
     }
   }
