@@ -43,6 +43,11 @@
   running app leave the stack as it was. The pages before the rejected route stayed on the stack unseen, and the next
   change of the stack showed them. A batch that starts on an empty stack, as when the app opens at a link, still keeps
   the pages its guards let through.
+- **FIX**: a page a batch takes off answers the code that opened it only once every guard lets the batch in. When a
+  later guard rejected `pushAll([FirstRoute(), SecondRoute()])` over a page that keeps no history, the page came back
+  on screen, but `push<int>` of it had already finished with `null`, so the result the page closed with reached no one.
+  The page `replacePath` with `includePrefixMatches` replaces, and the pages above its target that a link takes off,
+  did the same when a later guard rejected the batch or its login page was canceled.
 
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes

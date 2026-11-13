@@ -1841,7 +1841,11 @@ abstract class StackRouter extends RoutingController {
     super.dispose();
     pagelessRoutesObserver.dispose();
     activeGuardObserver.dispose();
-    _completeFuturesOf({..._pagesAtLastLeaveReport, ..._pages});
+    _completeFuturesOf({
+      ..._pagesAtLastLeaveReport,
+      ..._pages,
+      ..._takenOffByOpenBatches,
+    });
   }
 
   // Whether [dispose] was called; a navigation that resumes after awaiting a
@@ -1882,6 +1886,15 @@ abstract class StackRouter extends RoutingController {
   // While above 0, a reevaluation takes pages off and puts back the ones its
   // guards keep, so leaves wait for its end.
   var _leaveReportHolds = 0;
+
+  // The pages a batch took off the stack while a guard may still reject a
+  // later route of the batch, which puts them back: their callers wait until
+  // the batch ends, see [_pushAllGuarded].
+  final _takenOffByOpenBatches = <AutoRoutePage<Object?>>{};
+
+  // Whether a batch is putting on the page of a route before its last; a page
+  // taken off meanwhile answers its caller only once the batch ends.
+  var _isBatchStepUndoable = false;
 
   void _markLeaving(
     Iterable<AutoRoutePage<Object?>> pages,
@@ -1957,7 +1970,8 @@ abstract class StackRouter extends RoutingController {
       previousPages.where(
         (page) =>
             !stillShown.contains(page.routeData) &&
-            !shownWaits.contains(page.routeData._popCompleter),
+            !shownWaits.contains(page.routeData._popCompleter) &&
+            !_takenOffByOpenBatches.contains(page),
       ),
     );
   }
@@ -2313,7 +2327,8 @@ abstract class StackRouter extends RoutingController {
     if (pageIndex != -1) {
       final page = _pages.removeAt(pageIndex);
       // Removed pages may be disposed without a pop callback from Navigator.
-      page.routeData.onPopInvoked(null);
+      // A page a batch takes off waits for the batch, which may put it back.
+      if (!_isBatchStepUndoable) page.routeData.onPopInvoked(null);
     }
     _shareTopPathData();
     if (notify) {
@@ -3111,7 +3126,9 @@ abstract class StackRouter extends RoutingController {
         match is ReevaluatableRouteMatch &&
         match.currentPage.routeData._isPoppedByNavigator;
     // What the routes the guards let through did to the stack, undone when a
-    // guard rejects a later route; see [_undoRejectedBatch].
+    // guard rejects a later route; see [_undoRejectedBatch]. The pages they
+    // took off, such as a top page that keeps no history, keep their callers
+    // waiting until the batch ends; see [_endWaitOfTakenOff].
     final added = <AutoRoutePage<Object?>>[];
     final takenOff = <AutoRoutePage<Object?>>[];
     final wasStackEmpty = _pages.isEmpty;
@@ -3126,75 +3143,121 @@ abstract class StackRouter extends RoutingController {
       }
     }
 
-    for (var i = 0; i < routes.length; i++) {
-      if (wasPopped(routes[i])) break;
-      final result = await _canNavigate(
-        routes[i],
-        onFailure: onFailure,
-        pendingRoutes: routes
-            .whereIndexed((index, element) => index > i)
-            .toList(),
-        isReevaluating: isReevaluating,
-      );
-      if (_isDisposed) break;
-      // A later link took over while a guard decided.
-      if (link != null && root._linkCount != link) break;
-      final match = result.route;
-      if (wasPopped(match)) break;
-      if (result.continueNavigation) {
-        // Before anything the route does to the stack once its guards accept.
-        final pagesBefore = List.of(_pages);
-        if (i == 0) onFirstRouteAccepted?.call();
-        if (i != (routes.length - 1)) {
-          if (match is ReevaluatableRouteMatch) {
-            _addReevaluatedPage(match, notify: false);
+    try {
+      for (var i = 0; i < routes.length; i++) {
+        if (wasPopped(routes[i])) break;
+        final result = await _canNavigate(
+          routes[i],
+          onFailure: onFailure,
+          pendingRoutes: routes
+              .whereIndexed((index, element) => index > i)
+              .toList(),
+          isReevaluating: isReevaluating,
+        );
+        if (_isDisposed) break;
+        // A later link took over while a guard decided.
+        if (link != null && root._linkCount != link) break;
+        final match = result.route;
+        if (wasPopped(match)) break;
+        if (result.continueNavigation) {
+          // Before anything the route does to the stack once its guards
+          // accept.
+          final pagesBefore = List.of(_pages);
+          if (i != (routes.length - 1)) {
+            _runUndoableBatchStep(() {
+              if (i == 0) onFirstRouteAccepted?.call();
+              if (match is ReevaluatableRouteMatch) {
+                _addReevaluatedPage(match, notify: false);
+              } else {
+                unawaited(
+                  _addNewPage<T>(match, notify: false, takeovers: takeovers),
+                );
+              }
+            });
           } else {
-            unawaited(
-              _addNewPage<T>(match, notify: false, takeovers: takeovers),
+            if (i == 0) onFirstRouteAccepted?.call();
+            _updateSharedPathData(
+              queryParams: match.queryParams.rawMap,
+              fragment: match.fragment,
+              includeAncestors: updateAncestorsPathData,
             );
+            onLastRouteAdded?.call(match);
+            if (match is ReevaluatableRouteMatch) {
+              _addReevaluatedPage(match, notify: notify);
+              openChildrenOfTakeovers();
+            } else {
+              final completer = _addNewPage<T>(match, notify: notify);
+              openChildrenOfTakeovers();
+              if (pushed != null && !pushed.isCompleted) pushed.complete();
+              // Every guard let the batch through.
+              _endWaitOfTakenOff(takenOff);
+              // This is the last route, so the loop ends here either way.
+              return returnLastRouteCompleter ? await completer : null;
+            }
+          }
+          added.addAll(_pages.whereNot(pagesBefore.contains));
+          final left = pagesBefore.whereNot(_pages.contains).toList();
+          takenOff.addAll(left);
+          _takenOffByOpenBatches.addAll(left);
+
+          if (isReevaluating && !result.reevaluateNext) {
+            break;
           }
         } else {
-          _updateSharedPathData(
-            queryParams: match.queryParams.rawMap,
-            fragment: match.fragment,
-            includeAncestors: updateAncestorsPathData,
-          );
-          onLastRouteAdded?.call(match);
-          if (match is ReevaluatableRouteMatch) {
-            _addReevaluatedPage(match, notify: notify);
-            openChildrenOfTakeovers();
-          } else {
-            final completer = _addNewPage<T>(match, notify: notify);
-            openChildrenOfTakeovers();
-            if (pushed != null && !pushed.isCompleted) pushed.complete();
-            // This is the last route, so the loop ends here either way.
-            return returnLastRouteCompleter ? await completer : null;
+          // A page its guard now closes leaves its history entry to the page
+          // below, as a pop does; a new entry would lead back to the guard.
+          if (match is ReevaluatableRouteMatch<Object?, Object?>) {
+            _markLeaving([match.currentPage], .removed);
+            _pages.remove(match.currentPage);
+            markUrlStateForReplace();
+          } else if (!isReevaluating && !wasStackEmpty) {
+            _undoRejectedBatch(
+              added: added,
+              takenOff: takenOff.whereNot(added.contains).toList(),
+            );
           }
-        }
-        added.addAll(_pages.whereNot(pagesBefore.contains));
-        takenOff.addAll(
-          pagesBefore.whereNot(
-            (page) => _pages.contains(page) || added.contains(page),
-          ),
-        );
-
-        if (isReevaluating && !result.reevaluateNext) {
           break;
         }
-      } else {
-        // A page its guard now closes leaves its history entry to the page
-        // below, as a pop does; a new entry would lead back to the guard.
-        if (match is ReevaluatableRouteMatch<Object?, Object?>) {
-          _markLeaving([match.currentPage], .removed);
-          _pages.remove(match.currentPage);
-          markUrlStateForReplace();
-        } else if (!isReevaluating && !wasStackEmpty) {
-          _undoRejectedBatch(added: added, takenOff: takenOff);
-        }
-        break;
       }
+    } finally {
+      _endWaitOfTakenOff(takenOff);
     }
     return null;
+  }
+
+  // Runs [step], which puts on the page of a route before a batch's last. A
+  // guard may still reject a later route of the batch, which puts back the
+  // pages [step] takes off, so they keep their callers waiting.
+  void _runUndoableBatchStep(VoidCallback step) {
+    _isBatchStepUndoable = true;
+    try {
+      step();
+    } finally {
+      _isBatchStepUndoable = false;
+    }
+  }
+
+  // Ends the wait of the callers of [pages], which a batch took off, once a
+  // guard has decided on every route of the batch. A page whose route data is
+  // back on the stack, as a rejected batch puts it back or a reevaluation
+  // builds it anew with new args, keeps its caller waiting, as does one whose
+  // screen and wait a page on the stack took over, see [_addNewPage]. The
+  // others left for good and answer null, as removed pages do. Clears [pages],
+  // so the call that waits on the batch's last page doesn't hold the pages
+  // that left.
+  void _endWaitOfTakenOff(List<AutoRoutePage<Object?>> pages) {
+    if (pages.isEmpty) return;
+    _takenOffByOpenBatches.removeAll(pages);
+    final stillOn = {for (final page in _pages) page.routeData};
+    final shownWaits = _pendingPopCompletersOf(_pages);
+    _completeFuturesOf(
+      pages.where(
+        (page) =>
+            !stillOn.contains(page.routeData) &&
+            !shownWaits.contains(page.routeData._popCompleter),
+      ),
+    );
+    pages.clear();
   }
 
   // A guard that rejects a route of a batch, such as pushAll or a link with

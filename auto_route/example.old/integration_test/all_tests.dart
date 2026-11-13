@@ -9,6 +9,7 @@ import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_same_route_params_test.dart' as back_same_route_params;
 import 'back_same_url_test.dart' as back_same_url;
 import 'back_twice_test.dart' as back_twice;
+import 'batch_rejected_keeps_caller_test.dart' as batch_rejected_keeps_caller;
 import 'batch_rejected_keeps_stack_test.dart' as batch_rejected_keeps_stack;
 import 'bool_query_param_test.dart' as bool_query_param;
 import 'camel_case_path_test.dart' as camel_case_path;
@@ -248,6 +249,7 @@ void main() {
   back_same_route_params.main();
   back_same_url.main();
   back_twice.main();
+  batch_rejected_keeps_caller.main();
   batch_rejected_keeps_stack.main();
   bool_query_param.main();
   camel_case_path.main();
