@@ -3319,7 +3319,7 @@ abstract class StackRouter extends RoutingController {
   /// Replaces the list of [_pages] with given [routes] result
   /// used by declarative routing widgets
   void updateDeclarativeRoutes(List<PageRouteInfo> routes) {
-    _pages.clear();
+    final matches = <RouteMatch<Object?>>[];
     for (final route in routes) {
       final match = _matchOrReportFailure(route);
       if (match == null) {
@@ -3328,8 +3328,18 @@ abstract class StackRouter extends RoutingController {
       if (match.guards.isNotEmpty) {
         throw FlutterError('Declarative routes can not have guards');
       }
+      matches.add(match);
+    }
+    final previous = List.of(_pages);
+    _pages.clear();
+    for (final match in _keepingDeclarativeScreensOf(previous, matches)) {
       final data = _createRouteData<Object?>(match, routeData);
       _pages.add(data.buildPage());
+      // A kept screen keeps its nested router, which now reads its params
+      // from the new page.
+      for (final ctr in _childControllers) {
+        if (ctr.matchId == data.matchId) ctr.updateRouteData(data);
+      }
     }
     // The app's list builds new pages each time, so only pops are reported.
     _pagesAtLastLeaveReport = List.of(_pages);
@@ -3342,6 +3352,42 @@ abstract class StackRouter extends RoutingController {
       ),
       notify: false,
     );
+  }
+
+  // [matches], where each match the navigator will show in the route of a
+  // page of [previous] has that page's match id, so the screen keeps its
+  // nested router, which is found by match id. Flutter's Navigator updates
+  // the route of a page in place when the new page at its place, counted
+  // from the bottom of the stack and then from the top, is of the same route
+  // (Page.canUpdate), and keeps the route's state.
+  List<RouteMatch<Object?>> _keepingDeclarativeScreensOf(
+    List<AutoRoutePage<Object?>> previous,
+    List<RouteMatch<Object?>> matches,
+  ) {
+    final kept = List.of(matches);
+    bool keepsScreen(int previousIndex, int index) {
+      final data = previous.elementAtOrNull(previousIndex)?.routeData;
+      final match = matches.elementAtOrNull(index);
+      if (data == null || match == null || data.key != match.key) {
+        return false;
+      }
+      kept[index] = match.withId(data.matchId);
+      return true;
+    }
+
+    var bottom = 0;
+    while (keepsScreen(bottom, bottom)) {
+      bottom++;
+    }
+    var previousTop = previous.length - 1;
+    var matchesTop = matches.length - 1;
+    while (previousTop >= bottom &&
+        matchesTop >= bottom &&
+        keepsScreen(previousTop, matchesTop)) {
+      previousTop--;
+      matchesTop--;
+    }
+    return kept;
   }
 
   // async, so a match failure reaches the returned future, not the caller's

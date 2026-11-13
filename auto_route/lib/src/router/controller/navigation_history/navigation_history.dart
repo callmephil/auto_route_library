@@ -217,10 +217,14 @@ abstract class NavigationHistory with ChangeNotifier {
   /// Going back to a page that is still under the current one with the same
   /// route name, as when the same route was pushed twice, needs this first:
   /// navigating to it alone would update the current page in place.
+  ///
+  /// The pages of a router built by `AutoRouter.declarative` stay: the app's
+  /// list decides them, and the navigation reaches the app as its
+  /// `onNavigate`.
   @protected
   void removePagesAbove(LocalKey pageId) {
     final holder = controllerOfPage(pageId);
-    if (holder is StackRouter) {
+    if (holder is StackRouter && !holder.managedByWidget) {
       holder.removeUntil((data) => data.route.id == pageId);
     }
   }

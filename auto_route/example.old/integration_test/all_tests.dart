@@ -32,6 +32,8 @@ import 'declarative_push_message_test.dart' as declarative_push_message;
 import 'declarative_router_key_test.dart' as declarative_router_key;
 import 'declarative_router_of_test.dart' as declarative_router_of;
 import 'declarative_routes_update_test.dart' as declarative_routes_update;
+import 'declarative_update_keeps_nested_router_test.dart'
+    as declarative_update_keeps_nested_router;
 import 'deep_link_parent_build_test.dart' as deep_link_parent_build;
 import 'deferred_and_eager_page_test.dart' as deferred_and_eager_page;
 import 'deferred_page_popped_test.dart' as deferred_page_popped;
@@ -329,6 +331,7 @@ void main() {
   declarative_router_key.main();
   declarative_router_of.main();
   declarative_routes_update.main();
+  declarative_update_keeps_nested_router.main();
   deep_link_parent_build.main();
   deferred_and_eager_page.main();
   deferred_page_popped.main();
