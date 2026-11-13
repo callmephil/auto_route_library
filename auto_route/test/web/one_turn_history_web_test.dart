@@ -211,4 +211,21 @@ void main() {
       neglectWhen: (location) => location == '/a',
     );
   });
+
+  // From A, replaceAll with C and a push of B in the same turn, then the
+  // browser's back button. Was: C got no entry, since the router wrote only
+  // B, over A's entry, so back from B went to Home's entry and put Home on
+  // top of C and B.
+  testWidgets('On web, a replaceAll and a push in one turn get an entry '
+      'each', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.replaceAll(const [NamedRoute('CRoute')]));
+        unawaited(router.push(const NamedRoute('BRoute')));
+      },
+      [(2, '/b', 'CRoute BRoute'), (1, '/c', 'CRoute')],
+      startsOnA: true,
+    );
+  });
 }

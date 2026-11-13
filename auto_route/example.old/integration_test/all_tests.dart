@@ -250,6 +250,7 @@ import 'replace_all_rejected_test.dart' as replace_all_rejected;
 import 'replace_all_shell_on_top_waits_for_guards_test.dart'
     as replace_all_shell_on_top_waits_for_guards;
 import 'replace_all_slow_guard_test.dart' as replace_all_slow_guard;
+import 'replace_all_then_push_test.dart' as replace_all_then_push;
 import 'replace_changed_path_param_test.dart' as replace_changed_path_param;
 import 'replace_path_rejected_test.dart' as replace_path_rejected;
 import 'replace_rejected_test.dart' as replace_rejected;
@@ -560,6 +561,7 @@ void main() {
   rejected_link_keeps_dialog.main();
   rebuild_stack_rejected_link.main();
   rejected_link_url_running.main();
+  replace_all_then_push.main();
   set_query_param_read.main();
   slow_link_builder_order.main();
   prefix_stripper.main();
