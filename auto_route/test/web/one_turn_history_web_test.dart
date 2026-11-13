@@ -36,8 +36,30 @@ RootStackRouter _router() => .build(
       path: '/item',
       builder: (_, data) => Text('Item ${data.args ?? 'none'}'),
     ),
+    NamedRouteDef(
+      name: 'MailRoute',
+      path: '/mail',
+      builder: (_, _) => const AutoRouter(),
+      children: [
+        NamedRouteDef(
+          name: 'InboxRoute',
+          path: '',
+          builder: (_, _) => const Text('InboxRoute'),
+        ),
+        NamedRouteDef(
+          name: 'MessageRoute',
+          path: ':id',
+          builder: (_, _) => const Text('MessageRoute'),
+        ),
+      ],
+    ),
   ],
 );
+
+// Opens A over Home, each step in a turn of its own.
+final _onA = <void Function(RootStackRouter router)>[
+  (router) => unawaited(router.push(const NamedRoute('ARoute'))),
+];
 
 // The browser's entry, counted from [home]'s, its url, and the names on the
 // router's stack.
@@ -47,8 +69,8 @@ RootStackRouter _router() => .build(
   router.stack.map((page) => page.name).join(' '),
 );
 
-// Runs [calls] in one turn from Home, or with A open over Home when
-// [startsOnA], and checks what the browser and the router show after them.
+// Runs [calls] in one turn from Home, after each of [opens] in a turn of its
+// own, and checks what the browser and the router show after them.
 // Then it presses the browser's back button once for each further reading in
 // [expected], and checks those too. The first reading is checked before the
 // browser moves, since a back step from a missing entry would leave the test
@@ -57,7 +79,7 @@ Future<void> _expectAfter(
   WidgetTester tester,
   void Function(RootStackRouter router) calls,
   List<(int, String, String)> expected, {
-  bool startsOnA = false,
+  List<void Function(RootStackRouter router)> opens = const [],
   bool Function(String? location)? neglectWhen,
 }) async {
   final [expectedAfterCalls, ...expectedAfterBacks] = expected;
@@ -65,8 +87,8 @@ Future<void> _expectAfter(
   await pumpRouterConfigApp(tester, router.config(neglectWhen: neglectWhen));
   await settleBrowser(tester);
   final home = browserSerialCount;
-  if (startsOnA) {
-    unawaited(router.push(const NamedRoute('ARoute')));
+  for (final open in opens) {
+    open(router);
     await settleBrowser(tester);
   }
   calls(router);
@@ -177,7 +199,7 @@ void main() {
         ),
       ),
       [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
-      startsOnA: true,
+      opens: _onA,
     );
   });
 
@@ -195,7 +217,7 @@ void main() {
         (1, '/a', 'HomeRoute ARoute'),
         (0, '/', 'HomeRoute'),
       ],
-      startsOnA: true,
+      opens: _onA,
     );
   });
 
@@ -225,7 +247,7 @@ void main() {
         unawaited(router.push(const NamedRoute('BRoute')));
       },
       [(2, '/b', 'CRoute BRoute'), (1, '/c', 'CRoute')],
-      startsOnA: true,
+      opens: _onA,
     );
   });
   // From A, popAndPush of B, then the browser's back button. Was: the step
@@ -240,7 +262,81 @@ void main() {
       tester,
       (router) => unawaited(router.popAndPush(const NamedRoute('BRoute'))),
       [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
-      startsOnA: true,
+      opens: _onA,
+    );
+  });
+  // From A over Home, popUntilRoot and a push of B in one turn.
+  testWidgets('On web, popUntilRoot and a push in one turn leave no entry of '
+      'the popped page', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        router.popUntilRoot();
+        unawaited(router.push(const NamedRoute('BRoute')));
+      },
+      [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
+
+  // From B over A over Home, popUntilRoot and a push of C in one turn.
+  testWidgets('On web, popUntilRoot over two pages and a push in one turn '
+      'show the pushed page', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        router.popUntilRoot();
+        unawaited(router.push(const NamedRoute('CRoute')));
+      },
+      [(1, '/c', 'HomeRoute CRoute'), (0, '/', 'HomeRoute')],
+      opens: [
+        ..._onA,
+        (router) => unawaited(router.push(const NamedRoute('BRoute'))),
+      ],
+    );
+  });
+
+  // From Mail with a message open in its nested router, a pop of the
+  // message and a push of A on the root, in one turn.
+  testWidgets('On web, a pop in a nested router and a push on the root in one '
+      'turn leave no entry of the popped page', (tester) async {
+    StackRouter mail(RootStackRouter router) =>
+        router.innerRouterOf('MailRoute')!;
+    await _expectAfter(
+      tester,
+      (router) {
+        mail(router).pop();
+        unawaited(router.push(const NamedRoute('ARoute')));
+      },
+      [
+        (2, '/a', 'HomeRoute MailRoute ARoute'),
+        (1, '/mail', 'HomeRoute MailRoute'),
+      ],
+      opens: [
+        (router) => unawaited(router.push(const NamedRoute('MailRoute'))),
+        (router) => unawaited(
+          mail(router)
+              .push(const NamedRoute('MessageRoute', params: {'id': '1'})),
+        ),
+      ],
+    );
+  });
+
+  // From A over Home, a replace of A with B and a push of C in one turn.
+  testWidgets('On web, a replace and a push in one turn give each page an '
+      'entry', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.replace(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+      },
+      [
+        (2, '/c', 'HomeRoute BRoute CRoute'),
+        (1, '/b', 'HomeRoute BRoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+      opens: _onA,
     );
   });
 }
