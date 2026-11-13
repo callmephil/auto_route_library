@@ -86,8 +86,17 @@ class _DeclarativeAutoRouterState extends State<_DeclarativeAutoRouter>
     _updateRoutes();
   }
 
-  // The list the routes callback returned last.
+  // The list the routes callback returned last, until a page is popped.
   List<PageRouteInfo>? _routes;
+
+  // A page the navigator popped leaves the stack the router holds, so the
+  // list given before no longer describes it: the next list the app gives
+  // is applied even if it is the same, and a page it still names shows
+  // again, as Flutter's Navigator shows a popped page still in its pages.
+  void _didPop(RouteMatch<Object?> route, Page<Object?> page) {
+    _routes = null;
+    widget.onPopRoute?.call(route, page);
+  }
 
   // Hands the router the app's list when it changed. Done here, before
   // [build] reads the router's state for the scopes, so the widgets that
@@ -123,7 +132,7 @@ class _DeclarativeAutoRouterState extends State<_DeclarativeAutoRouter>
       key: GlobalObjectKey(_controller.hashCode),
       navRestorationScopeId: widget.navRestorationScopeId,
       navigatorObservers: _navigatorObservers,
-      didPop: widget.onPopRoute,
+      didPop: _didPop,
       placeholder: widget.placeholderBuilder,
       routeTraversalEdgeBehavior: widget.traversalEdgeBehavior,
     );

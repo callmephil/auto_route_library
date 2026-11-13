@@ -30,6 +30,8 @@ import 'declarative_initial_routes_test.dart' as declarative_initial_routes;
 import 'declarative_leading_button_after_pop_test.dart'
     as declarative_leading_button_after_pop;
 import 'declarative_on_navigate_once_test.dart' as declarative_on_navigate_once;
+import 'declarative_popped_page_still_listed_test.dart'
+    as declarative_popped_page_still_listed;
 import 'declarative_push_message_test.dart' as declarative_push_message;
 import 'declarative_router_key_test.dart' as declarative_router_key;
 import 'declarative_router_of_test.dart' as declarative_router_of;
@@ -330,6 +332,7 @@ void main() {
   declarative_initial_routes.main();
   declarative_leading_button_after_pop.main();
   declarative_on_navigate_once.main();
+  declarative_popped_page_still_listed.main();
   declarative_push_message.main();
   declarative_router_key.main();
   declarative_router_of.main();

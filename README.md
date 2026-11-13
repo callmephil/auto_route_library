@@ -1251,8 +1251,12 @@ AutoRouter.declarative(
     BookListRoute(),
     if (_selectedBook != null) BookDetailsRoute(id: _selectedBook.id),
   ],
+  // Back closed the details page: take it out of the list.
+  onPopRoute: (route, page) => setState(() => _selectedBook = null),
 );
 ```
+
+The list is the truth: the router shows the pages it names, as Flutter's `Navigator` does with its `pages`. When back closes a page, `onPopRoute` tells the app, and the app takes the page out of its list. A page the list still names comes back at the next rebuild of the widget that builds the list, whatever caused that rebuild.
 
 **Note:** The handler contains a temp-list of pending initial routes which can be read only once.
 

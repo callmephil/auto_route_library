@@ -187,6 +187,8 @@ class AutoRouteNavigatorState extends State<AutoRouteNavigator> {
             onDidRemovePage: (page) {
               if (page is AutoRoutePage) {
                 widget.router.onPopPage(page);
+                // The next list, even the same one, describes the stack anew.
+                _routesSnapshot = null;
                 widget.didPop?.call(page.routeData.route, page);
               }
             },

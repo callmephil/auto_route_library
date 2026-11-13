@@ -81,6 +81,12 @@ class AutoRouter extends StatefulWidget {
   /// Builds a [_DeclarativeAutoRouter] which uses
   /// a declarative list of routes to update navigator stack
   ///
+  /// The list [routes] returns is the truth, as a [Navigator]'s pages are:
+  /// the router shows the pages it names. When back closes a page,
+  /// [onPopRoute] tells the app, which takes the page out of its list. A page
+  /// the list still names comes back at the next rebuild of the widget that
+  /// builds this router.
+  ///
   /// [heroControllerBuilder] works as [AutoRouter.heroControllerBuilder]
   /// does: pass [MaterialApp.createMaterialHeroController] or
   /// `CupertinoApp.createCupertinoHeroController` to fly Heroes between this
