@@ -147,6 +147,7 @@ import 'reevaluation_nested_tabs_test.dart' as reevaluation_nested_tabs;
 import 'reevaluation_redirect_test.dart' as reevaluation_redirect;
 import 'reject_go_back_link_keeps_stack_test.dart'
     as reject_go_back_link_keeps_stack;
+import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
 import 'reload_guard_test.dart' as reload_guard;
 import 'reload_hero_test.dart' as reload_hero;
 import 'remove_last_then_push_same_test.dart' as remove_last_then_push_same;
@@ -163,7 +164,6 @@ import 'replace_all_kept_shell_keeps_its_route_data_test.dart'
 import 'replace_all_on_reevaluation_test.dart' as replace_all_on_reevaluation;
 import 'replace_all_parent_then_child_test.dart'
     as replace_all_parent_then_child;
-import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
 import 'replace_all_rejected_test.dart' as replace_all_rejected;
 import 'replace_all_shell_on_top_waits_for_guards_test.dart'
     as replace_all_shell_on_top_waits_for_guards;
