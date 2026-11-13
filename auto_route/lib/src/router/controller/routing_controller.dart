@@ -4029,10 +4029,10 @@ abstract class StackRouter extends RoutingController {
         // between its guard's answer and its place on the stack.
         final result = answer is ResolverResult ? answer : await answer;
         if (_isDisposed) break;
-        // A later link took over while a guard decided. The pages this
+        // A later link was let in while a guard decided. The pages this
         // link's guard set aside for its own page come back, unless a page
         // was replaced meanwhile, as when the later link replaced the stack.
-        if (link != null && root._linkCount != link) {
+        if (link != null && root._isLinkOvertaken(link)) {
           replacement?.onRejected();
           break;
         }

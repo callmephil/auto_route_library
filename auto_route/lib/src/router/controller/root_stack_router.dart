@@ -23,14 +23,18 @@ abstract class RootStackRouter extends StackRouter {
 
   final _rootBackButtonDispatcher = RootBackButtonDispatcher();
 
-  // Counts the links the delegate opened. A navigation a link starts keeps
-  // the count it started with, and stops at its next guard once a later link
-  // has started: a slow guard of the link the app started at must not open
-  // its page over the pages of a link that came after it.
+  // Counts the links the delegate opened.
   int _linkCount = 0;
 
   // The count of the link whose navigation is starting, while it starts.
   int? _startingLink;
+
+  // The count of the latest link the app let in. A navigation a link starts
+  // stops at its next guard once a link that started after it has been let
+  // in: a slow guard of the link the app started at must not open its page
+  // over the pages of a link that came after it. A link the app turns down
+  // cancels no link before it, as a refused navigation changes nothing.
+  int _letInLink = 0;
 
   // Holds, in the zone a link's navigation runs in, the count of that link.
   static final _linkZone = Object();
@@ -52,7 +56,10 @@ abstract class RootStackRouter extends StackRouter {
     VoidCallback? onAccepted,
   }) {
     final link = _startingLink = ++_linkCount;
-    _linkAccepted = onAccepted;
+    _linkAccepted = () {
+      if (link > _letInLink) _letInLink = link;
+      onAccepted?.call();
+    };
     _acceptingLink = link;
     final Future<void> navigation;
     try {
@@ -74,6 +81,9 @@ abstract class RootStackRouter extends StackRouter {
 
   // The count of the link whose navigation runs now, or null.
   int? get _currentLink => _startingLink ?? Zone.current[_linkZone] as int?;
+
+  // Whether a link that started after [link] has been let in.
+  bool _isLinkOvertaken(int link) => _letInLink > link;
 
   // The step the link whose navigation runs takes once it is let in, for
   // the guarded navigation it starts to run; null for any other navigation

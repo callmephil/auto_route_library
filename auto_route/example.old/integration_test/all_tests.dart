@@ -228,6 +228,8 @@ import 'rejected_child_of_unbuilt_nested_router_test.dart'
 import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
 import 'rejected_link_into_other_tab_test.dart' as rejected_link_into_other_tab;
 import 'rejected_link_keeps_dialog_test.dart' as rejected_link_keeps_dialog;
+import 'rejected_link_keeps_earlier_link_test.dart'
+    as rejected_link_keeps_earlier_link;
 import 'rejected_link_url_running_test.dart' as rejected_link_url_running;
 import 'relative_path_colon_test.dart' as relative_path_colon;
 import 'reload_guard_test.dart' as reload_guard;
@@ -576,6 +578,7 @@ void main() {
   rejected_initial_link_url.main();
   rejected_link_into_other_tab.main();
   rejected_link_keeps_dialog.main();
+  rejected_link_keeps_earlier_link.main();
   rebuild_stack_rejected_link.main();
   rejected_link_url_running.main();
   replace_all_then_push.main();
