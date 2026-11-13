@@ -1286,7 +1286,11 @@ class TabsRouter extends RoutingController {
     onLinkAccepted?.call();
     // A guard may have overridden the route, e.g. its args.
     final updated = update || !identical(result.route, match)
-        ? _updateTabPage(index, result.route)
+        ? _updateTabPage(
+            index,
+            result.route,
+            keepsUnnamedPages: keepsUnnamedPages,
+          )
         : null;
     // Preloads while the old tab is still active, whether or not this notifies.
     final shouldWaitForFrame =
@@ -1794,6 +1798,7 @@ class TabsRouter extends RoutingController {
           final routeToBeUpdated = _updateTabPage(
             pageToUpdateIndex,
             mayUpdateRoute,
+            keepsUnnamedPages: keepsUnnamedPages,
           );
           if (shouldNotify) {
             notifyAll();
@@ -1887,14 +1892,29 @@ class TabsRouter extends RoutingController {
   }
 
   // Puts [mayUpdateRoute] in the page of the tab at [index], and answers the
-  // route the page now holds.
+  // route the page now holds. With [keepsUnnamedPages], see
+  // [_navigateAll], a route that names no children keeps the tab's.
   RouteMatch<Object?> _updateTabPage(
     int index,
-    RouteMatch<Object?> mayUpdateRoute,
-  ) {
+    RouteMatch<Object?> mayUpdateRoute, {
+    bool keepsUnnamedPages = false,
+  }) {
     final oldData = _pages.elementAtOrNull(index)?.routeData;
     if (oldData == null) return mayUpdateRoute;
-    final routeToBeUpdated = mayUpdateRoute.withId(oldData._route.id);
+    var routeToBeUpdated = mayUpdateRoute.withId(oldData._route.id);
+    // navigate to a route object that names no children, for a tab whose
+    // nested router isn't built yet, keeps the children the tab has, such as
+    // the ones the tabs list gave it: they are what the tab shows when it
+    // opens. A built nested router keeps its own pages. A path names the
+    // whole state, so with no children the tab opens with none.
+    final oldChildren = oldData._route.children ?? const [];
+    if (keepsUnnamedPages &&
+        mayUpdateRoute is! ReevaluatableRouteMatch &&
+        (mayUpdateRoute.children ?? const []).isEmpty &&
+        oldChildren.isNotEmpty &&
+        _innerControllerOfMatch(oldData.matchId) == null) {
+      routeToBeUpdated = routeToBeUpdated.copyWith(children: oldChildren);
+    }
     for (final ctr in _childControllers) {
       if (ctr.matchId == oldData.matchId) {
         ctr._isMarkedForDataUpdate = true;
