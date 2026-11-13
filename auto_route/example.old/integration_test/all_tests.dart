@@ -189,6 +189,8 @@ import 'push_all_waits_for_guard_test.dart' as push_all_waits_for_guard;
 import 'push_and_pop_until_async_test.dart' as push_and_pop_until_async;
 import 'push_and_pop_until_flash_test.dart' as push_and_pop_until_flash;
 import 'push_and_pop_until_test.dart' as push_and_pop_until;
+import 'push_and_pop_until_with_name_in_one_turn_test.dart'
+    as push_and_pop_until_with_name_in_one_turn;
 import 'push_and_reevaluate_test.dart' as push_and_reevaluate;
 import 'push_futures_test.dart' as push_futures;
 import 'push_same_route_twice_test.dart' as push_same_route_twice;
@@ -541,6 +543,7 @@ void main() {
   push_and_pop_until_async.main();
   push_and_pop_until_flash.main();
   push_and_pop_until.main();
+  push_and_pop_until_with_name_in_one_turn.main();
   push_and_reevaluate.main();
   push_futures.main();
   push_same_route_twice.main();

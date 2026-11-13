@@ -5367,9 +5367,30 @@ class GuardEntry {
 }
 
 // Stands in for the route of a page the navigator has not built yet, so a
-// [RoutePredicate] can still be asked about the page.
-class _UnshownPageRoute extends Route<Object?> {
+// [RoutePredicate] can still be asked about the page. It is a page route, as
+// the page's own route will be, so [ModalRoute.withName] accepts it by the
+// page's name. It is never handed to a navigator and builds nothing.
+class _UnshownPageRoute extends PageRoute<Object?> {
   new(Page<Object?> page) : super(settings: page);
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  Duration get transitionDuration => .zero;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) => const SizedBox.shrink();
 
   void release() => dispose();
 }
