@@ -2022,6 +2022,11 @@ abstract class StackRouter extends RoutingController {
   /// e.g when the user is no longer authenticated
   /// and there are auth-protected routes in the stack
   ///
+  /// The guards of every page are asked, also those of the pages in a nested
+  /// router, or in a tab, of a page that another page covers. The nested
+  /// routers are asked one after another, from the bottom of the stack up, so
+  /// a guard is asked only once the one before it has answered.
+  ///
   /// While a guard's check runs, its page stays in the stack and on screen,
   /// with the pages above it; only the guard's answer closes it. A guard that
   /// returns without an answer, and without
@@ -3820,6 +3825,23 @@ abstract class StackRouter extends RoutingController {
           _openChildrenInKeptScreens(keptScreens, onFailure: onFailure);
         }
       }
+      if (isReevaluating) {
+        // The nested router of every page that stays, not only of the one on
+        // top: a guarded page in the nested router of a page another page
+        // covers is asked again too, and so is a guarded tab, or it would
+        // show once the user goes back. One router after another, from the
+        // bottom of the stack up, as a stack asks its own pages: a guard is
+        // asked once the one before it has answered, so two guards that send
+        // the user to a login page show one login page, not two.
+        for (final route in routes) {
+          await _reevaluateInside(
+            route == routes.lastOrNull ? mayUpdateRoute : route,
+            onFailure: onFailure,
+          );
+          if (_isDisposed) break;
+        }
+        return await popped;
+      }
       final mayUpdateController = _topInnerControllerOf(mayUpdateRoute.key);
       final newChildren = mayUpdateRoute.children ?? const [];
       // A page that took over this nested router has opened its children in
@@ -3830,21 +3852,35 @@ abstract class StackRouter extends RoutingController {
         return null;
       }
       if (mayUpdateController != null) {
-        // children a guard set while reevaluating are new routes, not pages
-        // being reevaluated
-        final areChildrenOverridden = newChildren.any(
-          (child) => child is! ReevaluatableRouteMatch,
-        );
         return await mayUpdateController._navigateAll(
           newChildren,
           onFailure: onFailure,
-          isReevaluating: isReevaluating && !areChildrenOverridden,
         );
       }
     } else if (!managedByWidget) {
       _reset();
     }
     return await popped;
+  }
+
+  // Asks the guards of the pages in the nested router of the page [route]
+  // reevaluated, if that page is still on the stack and holds a router.
+  Future<void>? _reevaluateInside(
+    RouteMatch<Object?> route, {
+    OnNavigationFailure? onFailure,
+  }) {
+    if (!_pages.any((page) => page.routeData.matchId == route.id)) return null;
+    final children = route.children ?? const [];
+    // children a guard set while reevaluating are new routes, not pages
+    // being reevaluated
+    final areChildrenOverridden = children.any(
+      (child) => child is! ReevaluatableRouteMatch,
+    );
+    return _innerControllerOfMatch(route.id)?._navigateAll(
+      children,
+      onFailure: onFailure,
+      isReevaluating: !areChildrenOverridden,
+    );
   }
 
   // A nested router its guards emptied, such as one a link opened on a guarded
