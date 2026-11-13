@@ -340,6 +340,8 @@ import 'typed_screen_reached_again_test.dart' as typed_screen_reached_again;
 import 'typed_url_test.dart' as typed_url;
 import 'universal_link_test.dart' as universal_link;
 import 'unmatched_deep_link_test.dart' as unmatched_deep_link;
+import 'unopened_tab_children_after_reevaluation_test.dart'
+    as unopened_tab_children_after_reevaluation;
 import 'url_after_tab_switch_test.dart' as url_after_tab_switch;
 import 'url_on_pop_test.dart' as url_on_pop;
 import 'url_on_push_in_shell_test.dart' as url_on_push_in_shell;
@@ -648,6 +650,7 @@ void main() {
   typed_url.main();
   universal_link.main();
   unmatched_deep_link.main();
+  unopened_tab_children_after_reevaluation.main();
   url_after_tab_switch.main();
   url_on_pop.main();
   url_on_push_in_shell.main();

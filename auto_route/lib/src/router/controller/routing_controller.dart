@@ -1642,9 +1642,11 @@ class TabsRouter extends RoutingController {
           ),
         );
       } else {
+        // A tab whose nested router isn't built yet keeps the pages it is to
+        // open with, as a stack page does.
         reMatch = ReevaluatableRouteMatch(
           currentPage: page,
-          originalMatch: match.copyWith(children: const []),
+          originalMatch: match,
         );
       }
       page.routeData._onStartReevaluating(reMatch.originalMatch);

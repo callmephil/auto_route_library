@@ -86,6 +86,46 @@ void main() {
     expect(find.text('HomeRoute'), findsOneWidget);
   }, skip: kIsWeb);
 
+  // A tab not opened since the app was restored keeps its stack when the
+  // guards are reevaluated. Found by the second audit of the library (T2-2).
+  // Steps: push InternalRoute in the first tab and switch to the second tab.
+  // Let the platform end and restore the app. Reevaluate the guards, as a
+  // reevaluateListenable does when the session is read at start. Then open
+  // the first tab.
+  // Was: the first tab showed HomeRoute alone. The reevaluation gave a tab
+  // whose nested router wasn't built yet empty children, and they replaced
+  // the restored pages it was to open with.
+  // Should: InternalRoute shows, as without the reevaluation. Android keeps
+  // the saved back stack of a tab not shown whatever else happens meanwhile.
+  testWidgets('a tab not opened since restoration keeps its stack after a '
+      'reevaluation', (tester) async {
+    await tester.pumpWidget(RestorableRouterApp(buildRouter));
+    await tester.pumpAndSettle();
+    unawaited(
+      RestorableRouterApp.router.replace(
+        const NamedRoute('BottomNavigationRoute'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    unawaited(
+      RestorableRouterApp.router.push(const NamedRoute('InternalRoute')),
+    );
+    await tester.pumpAndSettle();
+    await selectTab(tester, 1);
+    await tester.restartAndRestore();
+    await tester.pumpAndSettle();
+
+    unawaited(RestorableRouterApp.router.reevaluateGuards());
+    await tester.pumpAndSettle();
+    await selectTab(tester, 0);
+
+    expect(find.text('InternalRoute'), findsOneWidget);
+    expect(
+      tabsRouter().stackRouterOfIndex(0)?.stackData.map((data) => data.name),
+      ['HomeRoute', 'InternalRoute'],
+    );
+  }, skip: kIsWeb);
+
   // https://github.com/Milad-Akarie/auto_route_library/issues/2099
   // Go a few pages deep in one tab, switch to another tab and go deeper
   // there, then let the platform end and restore the app. Both tabs should
