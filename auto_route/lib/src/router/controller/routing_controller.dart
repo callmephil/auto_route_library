@@ -2965,8 +2965,20 @@ abstract class StackRouter extends RoutingController {
       pushed: pushed,
       onLastRouteAdded: onLastRouteAdded,
       onFirstRouteAccepted: () {
-        // A page popped while the guards decided has left already.
-        final left = [...?leaving?.where(_pages.contains)];
+        // A page popped while the guards decided has left already. And a
+        // later navigation to the same page, let in while these guards
+        // decided, has put its own page in the anchor's place, with the
+        // anchor's match id: that page leaves for this one, which takes over
+        // its screen, or the stack would hold two pages with one key, which
+        // Flutter's Navigator forbids.
+        final pagesLeaving = leaving ?? const [];
+        final left = _pages
+            .where(
+              (page) =>
+                  pagesLeaving.contains(page) ||
+                  (anchorId != null && page.routeData.matchId == anchorId),
+            )
+            .toList();
         leaving = null;
         _markLeaving(left, .removed);
         _pages.removeWhere(left.contains);
