@@ -783,29 +783,32 @@ class RouteCollection {
   /// returns and empty list if the track is not found
   List<AutoRoute> findPathTo(String routeName) {
     final track = <AutoRoute>[];
-    for (final route in routes) {
-      if (_hasPathTo(route, routeName, track)) {
-        break;
-      }
-    }
+    _hasPathTo(this, routeName, track);
     return track;
   }
 
-  bool _hasPathTo(AutoRoute node, String routeName, List<AutoRoute> track) {
-    if (node.name == routeName) {
-      track.add(node);
-      return true;
-    }
-
-    if (node.hasSubTree) {
-      for (final child in node.children!) {
-        if (_hasPathTo(child, routeName, track)) {
-          track.insert(0, node);
-          return true;
-        }
+  // Walks the collections, not the routes' own children: a route whose path
+  // is generated holds it only in the copy its collection keeps.
+  static bool _hasPathTo(
+    RouteCollection collection,
+    String routeName,
+    List<AutoRoute> track,
+  ) {
+    for (final route in collection.routes) {
+      if (route.name == routeName) {
+        track.add(route);
+        return true;
+      }
+      if (route.hasSubTree &&
+          _hasPathTo(
+            collection.subCollectionOf(route.name),
+            routeName,
+            track,
+          )) {
+        track.insert(0, route);
+        return true;
       }
     }
-
     return false;
   }
 

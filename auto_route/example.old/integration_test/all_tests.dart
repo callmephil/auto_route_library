@@ -122,6 +122,7 @@ import 'nested_absolute_redirect_test.dart' as nested_absolute_redirect;
 import 'nested_back_test.dart' as nested_back;
 import 'nested_browser_back_test.dart' as nested_browser_back;
 import 'nested_did_pop_test.dart' as nested_did_pop;
+import 'nested_generated_path_url_test.dart' as nested_generated_path_url;
 import 'nested_pop_scope_first_page_test.dart' as nested_pop_scope_first_page;
 import 'nested_pop_scope_step_test.dart' as nested_pop_scope_step;
 import 'nested_redirect_before_wildcard_test.dart'
@@ -445,6 +446,7 @@ void main() {
   nested_back.main();
   nested_browser_back.main();
   nested_did_pop.main();
+  nested_generated_path_url.main();
   nested_pop_scope_first_page.main();
   nested_pop_scope_step.main();
   nested_redirect_before_wildcard.main();

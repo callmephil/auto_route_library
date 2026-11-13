@@ -42,7 +42,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('child4'), findsOneWidget);
-      expect(router.currentPath, '/parent-shell/child4');
+      // The url that opens child4: each shell's generated path is in it.
+      expect(router.currentPath, '/parent-shell/parent-shell2/child4');
+      expect(router.matcher.match('/parent-shell/child4'), isNull);
       expect(router.currentHierarchy(), const [
         HierarchySegment('landing'),
         HierarchySegment(
