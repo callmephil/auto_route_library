@@ -15,7 +15,8 @@ import 'router_test_utils.dart';
 // TypeError, so the page fails to build. A value pushed as a number
 // (`queryParams: {'page': 2}`) throws the same way.
 // Should: they return the last value, as Uri.queryParameters does, and a
-// number as its text, as optInt and the other getters already read any value.
+// number as its text. The number and bool getters:
+// repeated_query_key_number_test.dart.
 void main() {
   test('optString and getString return the last value of a repeated key', () {
     const params = Parameters({

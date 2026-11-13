@@ -83,6 +83,9 @@ class Parameters {
 
   /// returns the value corresponding with [key] as nullable `Int`
   /// if null returns [defaultValue]
+  ///
+  /// A key repeated in the url (`?page=1&page=2`) gives its last value, as
+  /// [optString] does; so do [optDouble], [optNum] and [optBool].
   int? optInt(String key, [int? defaultValue]) {
     final param = _rawMap[key];
     if (param == null) {
@@ -90,7 +93,7 @@ class Parameters {
     } else if (param is int) {
       return param;
     }
-    return int.tryParse(param.toString()) ?? defaultValue;
+    return int.tryParse(_stringOf(param) ?? '') ?? defaultValue;
   }
 
   /// returns the value corresponding with [key] as `Int`
@@ -114,7 +117,7 @@ class Parameters {
     } else if (param is double) {
       return param;
     }
-    return double.tryParse(param.toString()) ?? defaultValue;
+    return double.tryParse(_stringOf(param) ?? '') ?? defaultValue;
   }
 
   /// returns the value corresponding with [key] as [double]
@@ -138,7 +141,7 @@ class Parameters {
     } else if (param is num) {
       return param;
     }
-    return num.tryParse(param.toString()) ?? defaultValue;
+    return num.tryParse(_stringOf(param) ?? '') ?? defaultValue;
   }
 
   /// returns the value corresponding with [key] as  [num]
@@ -162,7 +165,7 @@ class Parameters {
   bool? optBool(String key, {bool? defaultValue}) {
     final param = _rawMap[key];
     if (param is bool) return param;
-    switch (param?.toString().toLowerCase()) {
+    switch (_stringOf(param)?.toLowerCase()) {
       case 'true':
         return true;
       case 'false':

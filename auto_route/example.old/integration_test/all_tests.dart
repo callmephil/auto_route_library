@@ -190,6 +190,7 @@ import 'reload_hero_test.dart' as reload_hero;
 import 'remove_last_then_push_same_test.dart' as remove_last_then_push_same;
 import 'remove_route_kept_handle_test.dart' as remove_route_kept_handle;
 import 'remove_where_same_route_test.dart' as remove_where_same_route;
+import 'repeated_query_key_number_test.dart' as repeated_query_key_number;
 import 'repeated_query_key_test.dart' as repeated_query_key;
 import 'replace_all_from_deep_stack_test.dart' as replace_all_from_deep_stack;
 import 'replace_all_guard_page_test.dart' as replace_all_guard_page;
@@ -461,6 +462,7 @@ void main() {
   remove_route_kept_handle.main();
   remove_where_same_route.main();
   repeated_query_key.main();
+  repeated_query_key_number.main();
   replace_all_from_deep_stack.main();
   replace_all_guard_page.main();
   replace_all_keeps_screen_below_top.main();
