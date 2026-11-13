@@ -3644,9 +3644,16 @@ abstract class StackRouter extends RoutingController {
 
   /// Pop the whole stack except for the first entry
   ///
-  /// Right after a push, or as a restored app starts, it waits for the
-  /// navigator to build the pages, as [popUntil] does.
+  /// Pages pushed earlier in the same turn, which the navigator has not built
+  /// yet, leave as this is called, so a page pushed right after it stays. As
+  /// a restored app starts, or while an earlier push waits for its guard, it
+  /// waits for the navigator to build the pages, as [popUntil] does.
   void popUntilRoot() {
+    final isAtRoot = _didPopUnbuiltPagesUntil(
+      (route) => route.isFirst,
+      keepsFirstPage: true,
+    );
+    if (isAtRoot) return;
     _whenPagesBuilt(isScoped: true, () {
       assert(
         _navigatorKey.currentState != null,
@@ -3654,6 +3661,48 @@ abstract class StackRouter extends RoutingController {
       );
       _didPopUntilShowingNoneBetween((route) => route.isFirst);
     });
+  }
+
+  // Closes the pages on top that the navigator has not built yet, as the
+  // pages pushed earlier in the same turn are, from the top down to the first
+  // one [predicate] accepts, and answers whether it accepted one. They leave
+  // as this is called, so a page pushed right after it stays: a pop that
+  // waited for the frame that builds them would close that page with them,
+  // and the navigator can't pop several routes it has only just built.
+  // [predicate] is asked through a stand-in route, as pushAndPopUntil asks
+  // it. With [keepsFirstPage] the first page stays and counts as accepted.
+  //
+  // Does nothing while an earlier push still waits for its turn, and when
+  // the navigator still shows a page that has left the stack, as right after
+  // a replaceAll: the callers then wait for the navigator, as before.
+  bool _didPopUnbuiltPagesUntil(
+    RoutePredicate predicate, {
+    bool keepsFirstPage = false,
+  }) {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null ||
+        _landingPushes.isNotEmpty ||
+        !navigator.widget.pages.every(_pages.contains)) {
+      return false;
+    }
+    var didRemove = false;
+    var isAccepted = false;
+    while (!isAccepted) {
+      final top = _pages.lastOrNull;
+      if (top == null || navigator.widget.pages.contains(top)) break;
+      isAccepted = keepsFirstPage && _pages.length == 1;
+      if (!isAccepted) {
+        final standIn = _UnshownPageRoute(top);
+        isAccepted = predicate(standIn);
+        standIn.release();
+      }
+      if (!isAccepted) {
+        _removeRoute(top.routeData._route, notify: false);
+        didRemove = true;
+      }
+    }
+    if (didRemove) notifyAll(forceUrlRebuild: true);
+    return isAccepted;
   }
 
   // Runs [pop] once the navigators it walks have built every page, as a pop
@@ -3802,9 +3851,15 @@ abstract class StackRouter extends RoutingController {
   /// top until satisfied
   ///
   /// Right after a push, or as a restored app starts, before its first
-  /// frame, the navigator has no route yet for the pages it would close, so
-  /// it waits for the navigator to build them, then pops.
+  /// frame, the navigator has no route yet for the pages it would close.
+  /// With [scoped], pages pushed earlier in the same turn leave as this is
+  /// called, from the top down to the first one [predicate] accepts, so a
+  /// page pushed right after it stays. [predicate] then gets a stand-in page
+  /// route that has the page as its settings, so [ModalRoute.withName] finds
+  /// the page. Otherwise it waits for the navigator to build the pages, then
+  /// pops.
   void popUntil(RoutePredicate predicate, {bool scoped = true}) {
+    if (scoped && _didPopUnbuiltPagesUntil(predicate)) return;
     _whenPagesBuilt(
       isScoped: scoped,
       () => _popUntilNow(predicate, isScoped: scoped),
@@ -5011,10 +5066,13 @@ abstract class StackRouter extends RoutingController {
   /// When no route has [name], it pops down to the first page and keeps it,
   /// instead of leaving no page.
   void popUntilRouteWithName(String name, {bool scoped = true}) {
+    final hasName = ModalRoute.withName(name);
+    final isReached =
+        scoped && _didPopUnbuiltPagesUntil(hasName, keepsFirstPage: true);
+    if (isReached) return;
     _whenPagesBuilt(
       isScoped: scoped,
-      () =>
-          _popUntilKeepingFirstPage(ModalRoute.withName(name), scoped: scoped),
+      () => _popUntilKeepingFirstPage(hasName, scoped: scoped),
     );
   }
 
