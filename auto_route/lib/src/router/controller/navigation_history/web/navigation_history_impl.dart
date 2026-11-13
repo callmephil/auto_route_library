@@ -35,8 +35,8 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   bool _isSteppingBack = false;
 
-  // Whether a step back after a pop waits to be made, to [_appIndex].
-  bool _isStepBackScheduled = false;
+  // The entry a step back after a pop waits to move the browser to, or null.
+  int? _stepBackTarget;
 
   bool _doesAddEntryWithSameUrl = false;
 
@@ -114,12 +114,18 @@ class NavigationHistoryImpl extends NavigationHistory {
   // one write needs, a replace when [index] is the entry the browser stands
   // on, a new entry when it is the next one. Every pair of changes in a frame
   // comes down to these, as the history API's calls one after another do: an
-  // entry recorded earlier in the frame is written now.
+  // entry recorded earlier in the frame is written now, and a pop of the frame
+  // that this entry follows needs no step back of its own.
   UrlState _placeEntry(UrlState newState, int index) {
     _startFrame();
     final pending = _pendingIndex;
     if (pending != null && pending != index) _writeEntryNow(pending);
     final standsOn = _frameBrowserIndex!;
+    if (_stepBackTarget != null && index == standsOn) {
+      // A pop and a push in one turn are a replace for the browser.
+      _stepBackTarget = null;
+      _ownMoveUrl = null;
+    }
     if (index != standsOn && index != standsOn + 1) return newState;
     final replaces = index == standsOn;
     // The router writes a new entry if any change of the frame asked for a
@@ -164,7 +170,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     // The browser stands on the app's entry once the router has written the
     // frames before, though the browser may not show it yet; a pop's step
     // back still to be made leaves it where it is until then.
-    _frameBrowserIndex = _isStepBackScheduled
+    _frameBrowserIndex = _stepBackTarget != null
         ? _currentIndex
         : (_appIndex ?? _currentIndex);
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -223,7 +229,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     // The pops of one popUntil come one after another, before the browser has
     // made the step back of the one before; that step's entry counts as
     // current.
-    final index = isPop && _isStepBackScheduled
+    final index = isPop && _stepBackTarget != null
         ? (_appIndex ?? _currentIndex)
         : _currentIndex;
     // Whether the entry at index i holds the page on top of [state]; two pages
@@ -250,7 +256,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       _appIndex = target;
       _ownMoveUrl = newUrl;
       if (isPop) {
-        _scheduleStepBack();
+        _scheduleStepBack(target);
       } else {
         _history.back();
         // A navigation later in this frame starts from the entry the browser
@@ -271,14 +277,19 @@ class NavigationHistoryImpl extends NavigationHistory {
     rebuildUrl();
   }
 
-  // Steps the browser back to [_appIndex] once the pops being made now are
-  // done, in one move: the browser makes a move later, and reports each one.
-  void _scheduleStepBack() {
-    if (_isStepBackScheduled) return;
-    _isStepBackScheduled = true;
+  // Steps the browser back to [target] once the pops being made now are done,
+  // in one move: the browser makes a move later, and reports each one. A later
+  // pop of the same turn moves the target on; a push of the same turn that
+  // takes the browser's entry needs no step (see [_placeEntry]).
+  void _scheduleStepBack(int target) {
+    final isScheduled = _stepBackTarget != null;
+    _stepBackTarget = target;
+    if (isScheduled) return;
     scheduleMicrotask(() {
-      _isStepBackScheduled = false;
-      final steps = (_appIndex ?? _currentIndex) - _currentIndex;
+      final to = _stepBackTarget;
+      _stepBackTarget = null;
+      if (to == null) return;
+      final steps = to - _currentIndex;
       if (steps < 0) _history.go(steps);
     });
   }

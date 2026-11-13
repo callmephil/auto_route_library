@@ -162,6 +162,7 @@ import 'platform_link_over_launch_page_test.dart'
     as platform_link_over_launch_page;
 import 'pop_and_back_test.dart' as pop_and_back;
 import 'pop_and_push_all_test.dart' as pop_and_push_all;
+import 'pop_and_push_browser_back_test.dart' as pop_and_push_browser_back;
 import 'pop_and_push_from_animating_modal_test.dart'
     as pop_and_push_from_animating_modal;
 import 'pop_right_after_push_test.dart' as pop_right_after_push;
@@ -492,6 +493,7 @@ void main() {
   platform_link_over_launch_page.main();
   pop_and_back.main();
   pop_and_push_all.main();
+  pop_and_push_browser_back.main();
   pop_and_push_from_animating_modal.main();
   pop_right_after_push.main();
   pop_scope_once.main();

@@ -228,4 +228,19 @@ void main() {
       startsOnA: true,
     );
   });
+  // From A, popAndPush of B, then the browser's back button. Was: the step
+  // back after the pop waited a microtask and counted from the app's entry,
+  // which the push in the same turn had already moved, so it made no step and
+  // the router wrote B as a new entry over A's. Back from B then reopened A
+  // on top of B.
+  testWidgets('On web, popAndPush takes the entry of the page it pops', (
+    tester,
+  ) async {
+    await _expectAfter(
+      tester,
+      (router) => unawaited(router.popAndPush(const NamedRoute('BRoute'))),
+      [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
+      startsOnA: true,
+    );
+  });
 }
