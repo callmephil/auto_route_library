@@ -99,7 +99,9 @@ class RouteMatcher {
         }
         // handle redirects
         if (config is RedirectRoute) {
-          final redirectToUri = Uri.parse(
+          // Read as a path, as pushPath reads one: a target whose first
+          // segment holds a ':', such as '12:30', is no scheme.
+          final redirectToUri = _parsePath(
             PageRouteInfo.expandPath(config.redirectTo, match.params.rawMap),
           );
           final redirectFrom = PageRouteInfo.expandPath(
