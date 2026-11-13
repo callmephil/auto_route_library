@@ -68,7 +68,11 @@ class _AutoTabsRouterIndexedStackState
 
   @override
   bool onPreload(int index) {
-    return _indexedStackKey.currentState?.preload(index) == true;
+    return _indexedStackKey.currentState?.preload(
+          index,
+          previous: _controller!.activeIndex,
+        ) ??
+        false;
   }
 
   @override

@@ -27,16 +27,19 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
   final _dummyWidget = const SizedBox.shrink();
   final _initializedPagesTracker = <int, bool>{};
 
-  bool preload(int index) {
+  // [previous] is the tab the router leaves, still active as it preloads.
+  // Not the active index of the last build: two changes in one frame pass
+  // through a tab that was never built as active.
+  bool preload(int index, {required int previous}) {
     if (_initializedPagesTracker[index] == true) {
-      if (index != widget.activeIndex) {
-        _didChangeTabRoute(index, widget.activeIndex);
+      if (index != previous) {
+        _didChangeTabRoute(index, previous);
       }
       return false;
     }
     // A tab not loaded is either lazy and not opened yet, or keeps no state
     // and was dropped while another tab showed: either way it starts anew.
-    _didInitTabRoute(index, widget.activeIndex);
+    _didInitTabRoute(index, previous);
     setState(() => _initializedPagesTracker[index] = true);
     return true;
   }
