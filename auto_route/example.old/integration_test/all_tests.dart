@@ -65,6 +65,8 @@ import 'insert_under_no_history_top_test.dart' as insert_under_no_history_top;
 import 'keep_history_test.dart' as keep_history;
 import 'late_router_deep_link_test.dart' as late_router_deep_link;
 import 'leading_button_drawer_test.dart' as leading_button_drawer;
+import 'leading_button_nested_page_removed_test.dart'
+    as leading_button_nested_page_removed;
 import 'leading_button_pop_test.dart' as leading_button_pop;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
 import 'list_query_param_test.dart' as list_query_param;
@@ -338,6 +340,7 @@ void main() {
   keep_history.main();
   late_router_deep_link.main();
   leading_button_drawer.main();
+  leading_button_nested_page_removed.main();
   leading_button_pop.main();
   link_during_initial_guard.main();
   list_query_param.main();

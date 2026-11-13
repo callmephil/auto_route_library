@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// Signature function to customize the
@@ -108,6 +109,9 @@ class AutoLeadingButton extends StatefulWidget {
 class _AutoLeadingButtonState extends State<AutoLeadingButton> {
   late final PagelessRoutesObserver _pagelessRoutesObserver;
 
+  // Tells the button of each change that can change what canPop says.
+  final _changes = _ChangeRelay();
+
   @override
   void initState() {
     super.initState();
@@ -115,68 +119,82 @@ class _AutoLeadingButtonState extends State<AutoLeadingButton> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    // Rebuilds when a pageless route, such as a dialog, opens or closes.
-    return ListenableBuilder(
-      listenable: _pagelessRoutesObserver,
-      builder: (leadingContext, _) {
-        final scope = RouterScope.of(leadingContext, watch: true);
-        Widget? leading;
-        if (scope.controller.canPop(
-          ignoreChildRoutes: !widget.showIfChildCanPop,
-          ignoreParentRoutes: !widget._shouldShowIfParentCanPop,
-          ignorePagelessRoutes: widget.ignorePagelessRoutes,
-        )) {
-          final topPage = scope.controller.topPage;
-          final shouldUseCloseButton = topPage?.fullscreenDialog ?? false;
-          if (widget.builder != null) {
-            return widget.builder!(
-              leadingContext,
-              shouldUseCloseButton ? .close : .back,
-              () => unawaited(scope.controller.maybePopTop()),
-            );
-          }
-          leading = shouldUseCloseButton
-              ? CloseButton(
-                  key: const ValueKey(LeadingType.close),
-                  color: widget.color,
-                  onPressed: () => unawaited(scope.controller.maybePopTop()),
-                )
-              : BackButton(
-                  key: const ValueKey(LeadingType.back),
-                  color: widget.color,
-                  onPressed: () => unawaited(scope.controller.maybePopTop()),
-                );
-        }
-        final scaffold = Scaffold.maybeOf(leadingContext);
-        if (scaffold?.hasDrawer == true) {
-          if (widget.builder != null) {
-            return widget.builder!(
-              leadingContext,
-              .drawer,
-              _handleDrawerButton,
-            );
-          }
-          leading = IconButton(
-            key: const ValueKey(LeadingType.drawer),
-            icon: const Icon(Icons.menu),
-            iconSize: Theme.of(leadingContext).iconTheme.size ?? 24,
-            onPressed: _handleDrawerButton,
-            tooltip: MaterialLocalizations.of(leadingContext)
-                .openAppDrawerTooltip,
-          );
-        }
+  void dispose() {
+    _changes.dispose();
+    super.dispose();
+  }
 
-        if (widget.builder != null) {
-          return widget.builder!(leadingContext, .noLeading, null);
-        }
-        if (widget._nullableBuilder != null) {
-          return widget._nullableBuilder!(leadingContext, leading);
-        }
-        return leading ??
-            const SizedBox.shrink(key: ValueKey(LeadingType.noLeading));
-      },
+  @override
+  Widget build(BuildContext context) {
+    final scope = RouterScope.of(context, watch: true);
+    return ListenableBuilder(
+      listenable: _changes,
+      builder: (leadingContext, _) => _buildLeading(leadingContext, scope),
     );
+  }
+
+  Widget _buildLeading(BuildContext context, RouterScope scope) {
+    // canPop also reads the routers nested in the page and the routers
+    // around it. The button rebuilds when the pages of any router change, as
+    // each change reaches the root router, and when a pageless route, such
+    // as a dialog, opens or closes in its own router. The root is found
+    // through the app's Router, so a button built around a stand-in router,
+    // as in a widget test, reads nothing more of it.
+    _changes.listenTo({
+      _pagelessRoutesObserver,
+      if (Router.maybeOf(context)?.routerDelegate
+          case final AutoRouterDelegate delegate)
+        delegate.controller,
+    });
+    Widget? leading;
+    if (scope.controller.canPop(
+      ignoreChildRoutes: !widget.showIfChildCanPop,
+      ignoreParentRoutes: !widget._shouldShowIfParentCanPop,
+      ignorePagelessRoutes: widget.ignorePagelessRoutes,
+    )) {
+      final topPage = scope.controller.topPage;
+      final shouldUseCloseButton = topPage?.fullscreenDialog ?? false;
+      if (widget.builder != null) {
+        return widget.builder!(
+          context,
+          shouldUseCloseButton ? .close : .back,
+          () => unawaited(scope.controller.maybePopTop()),
+        );
+      }
+      leading = shouldUseCloseButton
+          ? CloseButton(
+              key: const ValueKey(LeadingType.close),
+              color: widget.color,
+              onPressed: () => unawaited(scope.controller.maybePopTop()),
+            )
+          : BackButton(
+              key: const ValueKey(LeadingType.back),
+              color: widget.color,
+              onPressed: () => unawaited(scope.controller.maybePopTop()),
+            );
+    }
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold?.hasDrawer == true) {
+      if (widget.builder != null) {
+        return widget.builder!(context, .drawer, _handleDrawerButton);
+      }
+      leading = IconButton(
+        key: const ValueKey(LeadingType.drawer),
+        icon: const Icon(Icons.menu),
+        iconSize: Theme.of(context).iconTheme.size ?? 24,
+        onPressed: _handleDrawerButton,
+        tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+      );
+    }
+
+    if (widget.builder != null) {
+      return widget.builder!(context, .noLeading, null);
+    }
+    if (widget._nullableBuilder != null) {
+      return widget._nullableBuilder!(context, leading);
+    }
+    return leading ??
+        const SizedBox.shrink(key: ValueKey(LeadingType.noLeading));
   }
 
   void _handleDrawerButton() {
@@ -253,4 +271,47 @@ enum LeadingType {
 
   /// Helper to check if this instance is [noLeading]
   bool get isNoLeading => this == noLeading;
+}
+
+// Tells its listeners of a change in any of the listenables it listens to.
+// A navigator can report a change while the app builds, when a widget
+// outside that navigator can't be marked to build again: such a change is
+// told after the frame.
+class _ChangeRelay extends ChangeNotifier {
+  final _sources = <Listenable>{};
+  bool _isDisposed = false;
+
+  // Listens to [sources] from now on, and no longer to the others.
+  void listenTo(Set<Listenable> sources) {
+    for (final gone in _sources.difference(sources)) {
+      gone.removeListener(_relay);
+    }
+    for (final added in sources.difference(_sources)) {
+      added.addListener(_relay);
+    }
+    _sources
+      ..clear()
+      ..addAll(sources);
+  }
+
+  void _relay() {
+    final binding = SchedulerBinding.instance;
+    if (binding.schedulerPhase == .persistentCallbacks) {
+      binding.addPostFrameCallback((_) {
+        if (!_isDisposed) notifyListeners();
+      });
+    } else {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    for (final source in _sources) {
+      source.removeListener(_relay);
+    }
+    _sources.clear();
+    super.dispose();
+  }
 }
