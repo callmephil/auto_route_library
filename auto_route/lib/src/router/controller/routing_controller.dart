@@ -4907,6 +4907,43 @@ class NestedStackRouter extends StackRouter {
     return true;
   }
 
+  // Opens [routes], the pages a link or a navigation named for this router
+  // before it was built. When a guard keeps the last of them out, the router
+  // shows the pages below it that were let in, or, with none, the page it
+  // opens with when it is named no pages, its first: a nested router is
+  // never left blank where it has a page to show, as it isn't when a
+  // reevaluation empties it, see [_reopenInitialRoutesIfEmptied], and
+  // Flutter's Navigator takes no empty list of pages. The navigator is told,
+  // since the pages below went on without a word, and the url, which named
+  // the page that was kept out, names the page on screen, in the same
+  // history entry: on the web a canceled navigation leaves the url of the
+  // document on screen.
+  Future<void> _openPendingRoutes(List<RouteMatch<Object?>> routes) async {
+    var isLastPageOn = false;
+    await _pushAllGuarded(
+      routes,
+      returnLastRouteCompleter: false,
+      onLastRouteAdded: (_) => isLastPageOn = true,
+    );
+    if (isLastPageOn || _isDisposed) return;
+    // The pages kept out are the ones this router opens with, as when its
+    // first page is the guarded one: it has no other page to show, and its
+    // guard is not asked a second time.
+    final first = matcher.match('');
+    final isFirstPageKeptOut =
+        first != null &&
+        const ListEquality<String>().equals(
+          [for (final route in first) route.name],
+          [for (final route in routes) route.name],
+        );
+    if (isFirstPageKeptOut) return;
+    // Before the first page goes on, whose url would else be a new entry
+    // after the one of the page that was kept out.
+    markUrlStateForReplace();
+    await _reopenInitialRoutesIfEmptied();
+    if (!_isDisposed) notifyAll(forceUrlRebuild: true);
+  }
+
   @internal
   /// Pushes the initial routes to the stack.
   ///
@@ -4922,9 +4959,7 @@ class NestedStackRouter extends StackRouter {
             .map((e) => e.toPageRouteInfo())
             .toList();
       } else {
-        unawaited(
-          _pushAllGuarded(initialRoutes, returnLastRouteCompleter: false),
-        );
+        unawaited(_openPendingRoutes(initialRoutes));
       }
       _routeData.pendingChildren.clear();
     } else if (!managedByWidget) {

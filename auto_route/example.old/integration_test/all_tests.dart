@@ -223,6 +223,8 @@ import 'reevaluation_nested_tabs_test.dart' as reevaluation_nested_tabs;
 import 'reevaluation_redirect_test.dart' as reevaluation_redirect;
 import 'reject_go_back_link_keeps_stack_test.dart'
     as reject_go_back_link_keeps_stack;
+import 'rejected_child_of_unbuilt_nested_router_test.dart'
+    as rejected_child_of_unbuilt_nested_router;
 import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
 import 'rejected_link_keeps_dialog_test.dart' as rejected_link_keeps_dialog;
 import 'rejected_link_url_running_test.dart' as rejected_link_url_running;
@@ -568,6 +570,7 @@ void main() {
   replace_all_kept_shell_keeps_its_route_data.main();
   replace_all_on_reevaluation.main();
   replace_all_parent_then_child.main();
+  rejected_child_of_unbuilt_nested_router.main();
   rejected_initial_link_url.main();
   rejected_link_keeps_dialog.main();
   rebuild_stack_rejected_link.main();
