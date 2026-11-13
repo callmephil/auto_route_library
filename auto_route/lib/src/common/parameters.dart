@@ -78,11 +78,13 @@ class Parameters {
     return val;
   }
 
-  // The router keeps a repeated query key as a list of its values.
+  // The router keeps a repeated query key as a list of its values; a route
+  // pushed in code may hold any Iterable, such as a Set, which the url writes
+  // as a repeated key too.
   static String? _stringOf(Object? value) => switch (value) {
     null => null,
     final String text => text,
-    final List<Object?> values => values.lastOrNull?.toString(),
+    final Iterable<Object?> values => values.lastOrNull?.toString(),
     _ => value.toString(),
   };
 
@@ -236,7 +238,7 @@ class Parameters {
         'Failed to parse [List<String>] $key value from ${_rawText(key)}',
       );
     }
-    if (val is List) {
+    if (val is Iterable) {
       return val.map((e) => e.toString()).toList();
     }
     return [val.toString()];
@@ -249,7 +251,7 @@ class Parameters {
     if (val == null) {
       return defaultValue;
     }
-    if (val is List) {
+    if (val is Iterable) {
       return val.map((e) => e.toString()).toList();
     }
     return [val.toString()];
