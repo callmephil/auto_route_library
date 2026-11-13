@@ -4384,11 +4384,13 @@ abstract class StackRouter extends RoutingController {
         // asked once the one before it has answered, so two guards that send
         // the user to a login page show one login page, not two.
         for (final route in routes) {
+          // Also before the first: the router may have left while a guard
+          // of its own pages decided.
+          if (_isDisposed) break;
           await _reevaluateInside(
             route == routes.lastOrNull ? mayUpdateRoute : route,
             onFailure: onFailure,
           );
-          if (_isDisposed) break;
         }
         return await popped;
       }
