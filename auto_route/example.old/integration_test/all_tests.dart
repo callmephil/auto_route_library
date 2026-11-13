@@ -270,6 +270,8 @@ import 'screen_reached_again_keeps_caller_test.dart'
 import 'screen_reached_again_keeps_leave_listener_test.dart'
     as screen_reached_again_keeps_leave_listener;
 import 'set_query_param_test.dart' as set_query_param;
+import 'sign_in_closes_awaited_redirect_test.dart'
+    as sign_in_closes_awaited_redirect;
 import 'simultaneous_taps_test.dart' as simultaneous_taps;
 import 'slow_link_builder_order_test.dart' as slow_link_builder_order;
 import 'stack_emptied_under_dialog_test.dart' as stack_emptied_under_dialog;
@@ -563,6 +565,7 @@ void main() {
   screen_reached_again_keeps_caller.main();
   screen_reached_again_keeps_leave_listener.main();
   set_query_param.main();
+  sign_in_closes_awaited_redirect.main();
   simultaneous_taps.main();
   stack_emptied_under_dialog.main();
   state_after_reload.main();

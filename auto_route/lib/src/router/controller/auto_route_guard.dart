@@ -362,6 +362,10 @@ class NavigationResolver {
         !_router._pages.contains(reevaluatedRoute.currentPage)) {
       _router._pages.add(reevaluatedRoute.currentPage);
     }
+    // The guard's check is over: from here on it waits behind [target],
+    // whether its call returns now or awaits this redirect until [target]
+    // closes.
+    _endCheck();
     await _router._redirect(
       target,
       onFailure: onFailure,
@@ -465,7 +469,18 @@ class NavigationResolver {
   /// The future that will be completed by [next], [reject] or [overrideNext]
   Future<ResolverResult> get future => _completer.future;
 
+  // Pending while the guard runs its check: from its call until the call
+  // returns or the guard starts a redirect, whichever comes first. A guard
+  // that awaits its redirect returns only once the page it shows has closed,
+  // and is no longer checking meanwhile: a reevaluation asks it again, as it
+  // asks one that started its redirect and returned.
   Completer<void>? _waitingCompleter;
+
+  void _endCheck() {
+    final waiting = _waitingCompleter;
+    _waitingCompleter = null;
+    waiting?.complete();
+  }
 
   /// Checks the provided [guard] and waits for it to complete
   ///
@@ -525,8 +540,8 @@ class NavigationResolver {
               zoneValues: {_askedZone: this},
             ));
     } finally {
-      _waitingCompleter = null;
-      waiting.complete();
+      // Not when a redirect ended this check and a later one began meanwhile.
+      if (identical(_waitingCompleter, waiting)) _endCheck();
     }
     if (!isResolved) onLeftUndecided?.call(isRedirecting: _isRedirecting);
     return await future;

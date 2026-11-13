@@ -1754,6 +1754,8 @@ While a guard's check runs, for example while it awaits a request, its page stay
 
 If the listenable notifies again while a guard is still running its check, the guards are asked once more when that round ends, so the last change wins. A change during that extra round isn't followed by another, so a guard that notifies the listenable from its own check doesn't run without end.
 
+A guard that waits behind the page it redirected to, such as a login, is asked again too when the listenable notifies, whether it awaits `redirectUntil` or not. Once the user is logged in it calls `resolver.next()`, which closes that page.
+
 **Note**: When the Stack is re-evaluated, the whole existing hierarchy will be re-pushed, so if you want to stop re-evaluating routes at some point, pass `reevaluateNext: false`: `resolver.overrideNext(reevaluateNext: false)` continues without re-pushing the routes after the current one, and `resolver.reject(reevaluateNext: false)` stops.
 
 ```dart
