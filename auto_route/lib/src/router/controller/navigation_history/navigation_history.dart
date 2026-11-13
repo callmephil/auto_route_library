@@ -84,7 +84,9 @@ abstract class NavigationHistory with ChangeNotifier {
   /// or now holds a different url, such as one typed into the address bar.
   /// Returns an empty list when the entry's page is still open and is now
   /// the top page: there is nothing to navigate to, and navigating to it
-  /// again would run its guards again. Always null on native platforms.
+  /// again would run its guards again. The app then takes over the entry's
+  /// [pathState], as when the browser's back button leaves an entry made by
+  /// [pushPathState]. Always null on native platforms.
   @internal
   List<RouteMatch<Object?>>? routesOfBrowserEntry(UrlState configuration) =>
       null;
@@ -110,7 +112,10 @@ abstract class NavigationHistory with ChangeNotifier {
   /// [AutoRouterDelegate.setNewRoutePath] asks this before following a route
   /// the browser reported, so that a page that refuses to be popped, through
   /// a PopScope, can refuse the browser's back button too.
-  /// Always false on native platforms, which have no browser.
+  /// False when that entry holds the page the app shows, as the one before an
+  /// entry made by [pushPathState]: going back to it closes no page, so there
+  /// is nothing to refuse. Always false on native platforms, which have no
+  /// browser.
   @internal
   bool get isBrowserBehindApp => false;
 

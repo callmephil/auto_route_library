@@ -67,14 +67,18 @@ class NavigationHistoryImpl extends NavigationHistory {
       _entries[browserIndex] = newState;
       _appIndex = browserIndex;
     } else if (notify && (isNewUrl || isPushedOverSameUrl)) {
-      // The router writes the new url after this frame: over the current entry
-      // for a replace, otherwise as a new entry, which drops those after it.
-      final index =
-          (_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1);
-      _entries.removeWhere((key, _) => key >= index);
-      _entries[index] = newState;
-      _appIndex = index;
+      _recordEntryToWrite(newState, browserIndex);
     }
+  }
+
+  // The router writes [newState] after this frame: over the current entry for
+  // a replace, otherwise as a new entry, which drops those after it.
+  void _recordEntryToWrite(UrlState newState, int browserIndex) {
+    final index =
+        (_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1);
+    _entries.removeWhere((key, _) => key >= index);
+    _entries[index] = newState;
+    _appIndex = index;
   }
 
   @override
@@ -143,6 +147,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       // The same page can show another url, as when its query params changed
       // in place; then the entry still needs to be shown.
       if (router.topMatch.id == pageId && _isSameUrl(urlState.url, entry.url)) {
+        _takeOverEntryState(configuration.pathState);
         return const [];
       }
     }
@@ -178,7 +183,17 @@ class NavigationHistoryImpl extends NavigationHistory {
   @override
   bool get isBrowserBehindApp {
     final appIndex = _appIndex;
-    return appIndex != null && _currentIndex < appIndex;
+    final index = _currentIndex;
+    if (appIndex == null || index >= appIndex) return false;
+    // An entry of the page on top, as one before a pushPathState entry, closes
+    // no page: like the browser moving between two states of one document, it
+    // asks no PopScope.
+    final entry = _entries[index];
+    final pageId = urlState.topMatch?.id;
+    return entry == null ||
+        pageId == null ||
+        entry.topMatch?.id != pageId ||
+        !_isSameUrl(entry.url, urlState.url);
   }
 
   @override
@@ -265,7 +280,28 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   @override
   void pushPathState(Object? state) {
-    onNewUrlState(urlState.copyWith(pathState: state));
+    final newState = urlState.copyWith(pathState: state);
+    if (newState == urlState) return;
+    final browserIndex = _currentIndex;
+    onNewUrlState(newState);
+    // The url stays the same, so onNewUrlState records no entry for it.
+    _recordEntryToWrite(newState, browserIndex);
+  }
+
+  // The browser moved to an entry whose page the app already shows, as its
+  // back button does from an entry made by [pushPathState]: the app takes
+  // over the entry's state, [entryState], null included, so the router
+  // reports what the entry holds and the browser keeps the entries ahead of
+  // it.
+  void _takeOverEntryState(Object? entryState) {
+    final shown = UrlState(
+      urlState.uri,
+      urlState.segments,
+      pathState: entryState,
+    );
+    super.onNewUrlState(shown, notify: false);
+    _entries[_currentIndex] = shown;
+    _appIndex = _currentIndex;
   }
 
   @override
