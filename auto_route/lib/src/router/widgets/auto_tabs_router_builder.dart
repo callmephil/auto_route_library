@@ -89,6 +89,7 @@ class _AutoTabsRouterBuilderState
       oldWidget.routes,
     )) {
       final left = _tabRouteAt(_controller!.activeIndex);
+      final shownBefore = _activeTab;
       _controller!.replaceAll(widget.routes, _controller!.activeIndex);
       // Like the other tabs, a change of the list reports the tab it shows,
       // when it shows another.
@@ -102,7 +103,7 @@ class _AutoTabsRouterBuilderState
         _controller!.activeIndex,
         isBuiltNow: _opensFirstTime(_activeTab),
       );
-      widget.onNavigate?.call(_controller!);
+      if (_activeTab != shownBefore) widget.onNavigate?.call(_controller!);
     }
   }
 

@@ -13,15 +13,17 @@ import '../router_test_utils.dart';
 // rejects. First test: on TabA, choose TabC. Second test: open TabB, then
 // navigate to TabB again with a query parameter, as a link into the open
 // tab does. Third test: open TabB, rebuild the tabs with [TabB, TabA], so
-// TabB moves to index 0, then give TabB a query parameter.
+// TabB moves to index 0, then give TabB a query parameter. Last tests: open
+// TabB, then rebuild the tabs without TabC, or without TabB, so TabA shows.
 // Was: didChangeTabRoute(TabA from TabA) after the rejection, and a second
 // didChangeTabRoute(TabB from TabA) for the new params, with onNavigate
-// each time. The builder reported on every notification of the tabs router
-// while activeIndex differed from previousIndex, which holds from the first
-// change on, and before it too. A builder that remembered the index it
-// reported still took the moved TabB for another tab. The third test runs
-// the builder only: what the default tabs report on a change of the list
-// is their own fix.
+// each time, and onNavigate on every change of the tabs list. The builder
+// reported on every notification of the tabs router while activeIndex
+// differed from previousIndex, which holds from the first change on, and
+// before it too. A builder that remembered the index it reported still took
+// the moved TabB for another tab. The third and last tests run the builder
+// only: what the default tabs report on a change of the list is their own
+// fix, and they have no onNavigate.
 // Native behavior this holds to: the doc of
 // AutoRouterObserver.didChangeTabRoute, "called when tab route
 // reactivates", and UIKit calls tabBarController(_:didSelect:) once per
@@ -93,11 +95,11 @@ void main() {
         ..setActiveIndex(1);
       await tester.pumpAndSettle();
       _events.clear();
+      _navigateCalls = 0;
 
       names.value = ['TabB', 'TabA'];
       await tester.pumpAndSettle();
       expect((tabs.activeIndex, tabs.current.name), (0, 'TabB'));
-      _navigateCalls = 0;
       unawaited(
         router.navigate(
           const NamedRoute(
@@ -115,6 +117,27 @@ void main() {
       expect(_navigateCalls, 0);
     },
   );
+
+  for (final (what, shown, calls) in const [
+    ('a tab not on screen leaves the list', ['TabA', 'TabB'], 0),
+    ('the open tab leaves the list', ['TabA', 'TabC'], 1),
+  ]) {
+    testWidgets('builder: $what: onNavigate is called $calls times', (
+      tester,
+    ) async {
+      final names = _allTabs();
+      final router = _buildRouter(.builder, names);
+      await pumpRouterApp(tester, router);
+      router.innerRouterOf<TabsRouter>('HomeRoute')!.setActiveIndex(1);
+      await tester.pumpAndSettle();
+      _navigateCalls = 0;
+
+      names.value = shown;
+      await tester.pumpAndSettle();
+
+      expect(_navigateCalls, calls);
+    });
+  }
 }
 
 enum _Tabs { builder, indexedStack }
