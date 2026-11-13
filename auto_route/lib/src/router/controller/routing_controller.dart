@@ -2967,6 +2967,10 @@ abstract class StackRouter extends RoutingController {
     final result = answer is ResolverResult ? answer : await answer;
     if (_isDisposed) return null;
     if (result.continueNavigation) {
+      // Before [onAccepted]: when this page is one a guard of replaceAll
+      // shows, the pages to replace leave first, so a redirect with replace
+      // finds none of them to replace and a rejection brings back them all.
+      NavigationResolver._reportPageGoesOn(this);
       onAccepted?.call();
       _updateSharedPathData(
         queryParams: route.rawQueryParams,
@@ -3110,13 +3114,13 @@ abstract class StackRouter extends RoutingController {
   /// own.
   ///
   /// The pages are replaced in one step, once the guards of every one of
-  /// [routes] have let it through. While a guard runs its check the stack
-  /// stays as it is, and a guard that rejects one of [routes] rejects them
-  /// all: the stack stays as it was. A guard that returns without an answer
-  /// and shows a page of its own, such as a login with
-  /// [NavigationResolver.redirectUntil], takes the pages off for it: back
-  /// from that page shows none of them, and they come back only if the guard
-  /// then rejects.
+  /// [routes] have let it through. While a guard decides the stack stays as
+  /// it is, and a guard that rejects one of [routes] rejects them all: the
+  /// stack stays as it was. A page that a guard shows before it
+  /// answers, such as a login with [NavigationResolver.redirectUntil], takes
+  /// the place of the pages as it goes on: back from that page shows none of
+  /// them, and they come back only if the guard then rejects. A guard that
+  /// shows no page keeps them until it answers.
   ///
   /// If [onFailure] is given, navigation errors are passed to it; otherwise
   /// they are thrown. A guard's rejection reaches it as a
@@ -3151,19 +3155,25 @@ abstract class StackRouter extends RoutingController {
   }
 
   // Replaces every page with pages for [matches], once every guard has let
-  // them through. While a guard's own call runs, such as one that awaits a
-  // request, the stack stays as it is on screen, as Flutter's Router keeps
+  // them through. While a guard decides, such as one that awaits a request,
+  // the stack stays as it is on screen, as Flutter's Router keeps
   // building the current pages while its delegate waits and iOS swaps a
   // navigation stack in one step (setViewControllers): no blank screen, and
   // a guard that rejects one of [matches] rejects them all and leaves the
   // pages with their State and the waits of the code that opened them.
   //
-  // A guard that returns without an answer holds the navigation, usually
-  // behind a page of its own, such as a login it shows with redirectUntil.
-  // That page takes the place of the pages to replace: they leave then, so
-  // back from the guard's page never shows them, as Android finishes the old
-  // screens of a task it clears before the new one starts. They come back
-  // only if the guard then rejects.
+  // The pages to replace stay until a page goes on the stack in their place.
+  // That is one of [matches], or before that a page a guard shows while it
+  // has not answered, such as a login it shows with redirectUntil, awaited or
+  // not, or pushes itself: the pages leave in the step in which that page
+  // goes on, not before, as while the guard's page waits for guards of its
+  // own, and not after, so back from it never shows them, its leave report
+  // names them as replaced, and a redirect with replace finds none of them
+  // to replace. Android finishes the old screens of a task it clears as the
+  // new one starts. A guard that shows no page, as one that asks in a dialog
+  // or answers later from a callback, keeps them until it answers. They come
+  // back only if the guard then rejects. A page the app itself pushes while
+  // a guard decides goes on over them, and is replaced with them.
   //
   // The screens the new pages keep are told as the pages are replaced, from
   // the pages the navigator shows at that moment.
@@ -3181,7 +3191,9 @@ abstract class StackRouter extends RoutingController {
       matches,
       onFailure: onFailure,
       replacement: _PagesReplacement(
-        onGuardHolds: () {
+        onGuardShowsPage: (router) {
+          // A page on another router is not in their place.
+          if (!identical(router, this)) return;
           final leaving = [...?pagesBefore?.where(_pages.contains)];
           if (leaving.isEmpty) return;
           setAside = [...setAside, ...leaving];
@@ -3746,18 +3758,21 @@ abstract class StackRouter extends RoutingController {
               .whereIndexed((index, element) => index > i)
               .toList(),
           isReevaluating: isReevaluating,
-          // A guard that returns without an answer holds its page back until
-          // it gives one, as it holds back a page being pushed: the page
-          // waits off the stack, with the pages above it, and goes back on
-          // once the guard lets it through. The navigator isn't told, so the
-          // screen stays unless the guard shows a page of its own. A page
-          // under the guard's redirect stays, see redirectUntil. A guard of
-          // replaceAll that holds takes the pages to replace off, see
-          // [_replaceAllMatches].
-          onLeftUndecided: ({required isRedirecting}) {
-            if (!isReevaluating) return replacement?.onGuardHolds();
-            if (!isRedirecting) takeOffPagesFrom(i);
-          },
+          // A guard asked again that returns without an answer holds its
+          // page back until it gives one, as it holds back a page being
+          // pushed. The page waits off the stack, with the pages above it,
+          // and goes back on once the guard lets it through. The navigator
+          // isn't told, so the screen stays unless the guard shows a page of
+          // its own. A page under the guard's redirect stays, see
+          // redirectUntil.
+          onLeftUndecided: isReevaluating
+              ? ({required isRedirecting}) {
+                  if (!isRedirecting) takeOffPagesFrom(i);
+                }
+              : null,
+          // The page a guard of replaceAll shows takes the place of the
+          // pages to replace, see [_replaceAllMatches].
+          onShowsPage: isReevaluating ? null : replacement?.onGuardShowsPage,
         );
         // No pause when every guard answers in its own call: the pages of a
         // batch the app calls are on the stack as the call returns, and a
@@ -3906,6 +3921,9 @@ abstract class StackRouter extends RoutingController {
     OnNavigationFailure? onFailure,
     List<RouteData<Object?>>? takeovers,
   }) {
+    // The page of a guard that decides about a replaceAll takes the place of
+    // the pages to replace, which leave first, see [_replaceAllMatches].
+    NavigationResolver._reportPageGoesOn(this);
     final shownTop = _pages.lastOrNull?.routeData;
     // A top page that keeps no history leaves when a page goes on above it,
     // not when one goes in below it, as insert does: Flutter's Navigator
@@ -4100,6 +4118,7 @@ abstract class StackRouter extends RoutingController {
     List<RouteMatch<Object?>> pendingRoutes = const [],
     bool isReevaluating = false,
     _GuardHoldsCallback? onLeftUndecided,
+    ValueChanged<StackRouter>? onShowsPage,
   }) {
     // Moves on as each guard is asked, at once or later.
     final guards = [...root.guards, ...route.guards].iterator;
@@ -4143,6 +4162,7 @@ abstract class StackRouter extends RoutingController {
           guard,
           this,
           onLeftUndecided: onLeftUndecided,
+          onShowsPage: onShowsPage,
         );
         final answer = resolver._result;
         if (answer == null) {
@@ -4745,13 +4765,14 @@ typedef _GuardHoldsCallback = void Function({required bool isRedirecting});
 // What replaceAll does to the pages it replaces, as its guards answer.
 class _PagesReplacement {
   const new({
-    required this.onGuardHolds,
+    required this.onGuardShowsPage,
     required this.onAllAccepted,
     required this.onRejected,
   });
 
-  // A guard returned without an answer: it holds the navigation.
-  final VoidCallback onGuardHolds;
+  // A guard that has not answered puts a page of its own on the stack of the
+  // given router, right after this returns.
+  final ValueChanged<StackRouter> onGuardShowsPage;
 
   // Every guard let the routes through; see [_RoutesChange].
   final _RoutesChange onAllAccepted;
@@ -4764,7 +4785,7 @@ class _PagesReplacement {
   _PagesReplacement thenOnAllAccepted(
     ValueChanged<List<RouteMatch<Object?>>> then,
   ) => .new(
-    onGuardHolds: onGuardHolds,
+    onGuardShowsPage: onGuardShowsPage,
     onRejected: onRejected,
     onAllAccepted: (accepted) {
       final replacing = onAllAccepted(accepted);

@@ -475,13 +475,37 @@ class NavigationResolver {
   Future<ResolverResult> checkGuard(AutoRouteGuard guard, StackRouter router) =>
       _checkGuard(guard, router);
 
+  // Holds, in the zone a guard's call runs in, the resolver the guard was
+  // given, for the pages that call puts on a stack to be told as the
+  // guard's, see [_reportPageGoesOn].
+  static final _askedZone = Object();
+
+  // Told with the router each time code of the guard puts a page on a stack
+  // while the guard has not answered, see [_checkGuard].
+  ValueChanged<StackRouter>? _onShowsPage;
+
+  // Called by [router] right before it adds a new page. When the code that
+  // adds it is a guard's that has not answered, such as its redirectUntil or
+  // a push of its own login page, also after an await and whether or not the
+  // guard awaits that page, the navigation the guard decides about hears of
+  // it. A page the app adds meanwhile is not the guard's.
+  static void _reportPageGoesOn(StackRouter router) {
+    final asked = Zone.current[_askedZone];
+    if (asked is NavigationResolver && !asked.isResolved) {
+      asked._onShowsPage?.call(router);
+    }
+  }
+
   // [checkGuard], with [onLeftUndecided] called when [guard] returns without
   // having resolved: it holds the navigation until it resolves later, behind
-  // a redirect it started or with nothing shown.
+  // a redirect it started or with nothing shown. And with [onShowsPage]
+  // called each time [guard] puts a page of its own on a stack before it has
+  // resolved, at the step the page goes on.
   Future<ResolverResult> _checkGuard(
     AutoRouteGuard guard,
     StackRouter router, {
     _GuardHoldsCallback? onLeftUndecided,
+    ValueChanged<StackRouter>? onShowsPage,
   }) async {
     if (_didReportRedirectLoop()) return await future;
     // Several reevaluations can wait for the same check; each takes its own
@@ -491,8 +515,15 @@ class NavigationResolver {
       if (isResolved) return await future;
     }
     final waiting = _waitingCompleter = Completer<void>();
+    // Kept for a later call of this guard too, as a reevaluation makes.
+    _onShowsPage = onShowsPage ?? _onShowsPage;
     try {
-      await guard.onNavigation(this, router);
+      await (_onShowsPage == null
+          ? guard.onNavigation(this, router)
+          : runZoned(
+              () => guard.onNavigation(this, router),
+              zoneValues: {_askedZone: this},
+            ));
     } finally {
       _waitingCompleter = null;
       waiting.complete();
