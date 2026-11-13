@@ -1750,23 +1750,23 @@ class TabsRouter extends RoutingController {
     final matches = <ReevaluatableRouteMatch<Object?, Object?>>[];
     for (final page in stack) {
       final match = page.routeData._route;
-      final ReevaluatableRouteMatch<Object?, Object?> reMatch;
       final childCtrl = _innerControllerOfMatch(match.id);
-      if (childCtrl != null) {
-        reMatch = ReevaluatableRouteMatch(
-          currentPage: page,
-          originalMatch: match.copyWith(
-            children: await childCtrl._composeMatchesForReevaluate(),
-          ),
+      if (childCtrl == null) {
+        // A tab whose nested router isn't built, not yet or no longer since
+        // it keeps no state, has nothing inside to reevaluate. Its page is
+        // left as it is: the pages it is still to open with, and the route
+        // it was opened with, which a later navigate reads.
+        matches.add(
+          ReevaluatableRouteMatch(currentPage: page, originalMatch: match),
         );
-      } else {
-        // A tab whose nested router isn't built yet keeps the pages it is to
-        // open with, as a stack page does.
-        reMatch = ReevaluatableRouteMatch(
-          currentPage: page,
-          originalMatch: match,
-        );
+        continue;
       }
+      final reMatch = ReevaluatableRouteMatch<Object?, Object?>(
+        currentPage: page,
+        originalMatch: match.copyWith(
+          children: await childCtrl._composeMatchesForReevaluate(),
+        ),
+      );
       page.routeData._onStartReevaluating(reMatch.originalMatch);
       matches.add(reMatch);
     }

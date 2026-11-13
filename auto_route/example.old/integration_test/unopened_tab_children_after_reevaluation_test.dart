@@ -95,5 +95,104 @@ void main() {
         await expectBrowserUrl('/profile/orders');
       });
     }
+
+    // Steps: as above, but ProfileTab keeps no state. Tap 'Open profile', go
+    // back to Info, tap 'Open feed', then 'Refresh token', then 'Open
+    // profile' again.
+    // Was: ProfileTab opened on Orders again, the pages it was first opened
+    // with.
+    // Should: Info shows, as without the reevaluation.
+    testWidgets('a tab that keeps no state opens on its first page after a '
+        'reevaluation', (tester) async {
+      final token = ValueNotifier(0);
+      addTearDown(token.dispose);
+      final router = RootStackRouter.build(
+        routes: [
+          NamedRouteDef(
+            name: 'HomeRoute',
+            path: '/',
+            builder: (_, _) => const Scaffold(
+              body: AutoTabsRouter(
+                routes: [
+                  NamedRoute('FeedTab'),
+                  NamedRoute(
+                    'ProfileTab',
+                    children: [
+                      NamedRoute('ProfileInfo'),
+                      NamedRoute('ProfileOrders'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            children: [
+              NamedRouteDef(
+                name: 'FeedTab',
+                path: 'feed',
+                builder: (context, _) => SafeArea(
+                  child: Column(
+                    children: [
+                      const Text('FeedTab'),
+                      TextButton(
+                        onPressed: () => token.value++,
+                        child: const Text('Refresh token'),
+                      ),
+                      TextButton(
+                        onPressed: () => context.tabsRouter.setActiveIndex(1),
+                        child: const Text('Open profile'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              NamedRouteDef(
+                name: 'ProfileTab',
+                path: 'profile',
+                maintainState: false,
+                builder: (_, _) => const AutoRouter(),
+                children: [
+                  for (final (name, path) in [
+                    ('ProfileInfo', ''),
+                    ('ProfileOrders', 'orders'),
+                  ])
+                    NamedRouteDef(
+                      name: name,
+                      path: path,
+                      builder: (context, _) => SafeArea(
+                        child: Column(
+                          children: [
+                            Text(name),
+                            TextButton(
+                              onPressed: () =>
+                                  context.tabsRouter.setActiveIndex(0),
+                              child: const Text('Open feed'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      await pumpRouterApp(tester, router, reevaluationNotifier: token);
+
+      await tester.tap(find.text('Open profile').hitTestable());
+      await tester.pumpAndSettle();
+      expect(find.text('ProfileOrders').hitTestable(), findsOneWidget);
+      await systemBack(tester);
+      expect(find.text('ProfileOrders'), findsNothing);
+      await tester.tap(find.text('Open feed').hitTestable());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Refresh token').hitTestable());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open profile').hitTestable());
+      await tester.pumpAndSettle();
+
+      expect(find.text('ProfileInfo').hitTestable(), findsOneWidget);
+      expect(router.urlState.url, '/profile');
+    });
   });
 }
