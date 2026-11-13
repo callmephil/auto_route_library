@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:auto_route/src/utils.dart';
 import 'package:collection/collection.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 
@@ -103,8 +104,8 @@ class RouteMatcher {
           }
           final target = redirectToUri.replace(
             queryParameters: {
-              ...redirectToUri.queryParametersAll,
-              ...uri.queryParametersAll,
+              ...queryParametersAllOf(redirectToUri),
+              ...queryParametersAllOf(uri),
             },
             fragment: uri.fragment,
           );
@@ -146,7 +147,7 @@ class RouteMatcher {
             final rest = uri.replace(
               pathSegments: pathSegments
                   .sublist(match.segments.length)
-                  .map(Uri.decodeComponent),
+                  .map(decodeUrlComponent),
             );
             final children = _match(
               rest,
@@ -297,8 +298,8 @@ class RouteMatcher {
     // Fewer parts than segments, as checked above: each part has its segment.
     for (final [part, segment] in IterableZip([parts, segments])) {
       if (part.startsWith(':')) {
-        pathParams[part.substring(1)] = Uri.decodeComponent(segment);
-      } else if (Uri.decodeComponent(segment) != part && part != '*') {
+        pathParams[part.substring(1)] = decodeUrlComponent(segment);
+      } else if (decodeUrlComponent(segment) != part && part != '*') {
         return null;
       }
     }
@@ -318,7 +319,9 @@ class RouteMatcher {
       segments: extractedSegments,
       redirectedFrom: redirectedFrom,
       params: Parameters(pathParams),
-      queryParams: Parameters(_normalizeSingleValues(uri.queryParametersAll)),
+      queryParams: Parameters(
+        _normalizeSingleValues(queryParametersAllOf(uri)),
+      ),
       fragment: uri.fragment,
     );
   }

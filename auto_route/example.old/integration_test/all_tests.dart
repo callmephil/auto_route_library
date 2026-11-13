@@ -65,6 +65,7 @@ import 'indexed_stack_curved_animation_test.dart'
 import 'inherited_id_child_test.dart' as inherited_id_child;
 import 'inherited_order_id_test.dart' as inherited_order_id;
 import 'insert_under_no_history_top_test.dart' as insert_under_no_history_top;
+import 'invalid_utf8_escape_link_test.dart' as invalid_utf8_escape_link;
 import 'keep_history_test.dart' as keep_history;
 import 'late_router_deep_link_test.dart' as late_router_deep_link;
 import 'leading_button_drawer_test.dart' as leading_button_drawer;
@@ -353,6 +354,7 @@ void main() {
   inherited_id_child.main();
   inherited_order_id.main();
   insert_under_no_history_top.main();
+  invalid_utf8_escape_link.main();
   keep_history.main();
   late_router_deep_link.main();
   leading_button_drawer.main();

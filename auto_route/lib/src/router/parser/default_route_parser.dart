@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/matcher/route_matcher.dart';
+import 'package:auto_route/src/utils.dart';
 import 'package:auto_route/src/utils/collection.dart';
 import 'package:collection/collection.dart' hide ListExtensions;
 import 'package:flutter/foundation.dart';
@@ -69,11 +70,10 @@ class DefaultRouteParser extends RouteInformationParser<UrlState> {
   // one turns '/' into '\'.
   Uri _normalize(Uri uri) {
     final path = uri.path.isEmpty ? '/' : uri.path;
+    final queryParameters = queryParametersAllOf(uri);
     return Uri(
       path: p.posix.normalize(path),
-      queryParameters: uri.queryParameters.isEmpty
-          ? null
-          : uri.queryParametersAll,
+      queryParameters: queryParameters.isEmpty ? null : queryParameters,
       fragment: uri.fragment.isEmpty ? null : uri.fragment,
     );
   }

@@ -3,6 +3,7 @@ import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:auto_route/auto_route.dart';
+import 'package:auto_route/src/utils.dart';
 import 'package:flutter/foundation.dart' show LocalKey;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/widgets.dart' show Router;
@@ -352,10 +353,11 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   bool _isSameUrl(String? a, String b) {
     if (a == null) return false;
-    // Uri.decodeFull throws on a letter outside ASCII, which a decoded url can
-    // hold; parsing first encodes it again.
+    // Decoding throws on a letter outside ASCII, which a decoded url can hold,
+    // so parsing first encodes it again. Escaped bytes that aren't valid UTF-8
+    // read as U+FFFD, as the matcher reads them.
     String normalize(String url) =>
-        url.isEmpty ? '/' : Uri.decodeFull(Uri.parse(url).toString());
+        url.isEmpty ? '/' : decodeUrlComponent(Uri.parse(url).toString());
     return normalize(a) == normalize(b);
   }
 
