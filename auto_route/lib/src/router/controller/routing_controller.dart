@@ -1307,10 +1307,12 @@ class TabsRouter extends RoutingController {
       notifyAll();
     }
     if (updated != null) {
-      _navigateInsideTab(
-        updated,
-        onFailure: onFailure,
-        keepsUnnamedPages: keepsUnnamedPages,
+      unawaited(
+        _navigateInsideTab(
+          updated,
+          onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
+        ),
       );
     }
     return .done;
@@ -1326,6 +1328,7 @@ class TabsRouter extends RoutingController {
     RouteMatch<Object?> route, {
     required int change,
     OnNavigationFailure? onFailure,
+    bool isReevaluating = false,
     int from = 0,
   }) {
     final guards = route.guards;
@@ -1338,7 +1341,12 @@ class TabsRouter extends RoutingController {
       );
     }
     final router = _guardRouter;
-    final resolver = NavigationResolver(router, Completer(), route);
+    final resolver = NavigationResolver(
+      router,
+      Completer(),
+      route,
+      isReevaluating: isReevaluating,
+    );
     _tabRoutesOfResolvers[resolver] = matcher;
     final entry = GuardEntry(guard, resolver);
     router.activeGuardObserver._add(entry);
@@ -1353,6 +1361,7 @@ class TabsRouter extends RoutingController {
         result.route,
         change: change,
         onFailure: onFailure,
+        isReevaluating: isReevaluating,
         from: from + 1,
       );
     }
@@ -1776,12 +1785,22 @@ class TabsRouter extends RoutingController {
           if (shouldNotify) {
             notifyAll();
           }
-          _navigateInsideTab(
-            routeToBeUpdated,
-            onFailure: onFailure,
-            isReevaluating: isReevaluating,
-            keepsUnnamedPages: keepsUnnamedPages,
-          );
+          // A reevaluation goes on once the guards of a tab and of the pages
+          // inside it have answered, as a stack asks its pages one after
+          // another, so two guards that show a login page show one.
+          final inside = isReevaluating && pageToUpdateIndex == _activeIndex
+              ? _reevaluateActiveTab(routeToBeUpdated, onFailure: onFailure)
+              : _navigateInsideTab(
+                  routeToBeUpdated,
+                  onFailure: onFailure,
+                  isReevaluating: isReevaluating,
+                  keepsUnnamedPages: keepsUnnamedPages,
+                );
+          if (isReevaluating) {
+            await inside;
+          } else if (inside != null) {
+            unawaited(inside);
+          }
         }
       }
       if (!isReevaluating && pageToUpdateIndex == -1) {
@@ -1793,6 +1812,65 @@ class TabsRouter extends RoutingController {
     }
 
     return null;
+  }
+
+  // Asks the guards of the active tab, which holds [route], again, as
+  // reevaluateGuards asks those of every page of a stack. The other tabs are
+  // asked when they are chosen. When the guards keep the tab out, the home
+  // tab shows instead, or else the first, through its own guards. The pages
+  // inside the tab are reevaluated once the guards let it stay, unless they
+  // say otherwise with reevaluateNext. Answers once the pages inside the tab
+  // are reevaluated, or null when that is done at once. A guard that throws
+  // reports its error as an uncaught one, and the reevaluation goes on.
+  Future<void>? _reevaluateActiveTab(
+    RouteMatch<Object?> route, {
+    OnNavigationFailure? onFailure,
+  }) {
+    final page = _activePage;
+    final change = _tabChanges;
+    Future<void>? apply(ResolverResult result) {
+      // Another tab was chosen meanwhile, or the tabs are gone.
+      if (_isDisposed || change != _tabChanges || _activePage != page) {
+        return null;
+      }
+      if (!result.continueNavigation) {
+        final fallback = _homeTab == -1 ? 0 : _homeTab;
+        if (fallback == _activeIndex) return null;
+        if (_changeTab(fallback, remember: false, onFailure: onFailure)
+            case final Future<void> shown) {
+          unawaited(shown);
+        }
+        return null;
+      }
+      if (!result.reevaluateNext) return null;
+      // Children a guard set are new routes, not pages being reevaluated.
+      // Their navigation answers once they are popped, so nothing waits for
+      // it.
+      final isReevaluating = (result.route.children ?? const []).every(
+        (c) => c is ReevaluatableRouteMatch,
+      );
+      final inside = _navigateInsideTab(
+        result.route,
+        onFailure: onFailure,
+        isReevaluating: isReevaluating,
+      );
+      if (isReevaluating || inside == null) return inside;
+      unawaited(inside);
+      return null;
+    }
+
+    final checked = _checkTabGuards(
+      route,
+      change: change,
+      onFailure: onFailure,
+      isReevaluating: true,
+    );
+    if (checked is ResolverResult) return apply(checked);
+    return checked.then(
+      apply,
+      onError: (Object error, StackTrace stackTrace) =>
+          Zone.current.handleUncaughtError(error, stackTrace),
+    );
   }
 
   // Puts [mayUpdateRoute] in the page of the tab at [index], and answers the
@@ -1840,7 +1918,8 @@ class TabsRouter extends RoutingController {
       : route.copyWith(args: tabArgs);
 
   // Navigates the nested router of the tab holding [route] to its children.
-  void _navigateInsideTab(
+  // Answers once that router has, or null when the tab has none.
+  Future<void>? _navigateInsideTab(
     RouteMatch<Object?> route, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
@@ -1848,18 +1927,12 @@ class TabsRouter extends RoutingController {
   }) {
     // By match id: a tab sharing its route with another has its own nested
     // router.
-    final mayUpdateController = _innerControllerOfMatch(route.id);
-    if (mayUpdateController != null) {
-      final newRoutes = route.children ?? const [];
-      unawaited(
-        mayUpdateController._navigateAll(
-          newRoutes,
-          onFailure: onFailure,
-          isReevaluating: isReevaluating,
-          keepsUnnamedPages: keepsUnnamedPages,
-        ),
-      );
-    }
+    return _innerControllerOfMatch(route.id)?._navigateAll(
+      route.children ?? const [],
+      onFailure: onFailure,
+      isReevaluating: isReevaluating,
+      keepsUnnamedPages: keepsUnnamedPages,
+    );
   }
 
   // The tab [route] opens, or -1. Two tabs share a route when both are

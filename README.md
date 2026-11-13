@@ -1600,6 +1600,8 @@ AutoRoute(
 
 Guards on the routes of an `AutoTabsRouter`'s tabs are asked each time their tab is about to become the active one: from `setActiveIndex`, a swipe in `AutoTabsRouter.pageView` or `AutoTabsRouter.tabBar`, `navigate`, back to the `homeIndex` tab, or a url. The tab shows once its guards call `resolver.next()`. Until then, and when they reject, the current tab stays, and so does the url. A guard that redirects, for example with `resolver.redirectUntil(LoginRoute())`, shows the tab once it resolves with `true`.
 
+When the router [reevaluates its guards](#using-a-reevaluate-listenable), as after a sign-out, the guards of the active tab are asked again, with `resolver.isReevaluating` true. When they reject, the `homeIndex` tab shows instead, or the first tab when there's no home tab, once its own guards let it in. The other tabs are asked when they're chosen.
+
 ```dart
 AutoRoute(
   page: HomeRoute.page,
