@@ -1221,7 +1221,8 @@ class TabsRouter extends RoutingController {
     return _pendingChange = checked.then(
       (result) => _endTabChange(
         change,
-        index,
+        // The tabs may have changed meanwhile: replaceAll moves the tab.
+        _pendingTab ?? index,
         match,
         result,
         onLinkAccepted: onLinkAccepted,
@@ -1231,6 +1232,14 @@ class TabsRouter extends RoutingController {
         keepsUnnamedPages: keepsUnnamedPages,
       ),
     );
+  }
+
+  // Calls off the change of the active tab still waiting for its guards: it
+  // ends as replaced once they answer.
+  void _callOffPendingChange() {
+    _tabChanges++;
+    _pendingTab = null;
+    _pendingChange = null;
   }
 
   _TabChange _endTabChange(
@@ -1496,7 +1505,14 @@ class TabsRouter extends RoutingController {
         if (result.continueNavigation && change == _tabChanges) {
           markUrlStateForReplace();
         }
-        return _endTabChange(change, index, match, result, update: true);
+        // The tabs may have changed meanwhile: replaceAll moves the tab.
+        return _endTabChange(
+          change,
+          _pendingTab ?? index,
+          match,
+          result,
+          update: true,
+        );
       });
     }
     // A host opened by a url that names no tab, such as '/tabs' when no tab is
@@ -1599,7 +1615,8 @@ class TabsRouter extends RoutingController {
   void replaceAll(List<PageRouteInfo>? routes, int fromIndex) {
     final routesToPush = _resolveRoutes(routes);
     _listedTabArgs = [for (final route in routesToPush) route.args];
-    final previousActivePage = _pages.elementAtOrNull(fromIndex);
+    final previousTabs = List.of(_pages);
+    final previousActivePage = previousTabs.elementAtOrNull(fromIndex);
     final previousPages = List.of(_pages);
     final previousHistory = [
       for (final index in _tabHistory) ?_pages.elementAtOrNull(index),
@@ -1636,6 +1653,18 @@ class TabsRouter extends RoutingController {
         {for (final page in previousHistory) _tabIndexAfterChange(page)}
             .where((index) => index != -1 && index != _activeIndex),
       );
+    // A change still waiting for its guards follows its tab. It is called off
+    // when the tab is gone, or a tab of other args took its place, as its
+    // guards were asked about that tab only, and when the tab shows already.
+    if (_pendingTab case final pendingTab?) {
+      final pendingPage = previousTabs.elementAtOrNull(pendingTab);
+      final index = pendingPage == null ? -1 : _pages.indexOf(pendingPage);
+      if (index == -1 || index == _activeIndex) {
+        _callOffPendingChange();
+      } else {
+        _pendingTab = index;
+      }
+    }
   }
 
   // Where the tab of [page], one of the tabs before they changed, is now:

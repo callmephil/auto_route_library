@@ -248,6 +248,8 @@ import 'route_aware_mixin_test.dart' as route_aware_mixin;
 import 'route_aware_pop_order_test.dart' as route_aware_pop_order;
 import 'route_leave_test.dart' as route_leave;
 import 'route_not_found_tree_test.dart' as route_not_found_tree;
+import 'routes_change_while_guard_decides_test.dart'
+    as routes_change_while_guard_decides;
 import 'same_route_tabs_keep_active_test.dart' as same_route_tabs_keep_active;
 import 'screen_reached_again_keeps_caller_test.dart'
     as screen_reached_again_keeps_caller;
@@ -533,6 +535,7 @@ void main() {
   route_aware_pop_order.main();
   route_leave.main();
   route_not_found_tree.main();
+  routes_change_while_guard_decides.main();
   same_route_tabs_keep_active.main();
   screen_reached_again_keeps_caller.main();
   screen_reached_again_keeps_leave_listener.main();
