@@ -270,6 +270,7 @@ import 'restore_inherited_path_param_test.dart' as restore_inherited_path_param;
 import 'restore_stack_test.dart' as restore_stack;
 import 'restore_tabs_test.dart' as restore_tabs;
 import 'restore_with_link_test.dart' as restore_with_link;
+import 'rewritten_link_back_test.dart' as rewritten_link_back;
 import 'root_bottom_sheet_aware_test.dart' as root_bottom_sheet_aware;
 import 'root_router_dispose_test.dart' as root_router_dispose;
 import 'route_aware_deep_link_test.dart' as route_aware_deep_link;
@@ -564,6 +565,7 @@ void main() {
   rebuild_stack_rejected_link.main();
   rejected_link_url_running.main();
   replace_all_then_push.main();
+  rewritten_link_back.main();
   set_query_param_read.main();
   slow_link_builder_order.main();
   prefix_stripper.main();

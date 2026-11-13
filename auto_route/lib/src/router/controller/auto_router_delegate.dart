@@ -560,9 +560,11 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   void _onNewUrlState(UrlState state) {
     final pathInBrowser = state.uri.path;
     var matchedUrlState = state.flatten;
-    // The matcher keeps each segment as the link's path has it, escapes and
-    // all, so a link matched as it is gives back its own path.
-    if (pathInBrowser != matchedUrlState.path) {
+    // On the web the browser made an entry for the link, with the link's own
+    // path; a path the router writes differently, after a redirect, a
+    // transformer or a nested segment written again, takes that entry. Off
+    // the web the link has no entry of its own: its pages get a new one.
+    if (kIsWeb && pathInBrowser != matchedUrlState.path) {
       matchedUrlState = matchedUrlState.copyWith(shouldReplace: true);
     }
     controller.navigationHistory.onNewUrlState(matchedUrlState);
