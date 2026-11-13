@@ -3620,7 +3620,11 @@ abstract class StackRouter extends RoutingController {
     List<RouteData<Object?>>? takeovers,
   }) {
     final shownTop = _pages.lastOrNull?.routeData;
-    if (shownTop != null && !shownTop._route.keepHistory) {
+    // A top page that keeps no history leaves when a page goes on above it,
+    // not when one goes in below it, as insert does: Flutter's Navigator
+    // keeps the route on top when a page is added under it.
+    final isAddedOnTop = index == null || index == _pages.length;
+    if (isAddedOnTop && shownTop != null && !shownTop._route.keepHistory) {
       markUrlStateForReplace();
       _takingOffForNewPage(() => _removeRoute(shownTop._route, notify: false));
     }
@@ -3669,7 +3673,7 @@ abstract class StackRouter extends RoutingController {
       ),
     };
     final data = page.routeData;
-    if (index != null) {
+    if (index != null && !isAddedOnTop) {
       _pages.insert(index, page);
     } else {
       _pages.add(page);
