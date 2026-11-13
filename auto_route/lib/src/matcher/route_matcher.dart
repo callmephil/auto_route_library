@@ -120,12 +120,16 @@ class RouteMatcher {
               'page.',
             );
           }
+          // The target's own fragment wins; without one it takes the url's.
+          final fragment = redirectToUri.hasFragment
+              ? redirectToUri.fragment
+              : uri.fragment;
           final target = redirectToUri.replace(
             queryParameters: {
               ...queryParametersAllOf(redirectToUri),
               ...queryParametersAllOf(uri),
             },
-            fragment: uri.fragment,
+            fragment: fragment,
           );
           final chain = [...redirectChain, (route: config, path: redirectFrom)];
           if (topRedirect != null &&
