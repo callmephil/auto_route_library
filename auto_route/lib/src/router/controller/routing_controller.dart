@@ -1293,15 +1293,48 @@ class TabsRouter extends RoutingController {
       if (notify) notifyListeners();
       return .rejected;
     }
+    final isUpdated = update || !identical(result.route, match);
+    // A link that goes on to pages in the tab's nested router shows the tab
+    // once the guards there let it in, as a link into the nested router of a
+    // page already open does: one they reject leaves the tab on screen and
+    // the open dialogs as they were.
+    if (onLinkAccepted != null &&
+        isUpdated &&
+        (result.route.children ?? const []).isNotEmpty) {
+      _showTabOnceLinkLetIn(
+        change,
+        index,
+        result.route,
+        onLinkAccepted: onLinkAccepted,
+        show: () => _showTab(index, notify: notify, remember: remember),
+        onFailure: onFailure,
+      );
+      return .done;
+    }
     onLinkAccepted?.call();
     // A guard may have overridden the route, e.g. its args.
-    final updated = update || !identical(result.route, match)
+    final updated = isUpdated
         ? _updateTabPage(
             index,
             result.route,
             keepsUnnamedPages: keepsUnnamedPages,
           )
         : null;
+    _showTab(index, notify: notify, remember: remember);
+    if (updated != null) {
+      unawaited(
+        _navigateInsideTab(
+          updated,
+          onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
+        ),
+      );
+    }
+    return .done;
+  }
+
+  // Makes the tab at [index] the active one.
+  void _showTab(int index, {required bool notify, required bool remember}) {
     // Preloads while the old tab is still active, whether or not this notifies.
     final shouldWaitForFrame =
         preload(index) &&
@@ -1323,16 +1356,59 @@ class TabsRouter extends RoutingController {
     } else if (notify) {
       notifyAll();
     }
-    if (updated != null) {
+  }
+
+  // Opens the pages of the link [route] names in the nested router of the
+  // tab at [index], and runs [show] and [onLinkAccepted] once their guards let
+  // the link in, unless the change [change] was replaced meanwhile. A tab
+  // whose nested router is not built yet is built offstage first, on its
+  // first page, as preload builds it, so the guards are asked with the tab
+  // the user is on still on screen.
+  void _showTabOnceLinkLetIn(
+    int change,
+    int index,
+    RouteMatch<Object?> route, {
+    required VoidCallback onLinkAccepted,
+    required VoidCallback show,
+    OnNavigationFailure? onFailure,
+  }) {
+    void onLetIn() {
+      if (!_isDisposed && change == _tabChanges) show();
+      onLinkAccepted();
+    }
+
+    void openInside(RouteMatch<Object?> tab) {
+      final isHandedOn = root._handLinkStepOn(onLetIn);
+      unawaited(_navigateInsideTab(tab, onFailure: onFailure));
+      // A nested router whose navigation asks no guard, such as a
+      // declarative one, leaves the step: the tab shows at once.
+      if (isHandedOn) root._takeLinkAcceptedStep()?.call();
+    }
+
+    final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
+    if (tabMatchId != null && _innerControllerOfMatch(tabMatchId) != null) {
+      return openInside(_updateTabPage(index, route));
+    }
+    final children = route.children;
+    final firstPage = _updateTabPage(index, route.copyWith(children: const []));
+    if (!preload(index)) {
+      // A tab that can't be built offstage shows as before the guards ask.
+      onLetIn();
       unawaited(
         _navigateInsideTab(
-          updated,
+          firstPage.copyWith(children: children),
           onFailure: onFailure,
-          keepsUnnamedPages: keepsUnnamedPages,
         ),
       );
+      return;
     }
-    return .done;
+    // The future's callback runs in the zone of the link's navigation.
+    unawaited(
+      SchedulerBinding.instance.endOfFrame.then((_) {
+        if (_isDisposed || change != _tabChanges) return;
+        openInside(firstPage.copyWith(children: children));
+      }),
+    );
   }
 
   // Asks the guards of the tab [route] opens whether it may show, the way a

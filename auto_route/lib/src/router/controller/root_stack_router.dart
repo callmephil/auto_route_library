@@ -87,6 +87,23 @@ abstract class RootStackRouter extends StackRouter {
     return step;
   }
 
+  // Makes [step] the step of the link whose navigation runs now, for the
+  // guarded navigation it starts next to take, as when a tab change hands
+  // it on to the tab's nested router, after any step that waits already.
+  // False when no link's navigation runs, or a later link has started.
+  bool _handLinkStepOn(VoidCallback step) {
+    final link = _currentLink;
+    if (link == null || link != _acceptingLink) return false;
+    final waiting = _linkAccepted;
+    _linkAccepted = waiting == null
+        ? step
+        : () {
+            waiting();
+            step();
+          };
+    return true;
+  }
+
   // Whether [step] waits for the link whose navigation runs now to be let
   // in, as it does while a guard of that link has yet to answer; it then
   // runs with the link's own step, or not at all if the link is turned down.
