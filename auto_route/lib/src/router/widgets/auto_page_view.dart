@@ -274,8 +274,15 @@ class AutoPageViewState extends State<AutoPageView> {
     } else {
       await _warpToNonAdjacentTab(previousIndex);
     }
-    if (mounted) {
-      setState(_updateChildren);
+    if (!mounted) return;
+    setState(_updateChildren);
+    // The active tab may have changed while the warp ran, as when a guard
+    // lets in the tab a swipe reached: the router then notified while the
+    // page still showed that tab, and the warp went on away from it.
+    if (_warpUnderwayCount > 0 || !_controller.hasClients) return;
+    final page = _controller.page?.round();
+    if (page != null && page != _router.activeIndex) {
+      await _warpToCurrentIndex(page);
     }
   }
 
