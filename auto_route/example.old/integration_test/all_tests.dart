@@ -297,6 +297,8 @@ import 'tab_bar_dispose_test.dart' as tab_bar_dispose;
 import 'tab_bar_drag_during_tab_change_test.dart'
     as tab_bar_drag_during_tab_change;
 import 'tab_bar_indicator_test.dart' as tab_bar_indicator;
+import 'tab_bar_list_change_during_move_test.dart'
+    as tab_bar_list_change_during_move;
 import 'tab_bar_zero_duration_guard_test.dart' as tab_bar_zero_duration_guard;
 import 'tab_cached_context_test.dart' as tab_cached_context;
 import 'tab_guard_override_children_test.dart' as tab_guard_override_children;
@@ -598,6 +600,7 @@ void main() {
   tab_bar_dispose.main();
   tab_bar_drag_during_tab_change.main();
   tab_bar_indicator.main();
+  tab_bar_list_change_during_move.main();
   tab_bar_zero_duration_guard.main();
   tab_cached_context.main();
   tab_guard_override_children.main();

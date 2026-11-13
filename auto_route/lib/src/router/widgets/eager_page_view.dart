@@ -22,6 +22,7 @@ import 'package:material_ui/material_ui.dart'
         ScrollConfiguration,
         ScrollNotification,
         ScrollPhysics,
+        ScrollPositionWithSingleContext,
         ScrollUpdateNotification,
         Scrollable,
         Scrollbar,
@@ -57,15 +58,18 @@ class _ForceImplicitScrollPhysics extends ScrollPhysics {
 
 const PageScrollPhysics _kPagePhysics = PageScrollPhysics();
 
-/// Puts [controller] on [page] for the next layout, without animating or
-/// sending scroll notifications.
+/// Puts [controller] on [page] for the next layout, without animating.
 ///
 /// For when the pages change: a jump before the new pages are laid out
-/// would be measured against the old ones.
+/// would be measured against the old ones. A move still running ends, as on a
+/// jump, which sends its scroll end notification.
 void correctToPage(PageController controller, int page) {
   if (!controller.hasClients) return;
   final position = controller.position;
   if (!position.hasViewportDimension) return;
+  // A move still running toward a page of the old pages would go on from the
+  // corrected pixels.
+  if (position is ScrollPositionWithSingleContext) position.goIdle();
   position.correctPixels(
     page * position.viewportDimension * controller.viewportFraction,
   );
