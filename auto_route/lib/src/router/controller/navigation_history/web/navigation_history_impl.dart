@@ -5,7 +5,8 @@ import 'dart:ui_web' as ui_web;
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/utils.dart';
 import 'package:flutter/foundation.dart' show LocalKey;
-import 'package:flutter/widgets.dart' show RouteInformation, Router;
+import 'package:flutter/widgets.dart'
+    show RouteInformation, RouteInformationProvider, Router;
 import 'package:web/web.dart';
 
 /// An implementation of [NavigationHistory]
@@ -103,9 +104,11 @@ class NavigationHistoryImpl extends NavigationHistory {
         ? newState.copyWith(shouldReplace: true)
         : newState;
     final hasFrame = notify && _startFrame();
-    // Outside a frame, a step back moves the browser itself, which reports the
-    // url once it gets there; a notification now would make the router write
-    // it as a new entry. Within a frame, the end of the frame makes the move.
+    // Outside a turn's account, a step back moves the browser itself, which
+    // reports the url once it gets there; a notification now would make the
+    // router write it as a new entry. Within one, the end of the turn makes the
+    // move, and the router's report only repeats the entry on top (see
+    // [writesBrowserEntries]).
     final doesNotify = notify && (!_isSteppingBack || hasFrame);
     _doesAddEntryWithSameUrl = doesNotify && isPushedOverSameUrl;
     try {
@@ -151,7 +154,7 @@ class NavigationHistoryImpl extends NavigationHistory {
   // there is nothing to account for, as when an app navigates before runApp.
   bool _startFrame() {
     if (_frameStartEntries == null) {
-      if (!isShownByRouter || _ownProvider == null) return false;
+      if (!isShownByRouter || _provider == null) return false;
       _frameStartEntries = Map.of(_entries);
       _frameStartIndex = _appIndex ?? _currentIndex;
     }
@@ -162,39 +165,31 @@ class NavigationHistoryImpl extends NavigationHistory {
     return true;
   }
 
-  // The route information provider of the Router that shows this history,
-  // when it is AutoRouteInformationProvider.
-  AutoRouteInformationProvider? get _ownProvider {
+  // The route information provider of the Router that shows this history.
+  RouteInformationProvider? get _provider {
     final context = router.navigatorKey.currentContext;
     if (context == null) return null;
-    final provider = Router.maybeOf<Object?>(context)?.routeInformationProvider;
-    return provider is AutoRouteInformationProvider ? provider : null;
+    return Router.maybeOf<Object?>(context)?.routeInformationProvider;
   }
 
+  @override
+  bool get writesBrowserEntries => _frameStartEntries != null;
+
   // Ends this turn's account: brings the browser to the entries the app's
-  // pages ask for, and has the router's write of the same url left out.
+  // pages ask for.
   void _endFrame() {
     _isEndScheduled = false;
     // While the app shows no page, as between the pages pushAndPopUntil takes
     // off and the one it puts on, the account stays open for the next turn.
     if (!urlState.hasSegments) return;
-    final provider = _ownProvider;
-    if (_ownMoveUrl != null && provider != null) {
-      // A step back of an earlier turn is still on its way: this turn's
-      // account waits for the browser to land (see consumeOwnBrowserMove), and
-      // the router's write of the url meanwhile is left out.
-      provider.reportToSkip = _informationOf(urlState);
-      return;
-    }
+    // A step back of an earlier turn is still on its way: this turn's account
+    // waits for the browser to land (see consumeOwnBrowserMove).
+    if (_ownMoveUrl != null) return;
     final start = _frameStartEntries;
     _frameStartEntries = null;
-    if (start == null) return;
-    if (provider == null || !_reconcile(start, _frameStartIndex, provider)) {
-      return;
-    }
-    final top = _entries[_appIndex];
-    final information = top == null ? null : _informationOf(top);
-    provider.reportToSkip = information;
+    final provider = _provider;
+    if (start == null || provider == null) return;
+    _reconcile(start, _frameStartIndex, provider);
   }
 
   // Brings the browser from the entries it held at the frame's start, [start],
@@ -202,17 +197,19 @@ class NavigationHistoryImpl extends NavigationHistory {
   // place, so that any calls in one turn end where the same calls a frame
   // apart end: it keeps what the two share from the bottom, steps back over
   // what is no longer there, writes what is new, and writes the top as a
-  // replace when only the entry on top changed. An entry this frame added
+  // replace when only the entry on top changed. An entry this turn added
   // whose page is gone again was never shown, and gets none. Afterwards the
   // account holds only what the browser holds, also when nothing was written.
-  // Returns whether it moved or wrote anything.
-  bool _reconcile(
+  void _reconcile(
     Map<int, UrlState> start,
     int standsOn,
-    AutoRouteInformationProvider provider,
+    RouteInformationProvider provider,
   ) {
     final appIndex = _appIndex;
-    if (appIndex == null) return false;
+    if (appIndex == null) return;
+    final neglects = provider is AutoRouteInformationProvider
+        ? provider.neglectIf
+        : null;
     // The entries the app's pages ask for, from the bottom; null for an entry
     // of the browser's that the history doesn't know and keeps as it is.
     final wanted = <UrlState?>[];
@@ -225,9 +222,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       }
       if (!isKept) {
         final location = entry.url.isEmpty ? '/' : entry.uri.toString();
-        if (!_isShown(entry) || (provider.neglectIf?.call(location) ?? false)) {
-          continue;
-        }
+        if (!_isShown(entry) || (neglects?.call(location) ?? false)) continue;
         // A new entry that repeats the one under it adds nothing; one that
         // takes the place of an entry the browser holds stays a replace.
         if (i > standsOn && _isSameEntry(wanted.lastOrNull, entry)) continue;
@@ -240,7 +235,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       if (index > standsOn || !_isSameEntry(entry, start[index])) break;
       shared++;
     }
-    if (top < 0) return false;
+    if (top < 0) return;
     final isUnchanged = shared == wanted.length && top == standsOn;
 
     // From where the browser stands: a step back, if any, then the writes,
@@ -282,7 +277,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       });
     _appIndex = holds.length - 1;
 
-    if (isUnchanged) return false;
+    if (isUnchanged) return;
     // Steps are counted from the entry the browser really stands on, which
     // differs from the account where the browser holds entries the app didn't
     // write. Only a step backwards is made: any other reloads or leaves.
@@ -291,10 +286,16 @@ class NavigationHistoryImpl extends NavigationHistory {
       _ownMoveUrl = start[moveTo]?.url;
       _writesAfterMove = writes;
       _history.go(steps);
-    } else {
-      writes.forEach(_write);
+      return;
     }
-    return true;
+    // The router reports the turn's url after the frame as a replace of the
+    // entry on top (AutoRouterDelegate): a replace of that entry with the
+    // app's url is left to it, so that the url goes out once.
+    if (writes.lastOrNull case (final entry, true)
+        when _isSameEntry(entry, urlState)) {
+      writes.removeLast();
+    }
+    writes.forEach(_write);
   }
 
   // Whether a stack holds the page on top of [entry], or the page whose nested
@@ -331,7 +332,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     // The entry's own replace mark would make the provider replace.
     final information = _informationOf(entry.copyWith(shouldReplace: replaces));
     if (information == null) return;
-    _ownProvider?.reportFromHistory(
+    _provider?.routerReportsNewRouteInformation(
       information,
       type: replaces ? .neglect : .navigate,
     );

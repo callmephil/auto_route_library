@@ -57,37 +57,11 @@ class AutoRouteInformationProvider extends RouteInformationProvider
   /// they were.
   bool Function(String? location)? neglectIf;
 
-  /// A report the router's next report is left out for when it reports the
-  /// same location and state.
-  ///
-  /// The web history writes the browser entries of a turn's navigations itself
-  /// as the turn ends; the Router then reports the same url after the frame,
-  /// with the frame's one kind, which would write it once more. Any other
-  /// report goes through, and ends the skip.
-  @internal
-  RouteInformation? reportToSkip;
-
-  /// Reports [information] for the web history, which writes a turn's browser
-  /// entries itself; [reportToSkip] stays for the router's own report.
-  @internal
-  void reportFromHistory(
-    RouteInformation information, {
-    required RouteInformationReportingType type,
-  }) {
-    final skipped = reportToSkip;
-    reportToSkip = null;
-    routerReportsNewRouteInformation(information, type: type);
-    reportToSkip = skipped;
-  }
-
   @override
   void routerReportsNewRouteInformation(
     RouteInformation routeInformation, {
     RouteInformationReportingType type = .none,
   }) {
-    final skipped = reportToSkip;
-    reportToSkip = null;
-    if (skipped != null && _isSameReport(skipped, routeInformation)) return;
     // On web DefaultRouteParser hands over the uri escaped for the engine.
     // Compare and keep the app's own uri, and escape one that skipped it.
     final appRouteInformation =
@@ -129,16 +103,6 @@ class AutoRouteInformationProvider extends RouteInformationProvider
     );
     _value = appRouteInformation;
     _valueInEngine = appRouteInformation;
-  }
-
-  // Whether [a] and [b] report the same location and state.
-  static bool _isSameReport(RouteInformation a, RouteInformation b) {
-    Uri appUri(RouteInformation information) => switch (information) {
-      AutoRouteInformation(:final appUri?) => appUri,
-      _ => information.uri,
-    };
-    return appUri(a) == appUri(b) &&
-        UrlState.platformState(a.state) == UrlState.platformState(b.state);
   }
 
   @override
