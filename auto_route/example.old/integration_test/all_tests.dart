@@ -261,6 +261,8 @@ import 'replaced_change_skips_later_guards_test.dart'
 import 'replaced_push_future_test.dart' as replaced_push_future;
 import 'required_args_test.dart' as required_args;
 import 'restore_args_test.dart' as restore_args;
+import 'restore_declarative_link_children_test.dart'
+    as restore_declarative_link_children;
 import 'restore_history_test.dart' as restore_history;
 import 'restore_inherited_path_param_test.dart' as restore_inherited_path_param;
 import 'restore_stack_test.dart' as restore_stack;
@@ -572,6 +574,7 @@ void main() {
   replaced_push_future.main();
   required_args.main();
   restore_args.main();
+  restore_declarative_link_children.main();
   restore_history.main();
   restore_inherited_path_param.main();
   restore_stack.main();

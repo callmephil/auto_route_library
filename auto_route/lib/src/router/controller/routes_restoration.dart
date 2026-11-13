@@ -21,8 +21,10 @@ extension on RoutingController {
     final child = _innerControllerOfMatch(data.matchId);
     final List<Object?>? children;
     if (child != null) {
-      // A declarative router builds its pages from the app's own state.
-      children = child.managedByWidget ? null : child._savedRoutes();
+      // A declarative router builds its pages from the app's own state, so
+      // none are saved: not the ones it shows, nor the ones of the link that
+      // first opened its page, which the app's list has answered since.
+      children = child.managedByWidget ? const [] : child._savedRoutes();
     } else {
       // A nested router that isn't built yet holds its routes as pending
       // children.
