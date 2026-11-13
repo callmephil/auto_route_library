@@ -675,11 +675,15 @@ abstract class RoutingController with ChangeNotifier {
       if (parent is TabsRouter) parent,
   ];
 
-  /// Casts parent controller to [T]
+  /// The parent controller when it is a [T], otherwise null.
   ///
-  /// returns null if [_parent]
+  /// The root router has no parent. The router of a tab has a [TabsRouter]
+  /// for parent, so `parent<StackRouter>()` answers null there, and
+  /// `parent<TabsRouter>()` answers null for a router nested in a page of a
+  /// [StackRouter].
   T? parent<T extends RoutingController>() {
-    return _parent as T?;
+    final parent = _parent;
+    return parent is T ? parent : null;
   }
 
   /// See [NavigationHistory.canNavigateBack]
@@ -744,7 +748,8 @@ abstract class RoutingController with ChangeNotifier {
     return router._childControllers.any(_hasTransitionIn);
   }
 
-  /// Returns parent route as [StackRouter]
+  /// The parent controller when it is a [StackRouter], otherwise null, as for
+  /// the root router and for the router of a tab; see [parent].
   StackRouter? get parentAsStackRouter => parent();
 
   /// Whether is controller is the root of all controllers

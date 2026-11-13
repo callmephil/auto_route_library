@@ -963,6 +963,8 @@ router.parent<StackRouter>() // this returns  the parent router as a Stack Routi
 router.parent<TabsRouter>() // this returns the parent router as a Tabs Routing controller
 ```
 
+Each answers `null` when the parent is a router of the other kind, as `parent<StackRouter>()` does in the router of a tab, and on the root router, which has no parent.
+
 On the other hand, obtaining the root controller does not require type casting because it's always a `StackRouter`.
 
 ```dart
