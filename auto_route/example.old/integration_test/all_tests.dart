@@ -142,6 +142,7 @@ import 'query_param_rebuild_test.dart' as query_param_rebuild;
 import 'query_params_on_pop_test.dart' as query_params_on_pop;
 import 'query_toggle_back_test.dart' as query_toggle_back;
 import 'rapid_pops_test.dart' as rapid_pops;
+import 'rebuild_stack_rejected_link_test.dart' as rebuild_stack_rejected_link;
 import 'redirect_cycle_test.dart' as redirect_cycle;
 import 'redirect_history_test.dart' as redirect_history;
 import 'redirect_in_closed_nested_router_test.dart'
@@ -424,6 +425,7 @@ void main() {
   replace_all_parent_then_child.main();
   rejected_initial_link_url.main();
   rejected_link_keeps_dialog.main();
+  rebuild_stack_rejected_link.main();
   replace_all_rejected.main();
   replace_all_shell_on_top_waits_for_guards.main();
   replace_all_slow_guard.main();

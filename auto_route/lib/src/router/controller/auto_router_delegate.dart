@@ -69,8 +69,9 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   /// will replace the old one on
   /// deep-links coming from the platform
   ///
-  /// pops all previous routes
-  /// and pushes the new ones
+  /// replaces all previous routes with the new ones, each on a screen of its
+  /// own, once the guards let the new ones in, as [StackRouter.replaceAll]
+  /// does; a link they reject leaves the stack as it was
   ///
   /// this is used after a deep-link is
   /// resolved by [deepLinkBuilder] if provided
@@ -205,13 +206,18 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   Future<void> _handleDeepLink(
     DeepLink deepLink, {
     bool replacesLaunchPage = false,
+    bool rebuildsStack = false,
     List<Route<Object?>> closing = const [],
   }) {
     if (deepLink is _IgnoredDeepLink) return SynchronousFuture(null);
 
     if (!deepLink.isValid) throw FlutterError(_unresolvedMessage(deepLink));
     return controller.root._openLink(
-      () => _openDeepLink(deepLink, replacesLaunchPage: replacesLaunchPage),
+      () => _openDeepLink(
+        deepLink,
+        replacesLaunchPage: replacesLaunchPage,
+        rebuildsStack: rebuildsStack,
+      ),
       onAccepted: () => _closePagelessRoutes(closing),
     );
   }
@@ -244,20 +250,36 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     }
   }
 
+  // With [rebuildsStack], the link's pages replace the stack, each on a screen
+  // of its own; a replacement a guard rejects puts the stack back.
   Future<void> _openDeepLink(
     DeepLink deepLink, {
     required bool replacesLaunchPage,
+    required bool rebuildsStack,
   }) {
     if (deepLink is PlatformDeepLink) {
       _onNewUrlState(deepLink.configuration);
       // A replacement a guard rejects puts the launch page back.
-      return replacesLaunchPage
+      return replacesLaunchPage || rebuildsStack
           ? controller._replaceAllMatches(
               deepLink.matches,
-              updateExistingRoutes: true,
+              updateExistingRoutes: !rebuildsStack,
             )
           : controller.navigateAll(deepLink.matches);
     } else if (deepLink is _PathDeepLink) {
+      final matches = rebuildsStack
+          ? controller.matcher.match(
+              deepLink.path,
+              includePrefixMatches: deepLink.includePrefixMatches,
+            )
+          : null;
+      // A path no route matches is reported by navigatePath and pushPath.
+      if (matches != null) {
+        return controller._replaceAllMatches(
+          matches,
+          updateExistingRoutes: false,
+        );
+      }
       if (deepLink.navigate) {
         return controller.navigatePath(
           deepLink.path,
@@ -269,6 +291,12 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         includePrefixMatches: deepLink.includePrefixMatches,
       );
     } else if (deepLink is _RoutesDeepLink) {
+      if (rebuildsStack) {
+        return controller._replaceAll(
+          deepLink.routes,
+          updateExistingRoutes: false,
+        );
+      }
       if (deepLink.navigate) {
         return controller._navigateAllRoutes(deepLink.routes);
       }
@@ -412,12 +440,10 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
           : await deepLinkBuilder!(platLink);
       final replacesLaunchPage = _doesLinkReplaceLaunchPage(resolvedLink);
       _endLaunch();
-      if (rebuildStackOnDeepLink) {
-        controller._popUntilNow((route) => false, isScoped: true);
-      }
       await _handleDeepLink(
         resolvedLink,
         replacesLaunchPage: replacesLaunchPage,
+        rebuildsStack: rebuildStackOnDeepLink,
         closing: pageless,
       );
     }
