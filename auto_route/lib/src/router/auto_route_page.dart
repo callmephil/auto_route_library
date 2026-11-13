@@ -592,6 +592,15 @@ abstract class _PageRoute<T> extends PageRoute<T> {
     _page.routeData.animation = animation;
   }
 
+  // The navigator calls this when it updates the route with a new page of
+  // the same screen, as a navigation that reaches the screen again does. The
+  // route's animation stays the route's, so the new page's data gets it too.
+  @override
+  void changedInternalState() {
+    super.changedInternalState();
+    _page.routeData.animation = animation;
+  }
+
   @override
   bool get maintainState => _page.maintainState;
 
