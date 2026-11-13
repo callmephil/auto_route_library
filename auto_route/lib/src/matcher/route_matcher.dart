@@ -156,10 +156,16 @@ class RouteMatcher {
             redirectedFrom: redirectFrom,
             topRedirect: topRedirect,
           );
-          if (redirected case [..., final last]) {
-            // An outer redirect of a chain sets this last, so it wins.
-            _redirectSpan[last] = match.segments.length;
+          final last = redirected?.lastOrNull;
+          // A redirect gives what its target gives: a target only partly
+          // matched, such as '/profile/settings' where only '/profile' is a
+          // page, matches nothing, as that url does when opened itself.
+          if (last == null ||
+              _consumedSegments(last) < _split(target.path).length) {
+            return null;
           }
+          // An outer redirect of a chain sets this last, so it wins.
+          _redirectSpan[last] = match.segments.length;
           return redirected;
         }
 
