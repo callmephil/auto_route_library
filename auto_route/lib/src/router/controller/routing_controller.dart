@@ -2313,7 +2313,8 @@ abstract class StackRouter extends RoutingController {
       _topMostRouter(ignorePagelessRoutes: true).current;
 
   /// Whether the top-most route of this controller is page-less
-  bool get hasPagelessTopRoute => pagelessRoutesObserver.hasPagelessTopRoute;
+  bool get hasPagelessTopRoute =>
+      hasEntries && pagelessRoutesObserver.hasPagelessTopRoute;
 
   @override
   void _updateSharedPathData({

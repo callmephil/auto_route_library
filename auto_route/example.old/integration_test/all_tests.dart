@@ -224,6 +224,7 @@ import 'screen_reached_again_keeps_leave_listener_test.dart'
 import 'set_query_param_test.dart' as set_query_param;
 import 'simultaneous_taps_test.dart' as simultaneous_taps;
 import 'slow_link_builder_order_test.dart' as slow_link_builder_order;
+import 'stack_emptied_under_dialog_test.dart' as stack_emptied_under_dialog;
 import 'state_after_reload_test.dart' as state_after_reload;
 import 'swipe_init_tab_test.dart' as swipe_init_tab;
 import 'swipe_unopened_tab_rtl_vertical_test.dart'
@@ -480,6 +481,7 @@ void main() {
   screen_reached_again_keeps_leave_listener.main();
   set_query_param.main();
   simultaneous_taps.main();
+  stack_emptied_under_dialog.main();
   state_after_reload.main();
   swipe_init_tab.main();
   swipe_unopened_tab_rtl_vertical.main();
