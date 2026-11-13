@@ -328,6 +328,34 @@ mixin _RouteAwareTabsMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
+  // The tab at [index], as observers hear of it. Read before a change of the
+  // tabs list for the tab on screen: it may leave the list, and then no index
+  // names it.
+  TabPageRoute? _tabRouteAt(int index) =>
+      switch (routes.elementAtOrNull(index)) {
+        final match? => .new(routeInfo: match, index: index),
+        null => null,
+      };
+
+  // After a change of the tabs list, observers hear of the tab at [index]
+  // when it is another tab than [left], the tab on screen before: as its init
+  // when its page [isBuiltNow], else as a change from [left].
+  void _didShowTabAfterListChange(
+    TabPageRoute? left,
+    int index, {
+    required bool isBuiltNow,
+  }) {
+    final shown = _tabRouteAt(index);
+    if (shown == null || shown.routeInfo.id == left?.routeInfo.id) return;
+    for (final observer in observers.whereType<AutoRouterObserver>()) {
+      if (isBuiltNow) {
+        observer.didInitTabRoute(shown, left);
+      } else if (left != null) {
+        observer.didChangeTabRoute(shown, left);
+      }
+    }
+  }
+
   void _didChangeTabRoute(int index, int previous) {
     final routeInfo = routes.elementAtOrNull(index);
     final previousInfo = routes.elementAtOrNull(previous);

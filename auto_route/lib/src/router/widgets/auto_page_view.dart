@@ -109,6 +109,8 @@ class AutoPageViewState extends State<AutoPageView> {
       // it, it may not have been opened yet.
       _updateChildren();
       _tabKeyAt(_router.activeIndex)?.currentState?.preload();
+      // The tabs widget reported the tab as opened.
+      _draggedInTabs.remove(_matchIdAt(_router.activeIndex));
       correctToPage(_controller, _router.activeIndex);
     }
   }
@@ -163,6 +165,14 @@ class AutoPageViewState extends State<AutoPageView> {
     }
     return didPreload || wasDraggedIn;
   }
+
+  /// Whether the tab of [matchId] was opened and its page is still built, so
+  /// showing it builds nothing anew. A tab a drag only uncovered was not
+  /// opened.
+  @internal
+  bool hasOpened(LocalKey matchId) =>
+      !_draggedInTabs.contains(matchId) &&
+      (_tabKeys[matchId]?.currentState?.isLoaded ?? false);
 
   // Loads the tab a drag is uncovering, without opening it. A guarded tab
   // loads only once its guards let it in.

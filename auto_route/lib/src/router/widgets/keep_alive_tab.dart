@@ -20,6 +20,10 @@ class KeepAliveTabState extends State<KeepAliveTab>
     with AutomaticKeepAliveClientMixin {
   late bool _isLoaded = widget.initiallyLoaded;
 
+  /// Whether the tab's page is built.
+  @internal
+  bool get isLoaded => _isLoaded;
+
   /// preloads the tab so other navigation actions can be done
   /// before the tab is initialized
   bool preload() {

@@ -88,7 +88,13 @@ class _AutoTabsRouterTabBarState
       widget.routes,
       oldWidget.routes,
     )) {
+      final left = _tabRouteAt(_controller!.activeIndex);
       _controller!.replaceAll(widget.routes, _tabController.index);
+      _didShowTabAfterListChange(
+        left,
+        _controller!.activeIndex,
+        isBuiltNow: !_hasOpened(_controller!.activeIndex),
+      );
       _tabsHash = const ListEquality<Object?>().hash(widget.routes);
       final oldTabController = _tabController
         ..removeListener(_onTabControllerChanged);
@@ -98,6 +104,14 @@ class _AutoTabsRouterTabBarState
       oldTabController.dispose();
     }
   }
+
+  // Whether the tab at [index] was opened and is still built; read before the
+  // tab view rebuilds with a new tabs list.
+  bool _hasOpened(int index) =>
+      switch (_controller!.stack.elementAtOrNull(index)?.routeData.matchId) {
+        final matchId? => _tabViewKey.currentState?.hasOpened(matchId) ?? false,
+        null => false,
+      };
 
   @override
   bool onPreload(int index) {

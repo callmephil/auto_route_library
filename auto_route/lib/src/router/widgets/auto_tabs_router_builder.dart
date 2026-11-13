@@ -88,17 +88,20 @@ class _AutoTabsRouterBuilderState
       widget.routes,
       oldWidget.routes,
     )) {
+      final left = _tabRouteAt(_controller!.activeIndex);
       _controller!.replaceAll(widget.routes, _controller!.activeIndex);
-      // Like the default tabs, a change of the list reports no tab change,
-      // only the opening of a tab not opened before.
+      // Like the other tabs, a change of the list reports the tab it shows,
+      // when it shows another.
       _activeTab = _activeTabId;
       final tabs = {
         for (final page in _controller!.stack) page.routeData.matchId,
       };
       _openedTabs.retainWhere(tabs.contains);
-      if (_opensFirstTime(_activeTab)) {
-        _didInitTabRoute(_controller!.activeIndex);
-      }
+      _didShowTabAfterListChange(
+        left,
+        _controller!.activeIndex,
+        isBuiltNow: _opensFirstTime(_activeTab),
+      );
       widget.onNavigate?.call(_controller!);
     }
   }

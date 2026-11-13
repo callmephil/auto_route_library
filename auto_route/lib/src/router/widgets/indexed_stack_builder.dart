@@ -55,10 +55,18 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
   }
 
   // Tabs in [kept] were loaded before a routes change and stay loaded; their
-  // pages were reported then.
-  void _setup({Set<AutoRoutePage<Object?>> kept = const {}}) {
+  // pages were reported then. [left] is the tab on screen before that change:
+  // when another tab shows now, observers hear of it.
+  void _setup({
+    Set<AutoRoutePage<Object?>> kept = const {},
+    TabPageRoute? left,
+  }) {
     for (var i = 0; i < widget.stack.length; ++i) {
-      if (kept.contains(widget.stack[i])) {
+      final isKept = kept.contains(widget.stack[i]);
+      if (left != null && i == widget.activeIndex) {
+        _initializedPagesTracker[i] = true;
+        _didShowTabAfterListChange(left, i, isBuiltNow: !isKept);
+      } else if (isKept) {
         _initializedPagesTracker[i] = true;
       } else if (i == widget.activeIndex ||
           // A tab that keeps no state is built only once it shows, and
@@ -80,8 +88,17 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
         for (final entry in _initializedPagesTracker.entries)
           if (entry.value) ?oldWidget.stack.elementAtOrNull(entry.key),
       };
+      final left = oldWidget.stack.elementAtOrNull(oldWidget.activeIndex);
       _initializedPagesTracker.clear();
-      _setup(kept: initializedPages);
+      _setup(
+        kept: initializedPages,
+        left: left == null
+            ? null
+            : TabPageRoute(
+                routeInfo: left.routeData.route,
+                index: oldWidget.activeIndex,
+              ),
+      );
     }
   }
 

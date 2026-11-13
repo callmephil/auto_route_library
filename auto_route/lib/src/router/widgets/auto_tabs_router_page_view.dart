@@ -81,10 +81,26 @@ class _AutoTabsRouterPageViewState
       widget.routes,
       oldWidget.routes,
     )) {
+      final left = _tabRouteAt(_controller!.activeIndex);
       _controller!.replaceAll(widget.routes, _controller!.activeIndex);
+      _didShowTabAfterListChange(
+        left,
+        _controller!.activeIndex,
+        isBuiltNow: !_hasOpened(_controller!.activeIndex),
+      );
       _tabsHash = const ListEquality<Object?>().hash(widget.routes);
     }
   }
+
+  // Whether the tab at [index] was opened and is still built; read before the
+  // page view rebuilds with a new tabs list.
+  bool _hasOpened(int index) => switch (_controller!.stack
+      .elementAtOrNull(index)
+      ?.routeData
+      .matchId) {
+    final matchId? => _pageViewKey.currentState?.hasOpened(matchId) ?? false,
+    null => false,
+  };
 
   @override
   Widget build(BuildContext context) {
