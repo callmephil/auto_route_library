@@ -54,9 +54,13 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
     _setup();
   }
 
-  void _setup() {
+  // Tabs in [kept] were loaded before a routes change and stay loaded; their
+  // pages were reported then.
+  void _setup({Set<AutoRoutePage<Object?>> kept = const {}}) {
     for (var i = 0; i < widget.stack.length; ++i) {
-      if (i == widget.activeIndex || !widget.lazyLoad) {
+      if (kept.contains(widget.stack[i])) {
+        _initializedPagesTracker[i] = true;
+      } else if (i == widget.activeIndex || !widget.lazyLoad) {
         _initializedPagesTracker[i] = true;
         _didInitTabRoute(i);
       } else {
@@ -74,13 +78,7 @@ class _IndexedStackBuilderState extends State<_IndexedStackBuilder>
           if (entry.value) ?oldWidget.stack.elementAtOrNull(entry.key),
       };
       _initializedPagesTracker.clear();
-      _setup();
-      // Tabs kept across the routes change stay loaded.
-      for (var i = 0; i < widget.stack.length; ++i) {
-        if (initializedPages.contains(widget.stack[i])) {
-          _initializedPagesTracker[i] = true;
-        }
-      }
+      _setup(kept: initializedPages);
     }
   }
 
