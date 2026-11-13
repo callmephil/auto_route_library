@@ -447,6 +447,21 @@
   leave it, such as two `popAndPush`, `popUntilRoot` and then two pushes, two pushes and then `popUntilRoot`, or
   `replace`, `pop` and `push`; a page opened and closed again within the turn, never shown, gets no entry. Some of them
   kept the entry of a closed page, so back reopened it, or wrote one entry for two pages.
+- **FIX**: on the web, an app opened at a url the router writes otherwise, such as `/a?b=`, whose empty query value it
+  leaves out, keeps one browser entry: the url as written takes the place of the one the app was opened at. It was added
+  as a second entry, so back went to the url as typed.
+- **FIX**, **BEHAVIOR CHANGE**: a push right after `popUntilRoot`, `popUntil` or `popUntilRouteWithName` stays when
+  pages were pushed earlier in the same handler: from Home, `push(A)`, `popUntilRoot()`, `push(D)` ends on Home, D. D
+  was lost, and with two pages pushed before it Flutter's "An OverlayEntry should be removed only once" assertion failed
+  and the screen stayed empty. The pages the navigator has not built yet now leave as the pop is called, not a frame
+  later: an app sees the stack without them as the call returns, the callers of their pushes get null then, and the
+  predicate of `popUntil` is asked about such a page through a stand-in page route that has the page as its settings.
+  Pages on screen are popped as before, and `popUntilRouteWithPath` and a pop with `scoped: false` still wait for the
+  frame.
+- **FIX**: `pushAndPopUntil` with `ModalRoute.withName`, or any predicate that asks for a `ModalRoute` or a `PageRoute`,
+  keeps the named page when it was pushed in the same handler: from Home, `push(A)` then
+  `pushAndPopUntil(D, predicate: ModalRoute.withName('ARoute'))` ends on Home, A, D. It ended on D alone, with no page
+  to go back to, because the predicate was asked about a stand-in that was no `ModalRoute`.
 
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
