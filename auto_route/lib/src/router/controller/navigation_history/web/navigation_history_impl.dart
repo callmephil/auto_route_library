@@ -280,7 +280,14 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   @override
   void pushPathState(Object? state) {
-    final newState = urlState.copyWith(pathState: state);
+    // Like history.pushState, always a new entry, also right after a replace,
+    // and null is a state like any other; copyWith would keep the last
+    // navigation's replace mark and can't set null.
+    final newState = UrlState(
+      urlState.uri,
+      urlState.segments,
+      pathState: state,
+    );
     if (newState == urlState) return;
     final browserIndex = _currentIndex;
     onNewUrlState(newState);

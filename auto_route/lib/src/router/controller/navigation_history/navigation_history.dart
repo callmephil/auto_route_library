@@ -133,6 +133,10 @@ abstract class NavigationHistory with ChangeNotifier {
 
   /// Pushes a new browser entry with given state
   ///
+  /// Like history.pushState, it adds an entry also right after a navigation
+  /// that replaced the current one, and takes null to push an entry without
+  /// a state. Pushes nothing when [state] equals the current [pathState].
+  ///
   /// only works for web
   void pushPathState(Object? state);
 
