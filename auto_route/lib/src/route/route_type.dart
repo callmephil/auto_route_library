@@ -73,6 +73,21 @@ class MaterialRouteType extends RouteType with PredictiveBackGestureMixin {
 
   @override
   final RouteTransitionsBuilder? predictiveBackPageTransitionsBuilder;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      super == other &&
+          other is MaterialRouteType &&
+          enablePredictiveBackGesture == other.enablePredictiveBackGesture &&
+          predictiveBackPageTransitionsBuilder ==
+              other.predictiveBackPageTransitionsBuilder;
+
+  @override
+  int get hashCode =>
+      super.hashCode ^
+      enablePredictiveBackGesture.hashCode ^
+      predictiveBackPageTransitionsBuilder.hashCode;
 }
 
 /// Generates a route that uses `CupertinoRouteTransitionMixin`
@@ -99,6 +114,21 @@ class AdaptiveRouteType extends RouteType with PredictiveBackGestureMixin {
 
   @override
   final RouteTransitionsBuilder? predictiveBackPageTransitionsBuilder;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      super == other &&
+          other is AdaptiveRouteType &&
+          enablePredictiveBackGesture == other.enablePredictiveBackGesture &&
+          predictiveBackPageTransitionsBuilder ==
+              other.predictiveBackPageTransitionsBuilder;
+
+  @override
+  int get hashCode =>
+      super.hashCode ^
+      enablePredictiveBackGesture.hashCode ^
+      predictiveBackPageTransitionsBuilder.hashCode;
 }
 
 /// Generates a route with user-defined transitions
@@ -212,6 +242,9 @@ class CustomRouteType extends RouteType with PredictiveBackGestureMixin {
           barrierDismissible == other.barrierDismissible &&
           barrierLabel == other.barrierLabel &&
           barrierColor == other.barrierColor &&
+          enablePredictiveBackGesture == other.enablePredictiveBackGesture &&
+          predictiveBackPageTransitionsBuilder ==
+              other.predictiveBackPageTransitionsBuilder &&
           enableCupertinoBackGesture == other.enableCupertinoBackGesture;
 
   @override
@@ -224,6 +257,8 @@ class CustomRouteType extends RouteType with PredictiveBackGestureMixin {
       barrierDismissible.hashCode ^
       barrierLabel.hashCode ^
       barrierColor.hashCode ^
+      enablePredictiveBackGesture.hashCode ^
+      predictiveBackPageTransitionsBuilder.hashCode ^
       enableCupertinoBackGesture.hashCode;
 }
 
