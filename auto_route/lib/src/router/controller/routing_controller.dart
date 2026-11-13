@@ -3114,6 +3114,7 @@ abstract class StackRouter extends RoutingController {
     bool updateAncestorsPathData = true,
     bool returnLastRouteCompleter = true,
     bool isReevaluating = false,
+    bool goesInAtOnce = false,
     Completer<void>? pushed,
     ValueChanged<RouteMatch<Object?>>? onLastRouteAdded,
     VoidCallback? onFirstRouteAccepted,
@@ -3143,6 +3144,48 @@ abstract class StackRouter extends RoutingController {
       }
     }
 
+    // Puts on the page of the route at [index], one before the last, which
+    // its guards let through as [match].
+    void putOn(int index, RouteMatch<Object?> match) {
+      if (index == 0) onFirstRouteAccepted?.call();
+      if (match is ReevaluatableRouteMatch) {
+        _addReevaluatedPage(match, notify: false);
+      } else {
+        unawaited(_addNewPage<T>(match, notify: false, takeovers: takeovers));
+      }
+    }
+
+    // Puts on the page of the last route, which its guards let through as
+    // [match], and tells the navigator. Returns the future of a new page,
+    // which completes when the page closes, and null for a page that was
+    // reevaluated.
+    Future<T?>? putOnLast(RouteMatch<Object?> match) {
+      if (routes.length == 1) onFirstRouteAccepted?.call();
+      _updateSharedPathData(
+        queryParams: match.queryParams.rawMap,
+        fragment: match.fragment,
+        includeAncestors: updateAncestorsPathData,
+      );
+      onLastRouteAdded?.call(match);
+      if (match is ReevaluatableRouteMatch) {
+        _addReevaluatedPage(match, notify: notify);
+        openChildrenOfTakeovers();
+        return null;
+      }
+      final popped = _addNewPage<T>(match, notify: notify);
+      openChildrenOfTakeovers();
+      if (pushed != null && !pushed.isCompleted) pushed.complete();
+      return popped;
+    }
+
+    // With [goesInAtOnce], the routes before the last that the guards let
+    // through, which wait for the guards of the routes after them: the stack
+    // stays as it is on screen until every guard has answered, and the pages
+    // then go on in one step, as Flutter's Navigator takes a new list of
+    // pages as one update. A guard that rejects a route leaves nothing to
+    // undo.
+    final held = <RouteMatch<Object?>>[];
+
     try {
       for (var i = 0; i < routes.length; i++) {
         if (wasPopped(routes[i])) break;
@@ -3160,40 +3203,29 @@ abstract class StackRouter extends RoutingController {
         final match = result.route;
         if (wasPopped(match)) break;
         if (result.continueNavigation) {
+          final isLast = i == routes.length - 1;
+          if (goesInAtOnce) {
+            if (!isLast) {
+              held.add(match);
+              continue;
+            }
+            held.forEachIndexed(putOn);
+            final popped = putOnLast(match);
+            return returnLastRouteCompleter ? await popped : null;
+          }
           // Before anything the route does to the stack once its guards
           // accept.
           final pagesBefore = List.of(_pages);
-          if (i != (routes.length - 1)) {
-            _runUndoableBatchStep(() {
-              if (i == 0) onFirstRouteAccepted?.call();
-              if (match is ReevaluatableRouteMatch) {
-                _addReevaluatedPage(match, notify: false);
-              } else {
-                unawaited(
-                  _addNewPage<T>(match, notify: false, takeovers: takeovers),
-                );
-              }
-            });
-          } else {
-            if (i == 0) onFirstRouteAccepted?.call();
-            _updateSharedPathData(
-              queryParams: match.queryParams.rawMap,
-              fragment: match.fragment,
-              includeAncestors: updateAncestorsPathData,
-            );
-            onLastRouteAdded?.call(match);
-            if (match is ReevaluatableRouteMatch) {
-              _addReevaluatedPage(match, notify: notify);
-              openChildrenOfTakeovers();
-            } else {
-              final completer = _addNewPage<T>(match, notify: notify);
-              openChildrenOfTakeovers();
-              if (pushed != null && !pushed.isCompleted) pushed.complete();
+          if (isLast) {
+            final popped = putOnLast(match);
+            if (popped != null) {
               // Every guard let the batch through.
               _endWaitOfTakenOff(takenOff);
               // This is the last route, so the loop ends here either way.
-              return returnLastRouteCompleter ? await completer : null;
+              return returnLastRouteCompleter ? await popped : null;
             }
+          } else {
+            _runUndoableBatchStep(() => putOn(i, match));
           }
           added.addAll(_pages.whereNot(pagesBefore.contains));
           final left = pagesBefore.whereNot(_pages.contains).toList();
