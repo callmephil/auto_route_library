@@ -1262,7 +1262,7 @@ AutoRouter.declarative(
 
 Working with paths in **AutoRoute** is optional because `PageRouteInfo` objects are matched by name unless pushed as a string using the `deepLinkBuilder` property in root delegate or the `pushPath`, `replacePath` and `navigatePath` methods.
 
-If you don’t specify a path it’s going to be generated from the page name e.g. `BookListPage` will have ‘book-list-page’ as a path, if initial arg is set to true the path will be `/`, unless it's relative then it will be an empty string `''`.
+If you don’t specify a path it’s going to be generated from the page name e.g. `BookListPage` will have ‘book-list-page’ as a path (a name with capitals in a row keeps some of them, `TVPage` gets ‘t-vPage’, so give such a page its own path), if initial arg is set to true the path will be `/`, unless it's relative then it will be an empty string `''`.
 
 When developing a web application or a native app that requires deep-linking, you'd probably need to define paths with clear memorable names, and that's done using the `path` argument in `AutoRoute`.
 

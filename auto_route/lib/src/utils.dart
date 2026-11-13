@@ -1,6 +1,11 @@
 import 'dart:convert';
 
 /// A utility to re-case a string to kabab-case
+///
+/// A name with capitals in a row keeps some of them: 'TVRoute' gives
+/// 't-vRoute' and 'HTTPRoute' gives 'h-tt-pRoute'. The default paths of
+/// routes come from this, so it stays as it is: changing it would change
+/// their urls.
 String toKebabCase(String s) {
   // Both groups of the pattern take part in every match, so neither is null.
   return s.replaceAllMapped(
