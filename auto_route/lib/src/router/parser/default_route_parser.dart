@@ -477,7 +477,11 @@ class UrlState {
     final fullPath = p.posix.joinAll(
       routes.where((e) => e.stringMatch.isNotEmpty).map((e) => e.stringMatch),
     );
-    final normalized = p.posix.normalize(fullPath);
+    // The top-level '*' page has the path '*': a url from the root starts
+    // with '/', so it reads '/*', as a nested '*' page reads '/shell/*'.
+    final normalized = p.posix.normalize(
+      fullPath.startsWith('/') ? fullPath : '/$fullPath',
+    );
     final queryParams = <String, Object?>{};
     if (lastSegment.queryParams.isNotEmpty) {
       final queries = lastSegment.queryParams.rawMap;

@@ -334,6 +334,7 @@ import 'url_on_pop_test.dart' as url_on_pop;
 import 'url_on_push_in_shell_test.dart' as url_on_push_in_shell;
 import 'url_path_separator_test.dart' as url_path_separator;
 import 'wait_for_transitions_test.dart' as wait_for_transitions;
+import 'wildcard_route_pushed_url_test.dart' as wildcard_route_pushed_url;
 import 'window_resize_test.dart' as window_resize;
 import 'wrapper_push_from_child_test.dart' as wrapper_push_from_child;
 
@@ -630,6 +631,7 @@ void main() {
   url_on_push_in_shell.main();
   url_path_separator.main();
   wait_for_transitions.main();
+  wildcard_route_pushed_url.main();
   window_resize.main();
   wrapper_push_from_child.main();
 }
