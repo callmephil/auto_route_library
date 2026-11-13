@@ -289,11 +289,13 @@ class AutoPageViewState extends State<AutoPageView> {
     if (notification is ScrollUpdateNotification) {
       final currentPage = _controller.page!.round();
       _router.setActiveIndex(currentPage);
-      final deltaDx = notification.dragDetails?.delta.dx;
-      if (deltaDx != null) {
-        if (deltaDx > 0 && currentPage > 0) {
+      // The page grows toward the next tab whatever the axis or the text
+      // direction, so it tells which neighbor a drag uncovers.
+      if (notification.dragDetails != null) {
+        final page = _controller.page!;
+        if (page < currentPage) {
           _preloadDraggedIn(currentPage - 1);
-        } else if (deltaDx < 0 && currentPage < _children.length) {
+        } else if (page > currentPage) {
           _preloadDraggedIn(currentPage + 1);
         }
       }

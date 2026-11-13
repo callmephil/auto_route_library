@@ -220,6 +220,8 @@ import 'simultaneous_taps_test.dart' as simultaneous_taps;
 import 'slow_link_builder_order_test.dart' as slow_link_builder_order;
 import 'state_after_reload_test.dart' as state_after_reload;
 import 'swipe_init_tab_test.dart' as swipe_init_tab;
+import 'swipe_unopened_tab_rtl_vertical_test.dart'
+    as swipe_unopened_tab_rtl_vertical;
 import 'switch_routers_test.dart' as switch_routers;
 import 'tab_bar_dispose_test.dart' as tab_bar_dispose;
 import 'tab_bar_indicator_test.dart' as tab_bar_indicator;
@@ -467,6 +469,7 @@ void main() {
   simultaneous_taps.main();
   state_after_reload.main();
   swipe_init_tab.main();
+  swipe_unopened_tab_rtl_vertical.main();
   switch_routers.main();
   tab_bar_dispose.main();
   tab_bar_indicator.main();
