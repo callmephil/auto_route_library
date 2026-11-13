@@ -98,6 +98,10 @@ class AutoLeadingButton extends StatefulWidget {
 
   /// Clients can use this builder to customize
   /// the looks and feels of their leading buttons
+  ///
+  /// It is told the [LeadingType] the default button would show:
+  /// [LeadingType.drawer] on a page whose [Scaffold] has a drawer, otherwise
+  /// [LeadingType.back] or [LeadingType.close] when the router can pop.
   final AutoLeadingButtonBuilder? builder;
 
   final NullableWidgetBuilder? _nullableBuilder;
@@ -159,7 +163,21 @@ class _AutoLeadingButtonState extends State<AutoLeadingButton> {
         ..._listenablesOf(delegate.controller),
     });
     Widget? leading;
-    if (scope.controller.canPop(
+    // A page with a drawer gets the drawer button, and the back button only
+    // otherwise, as Flutter's AppBar chooses its leading widget.
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold?.hasDrawer == true) {
+      if (widget.builder != null) {
+        return widget.builder!(context, .drawer, _handleDrawerButton);
+      }
+      leading = IconButton(
+        key: const ValueKey(LeadingType.drawer),
+        icon: const Icon(Icons.menu),
+        iconSize: Theme.of(context).iconTheme.size ?? 24,
+        onPressed: _handleDrawerButton,
+        tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
+      );
+    } else if (scope.controller.canPop(
       ignoreChildRoutes: !widget.showIfChildCanPop,
       ignoreParentRoutes: !widget._shouldShowIfParentCanPop,
       ignorePagelessRoutes: widget.ignorePagelessRoutes,
@@ -184,19 +202,6 @@ class _AutoLeadingButtonState extends State<AutoLeadingButton> {
               color: widget.color,
               onPressed: () => unawaited(scope.controller.maybePopTop()),
             );
-    }
-    final scaffold = Scaffold.maybeOf(context);
-    if (scaffold?.hasDrawer == true) {
-      if (widget.builder != null) {
-        return widget.builder!(context, .drawer, _handleDrawerButton);
-      }
-      leading = IconButton(
-        key: const ValueKey(LeadingType.drawer),
-        icon: const Icon(Icons.menu),
-        iconSize: Theme.of(context).iconTheme.size ?? 24,
-        onPressed: _handleDrawerButton,
-        tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
-      );
     }
 
     if (widget.builder != null) {
