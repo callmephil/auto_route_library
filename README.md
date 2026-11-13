@@ -1659,7 +1659,7 @@ AutoRoute(page: AdminRoute.page, guards: [adminGuard], children: [
 // authGuard (AdminRoute), adminGuard, authGuard (UsersRoute), usersGuard
 ```
 
-A guard that throws, as an `async` guard does when the request it awaits fails, fails its navigation: the future the call returned completes with the error, the stack stays as it was, and `activeGuardObserver` no longer counts the guard as in progress. During a reevaluation the pages stay open, and the next reevaluation asks the guards again.
+A guard that throws before it answers, as an `async` guard does when the request it awaits fails, fails its navigation: the future the call returned completes with the error, the stack stays as it was, and `activeGuardObserver` no longer counts the guard as in progress. During a reevaluation the pages stay open, and the next reevaluation asks the guards again. A guard that answers and then throws has given its answer: the navigation goes on with it, and the error is an uncaught error, not the navigation's.
 
 When several routes are opened at once, as by `pushAll` or a deep link, they're checked one after another, from the bottom of the stack up, and their pages go on together once the last guard has let its route through. Until then the stack stays as it is, also under a page a guard shows meanwhile. A rejected route rejects them all: the routes before it that its guards let through don't open either, and the stack stays as it was. A router with no pages yet, as when the app starts at a deep link, opens each page as its guards let it through, so it shows the routes below a rejected one. The guards of tab routes run when their tab is about to show, without the global guards (see [Guarding tab routes](#guarding-tab-routes)).
 
