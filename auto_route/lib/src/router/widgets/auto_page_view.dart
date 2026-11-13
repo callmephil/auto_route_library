@@ -119,8 +119,14 @@ class AutoPageViewState extends State<AutoPageView> {
       setState(_updateChildren);
     }
     _disposeInactiveChildren();
-    if (_router.activeIndex != _controller.page!.round()) {
-      unawaited(_warpToCurrentIndex());
+    if (!_controller.hasClients) return;
+    // Null until the page view is first laid out, as under a covering page.
+    final page = _controller.page;
+    if (page == null) {
+      // The page view starts on the active tab at its first layout.
+      _jumpToPage(_router.activeIndex);
+    } else if (_router.activeIndex != page.round()) {
+      unawaited(_warpToCurrentIndex(page.round()));
     }
   }
 
@@ -254,13 +260,12 @@ class AutoPageViewState extends State<AutoPageView> {
     }
   }
 
-  Future<void> _warpToCurrentIndex() async {
+  // [previousIndex] is the page on screen: the tab before the active one, or
+  // the tab a swipe reached when its guards kept it out.
+  Future<void> _warpToCurrentIndex(int previousIndex) async {
     if (!mounted) return;
 
     _disposeInactiveChildren();
-    // From the page on screen: it's the tab before the active one, or the
-    // tab a swipe reached when its guards kept it out.
-    final previousIndex = _controller.page!.round();
 
     final isAdjacentDestination =
         (_router.activeIndex - previousIndex).abs() == 1;

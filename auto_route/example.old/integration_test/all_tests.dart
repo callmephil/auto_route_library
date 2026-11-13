@@ -107,6 +107,7 @@ import 'override_children_on_reevaluate_test.dart'
     as override_children_on_reevaluate;
 import 'page_semantics_identifier_test.dart' as page_semantics_identifier;
 import 'page_view_swipe_back_test.dart' as page_view_swipe_back;
+import 'page_view_tabs_under_cover_test.dart' as page_view_tabs_under_cover;
 import 'page_view_zero_duration_test.dart' as page_view_zero_duration;
 import 'pageless_push_rebuild_test.dart' as pageless_push_rebuild;
 import 'param_converter_test.dart' as param_converter;
@@ -365,6 +366,7 @@ void main() {
   override_children_on_reevaluate.main();
   page_semantics_identifier.main();
   page_view_swipe_back.main();
+  page_view_tabs_under_cover.main();
   page_view_zero_duration.main();
   pageless_push_rebuild.main();
   param_converter.main();
