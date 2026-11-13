@@ -75,6 +75,8 @@ import 'navigate_awaits_test.dart' as navigate_awaits;
 import 'navigate_inherited_path_params_test.dart'
     as navigate_inherited_path_params;
 import 'navigate_nested_update_test.dart' as navigate_nested_update;
+import 'navigate_open_shell_no_children_test.dart'
+    as navigate_open_shell_no_children;
 import 'navigate_over_pageless_route_test.dart' as navigate_over_pageless_route;
 import 'navigate_rejected_keeps_stack_test.dart'
     as navigate_rejected_keeps_stack;
@@ -326,6 +328,7 @@ void main() {
   navigate_awaits.main();
   navigate_inherited_path_params.main();
   navigate_nested_update.main();
+  navigate_open_shell_no_children.main();
   navigate_over_pageless_route.main();
   navigate_rejected_keeps_stack.main();
   navigate_root_from_nested.main();

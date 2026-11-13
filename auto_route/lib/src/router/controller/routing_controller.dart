@@ -539,6 +539,13 @@ abstract class RoutingController with ChangeNotifier {
   /// The pages above it leave only once the guards of [route] let it through;
   /// a rejected [route] leaves the stack as it was.
   ///
+  /// A [route] that is open and holds a nested router sends that router to
+  /// the children it is given, or to its initial child. Given no children and
+  /// with no initial child, it says nothing about the pages inside, so the
+  /// nested router keeps the pages it shows. [navigatePath], a link and
+  /// [back] name the whole state: with no page named for a nested router,
+  /// they empty it.
+  ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
   Future<T?> navigate<T extends Object?>(
@@ -553,6 +560,10 @@ abstract class RoutingController with ChangeNotifier {
   ///
   /// The pages above it leave only once the guards of its route let it
   /// through; a rejected route leaves the stack as it was.
+  ///
+  /// A [path] names the whole state, as a url does: a nested router of the
+  /// page it reaches that [path] names no page for, and whose route has no
+  /// initial child, is emptied. See [navigate] to keep its pages.
   ///
   /// if [includePrefixMatches] is true prefixed-matches
   /// will be added to to target destination
@@ -583,7 +594,11 @@ abstract class RoutingController with ChangeNotifier {
   }) async {
     final match = _matchOrReportFailure(route, onFailure: onFailure);
     if (match != null) {
-      return await _navigateAll([match], onFailure: onFailure);
+      return await _navigateAll(
+        [match],
+        onFailure: onFailure,
+        keepsUnnamedPages: true,
+      );
     }
     return null;
   }
@@ -920,10 +935,16 @@ abstract class RoutingController with ChangeNotifier {
   @override
   String toString() => '${routeData.name} Router';
 
+  // With [keepsUnnamedPages], a nested router that [routes] reach and name
+  // no pages for keeps the pages it shows, as navigate to a route object
+  // asks: a route given no children says nothing about them. A path, a link
+  // and a history entry name the whole state, so without it such a router is
+  // emptied.
   Future<T?> _navigateAll<T extends Object?>(
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
+    bool keepsUnnamedPages = false,
   });
 
   Future<void> _navigateAllRoutes(
@@ -1001,7 +1022,11 @@ class TabsRouter extends RoutingController {
         'show it in a router of its own.',
       );
     }
-    return await _navigateAll([match], onFailure: onFailure);
+    return await _navigateAll(
+      [match],
+      onFailure: onFailure,
+      keepsUnnamedPages: true,
+    );
   }
 
   RouteData<Object?> _routeData;
@@ -1159,6 +1184,7 @@ class TabsRouter extends RoutingController {
     RouteMatch<Object?>? route,
     OnNavigationFailure? onFailure,
     bool remember = true,
+    bool keepsUnnamedPages = false,
   }) {
     if (_activeIndex == index) return _TabChange.done;
     // A view asks again for the tab it moved to while its guards decide.
@@ -1177,6 +1203,7 @@ class TabsRouter extends RoutingController {
         update: route != null,
         onFailure: onFailure,
         remember: remember,
+        keepsUnnamedPages: keepsUnnamedPages,
       );
     }
     _pendingTab = index;
@@ -1192,6 +1219,7 @@ class TabsRouter extends RoutingController {
         update: route != null,
         onFailure: onFailure,
         remember: remember,
+        keepsUnnamedPages: keepsUnnamedPages,
       ),
     );
   }
@@ -1205,6 +1233,7 @@ class TabsRouter extends RoutingController {
     bool update = false,
     OnNavigationFailure? onFailure,
     bool remember = true,
+    bool keepsUnnamedPages = false,
   }) {
     if (_isDisposed || change != _tabChanges) return .replaced;
     _pendingTab = null;
@@ -1239,7 +1268,13 @@ class TabsRouter extends RoutingController {
     } else if (notify) {
       notifyAll();
     }
-    if (updated != null) _navigateInsideTab(updated, onFailure: onFailure);
+    if (updated != null) {
+      _navigateInsideTab(
+        updated,
+        onFailure: onFailure,
+        keepsUnnamedPages: keepsUnnamedPages,
+      );
+    }
     return .done;
   }
 
@@ -1612,6 +1647,7 @@ class TabsRouter extends RoutingController {
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
+    bool keepsUnnamedPages = false,
   }) async {
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
     for (final mayUpdateRoute in routesToProcess) {
@@ -1623,6 +1659,7 @@ class TabsRouter extends RoutingController {
             pageToUpdateIndex,
             route: mayUpdateRoute,
             onFailure: onFailure,
+            keepsUnnamedPages: keepsUnnamedPages,
           );
         } else {
           final shouldNotify =
@@ -1639,6 +1676,7 @@ class TabsRouter extends RoutingController {
             routeToBeUpdated,
             onFailure: onFailure,
             isReevaluating: isReevaluating,
+            keepsUnnamedPages: keepsUnnamedPages,
           );
         }
       }
@@ -1702,6 +1740,7 @@ class TabsRouter extends RoutingController {
     RouteMatch<Object?> route, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
+    bool keepsUnnamedPages = false,
   }) {
     // By match id: a tab sharing its route with another has its own nested
     // router.
@@ -1713,6 +1752,7 @@ class TabsRouter extends RoutingController {
           newRoutes,
           onFailure: onFailure,
           isReevaluating: isReevaluating,
+          keepsUnnamedPages: keepsUnnamedPages,
         ),
       );
     }
@@ -3843,6 +3883,7 @@ abstract class StackRouter extends RoutingController {
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
+    bool keepsUnnamedPages = false,
     _PagesReplacement? replacement,
   }) async {
     // A reevaluation closes the pages its guards reject, and a guard may show
@@ -3946,10 +3987,20 @@ abstract class StackRouter extends RoutingController {
         return await mayUpdateController._navigateAll(
           newChildren,
           onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
         );
       }
-    } else if (!managedByWidget) {
+    } else if (!managedByWidget && !keepsUnnamedPages) {
+      // A path, a link, a history entry and a reevaluation name every page
+      // this router shows, so with none it shows none. The listeners hear of
+      // it, so the url no longer names a page that left. Not after navigate to
+      // a route object that was given no children and has no initial child,
+      // which names no pages for this router: its pages stay, as going back to
+      // an open screen shows it as it was (iOS popToViewController, Android
+      // popUpTo, Flutter's Navigator.popUntil).
+      final hadPages = _pages.isNotEmpty;
       _reset();
+      if (hadPages && !isReevaluating) notifyAll(forceUrlRebuild: true);
     }
     return await popped;
   }
