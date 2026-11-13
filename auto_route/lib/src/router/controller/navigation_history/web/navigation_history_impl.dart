@@ -4,6 +4,7 @@ import 'dart:ui_web' as ui_web;
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter/foundation.dart' show LocalKey;
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:web/web.dart';
 
 /// An implementation of [NavigationHistory]
@@ -37,11 +38,34 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   bool _doesAddEntryWithSameUrl = false;
 
+  // Whether a navigation of this frame adds an entry the router writes only
+  // when the frame ends.
+  bool _isNewEntryUnwritten = false;
+
   @override
   bool get addsEntryWithSameUrl => _doesAddEntryWithSameUrl;
 
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
+    // The router writes the url once a frame, with the last change's kind. A
+    // replace of the entry an earlier navigation of this frame adds goes to
+    // the browser as that new entry, or it would replace the one under; it
+    // still takes that entry's place here.
+    final isReplace = newState.shouldReplace;
+    _onNewUrlState(
+      isReplace && _isNewEntryUnwritten
+          ? newState.copyWith(shouldReplace: false)
+          : newState,
+      notify: notify,
+      isReplace: isReplace,
+    );
+  }
+
+  void _onNewUrlState(
+    UrlState newState, {
+    required bool notify,
+    required bool isReplace,
+  }) {
     final browserIndex = _currentIndex;
     final browserPath = ui_web.urlStrategy?.getPath();
     _recordCurrentEntry();
@@ -71,18 +95,28 @@ class NavigationHistoryImpl extends NavigationHistory {
       _entries[browserIndex] = newState;
       _appIndex = browserIndex;
     } else if (notify && (isNewUrl || isPushedOverSameUrl)) {
-      _recordEntryToWrite(newState, browserIndex);
+      _recordEntryToWrite(newState, browserIndex, isReplace: isReplace);
     }
   }
 
   // The router writes [newState] after this frame: over the current entry for
-  // a replace, otherwise as a new entry, which drops those after it.
-  void _recordEntryToWrite(UrlState newState, int browserIndex) {
-    final index =
-        (_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1);
+  // a replace, [isReplace], otherwise as a new entry, which drops those after
+  // it.
+  void _recordEntryToWrite(
+    UrlState newState,
+    int browserIndex, {
+    required bool isReplace,
+  }) {
+    final index = (_appIndex ?? browserIndex) + (isReplace ? 0 : 1);
     _entries.removeWhere((key, _) => key >= index);
     _entries[index] = newState;
     _appIndex = index;
+    if (!isReplace && !_isNewEntryUnwritten) {
+      _isNewEntryUnwritten = true;
+      SchedulerBinding.instance.addPostFrameCallback(
+        (_) => _isNewEntryUnwritten = false,
+      );
+    }
   }
 
   @override
@@ -337,7 +371,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     final browserIndex = _currentIndex;
     onNewUrlState(newState);
     // The url stays the same, so onNewUrlState records no entry for it.
-    _recordEntryToWrite(newState, browserIndex);
+    _recordEntryToWrite(newState, browserIndex, isReplace: false);
   }
 
   // The browser moved to an entry whose page the app already shows, as its
