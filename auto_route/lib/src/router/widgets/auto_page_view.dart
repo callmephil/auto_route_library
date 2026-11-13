@@ -81,6 +81,12 @@ class AutoPageViewState extends State<AutoPageView> {
   final _tabKeys = <LocalKey, GlobalKey<KeepAliveTabState>>{};
   // The tabs [_children] were built for, to tell when the routes change.
   var _matchIds = <LocalKey>[];
+  // The tab at each page of the page view: the order of [_matchIds], except
+  // while a warp has swapped two of them.
+  var _pageTabs = <LocalKey>[];
+  // Counts the warps started, so a warp cut off by a later one leaves the
+  // pages to it.
+  int _warpCount = 0;
   // Tabs a drag loaded before they were opened; observers have not heard of
   // them.
   final _draggedInTabs = <LocalKey>{};
@@ -114,6 +120,8 @@ class AutoPageViewState extends State<AutoPageView> {
   }
 
   void _routerListener() {
+    // Read before the pages go back to the tabs' order below.
+    final shownTab = _shownTab();
     if (mounted) {
       // Rebuilds so only the new active tab is reachable.
       setState(_updateChildren);
@@ -125,9 +133,22 @@ class AutoPageViewState extends State<AutoPageView> {
     if (page == null) {
       // The page view starts on the active tab at its first layout.
       _jumpToPage(_router.activeIndex);
-    } else if (_router.activeIndex != page.round()) {
-      unawaited(_warpToCurrentIndex(page.round()));
+      return;
     }
+    // While a warp runs, the tab on screen may sit at another page than its
+    // own, and the pages are now in the tabs' order again.
+    final shownIndex = shownTab == null ? -1 : _matchIds.indexOf(shownTab);
+    final previousIndex = shownIndex < 0 ? page.round() : shownIndex;
+    if (_router.activeIndex != page.round() || previousIndex != page.round()) {
+      unawaited(_warpToCurrentIndex(previousIndex));
+    }
+  }
+
+  // The tab the page view shows, if it has been laid out.
+  LocalKey? _shownTab() {
+    if (!_controller.hasClients) return null;
+    final page = _controller.page?.round();
+    return page == null ? null : _pageTabs.elementAtOrNull(page);
   }
 
   /// Preload the page at [index]
@@ -174,6 +195,7 @@ class AutoPageViewState extends State<AutoPageView> {
   void _updateChildren() {
     final stack = widget.router.stack;
     _matchIds = [for (final page in stack) page.routeData.matchId];
+    _pageTabs = List.of(_matchIds);
     _tabKeys.removeWhere((matchId, _) => !_matchIds.contains(matchId));
     _draggedInTabs.retainAll(_matchIds);
     _children = List.generate(stack.length, (index) {
@@ -236,8 +258,8 @@ class AutoPageViewState extends State<AutoPageView> {
 
   Future<void> _warpToNonAdjacentTab(int previousIndex) async {
     assert(
-      (_router.activeIndex - previousIndex).abs() > 1,
-      'Only a jump of more than one page warps.',
+      _router.activeIndex != previousIndex,
+      'A warp moves to another tab.',
     );
     final initialPage = _router.activeIndex > previousIndex
         ? _router.activeIndex - 1
@@ -247,9 +269,19 @@ class AutoPageViewState extends State<AutoPageView> {
       _children = List.of(_children, growable: false);
       final first = _children.elementAtOrNull(initialPage);
       final second = _children.elementAtOrNull(previousIndex);
-      if (first == null || second == null) return;
+      final firstTab = _pageTabs.elementAtOrNull(initialPage);
+      final secondTab = _pageTabs.elementAtOrNull(previousIndex);
+      if (first == null ||
+          second == null ||
+          firstTab == null ||
+          secondTab == null) {
+        return;
+      }
       _children[initialPage] = second;
       _children[previousIndex] = first;
+      _pageTabs = List.of(_pageTabs)
+        ..[initialPage] = secondTab
+        ..[previousIndex] = firstTab;
     });
     _jumpToPage(initialPage);
 
@@ -260,21 +292,28 @@ class AutoPageViewState extends State<AutoPageView> {
     }
   }
 
-  // [previousIndex] is the page on screen: the tab before the active one, or
-  // the tab a swipe reached when its guards kept it out.
+  // [previousIndex] is the index of the tab on screen: the tab before the
+  // active one, the tab a swipe reached when its guards kept it out, or the
+  // tab a warp cut off by this one showed.
   Future<void> _warpToCurrentIndex(int previousIndex) async {
     if (!mounted) return;
+    final warp = ++_warpCount;
 
     _disposeInactiveChildren();
 
-    final isAdjacentDestination =
-        (_router.activeIndex - previousIndex).abs() == 1;
-    if (isAdjacentDestination) {
+    // The tab on screen sits at its own page unless a warp cut off by this
+    // one had moved it.
+    final isAtOwnPage = _controller.page?.round() == previousIndex;
+    if (previousIndex == _router.activeIndex) {
+      _jumpToPage(previousIndex);
+    } else if (isAtOwnPage &&
+        (_router.activeIndex - previousIndex).abs() == 1) {
       await _warpToAdjacentTab();
     } else {
       await _warpToNonAdjacentTab(previousIndex);
     }
-    if (!mounted) return;
+    // A later warp cut this one off and owns the pages now.
+    if (!mounted || warp != _warpCount) return;
     setState(_updateChildren);
     // The active tab may have changed while the warp ran, as when a guard
     // lets in the tab a swipe reached: the router then notified while the
