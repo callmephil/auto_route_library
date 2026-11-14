@@ -135,35 +135,3 @@ Future<void> pumpAsRunApp(WidgetTester tester, Widget app) async {
 /// Presses the browser's forward button and settles.
 Future<void> pressBrowserForward(WidgetTester tester) =>
     browserMove(tester, () => window.history.forward());
-
-/// Runs a frame now, before the browser can make a move it was asked for in
-/// this turn, such as the step back after a pop: only microtasks run between
-/// the calls and this frame.
-///
-/// [settleBrowser] waits before each frame, so the browser's moves land first;
-/// in an app the next frame may come first. Needs
-/// [LiveTestWidgetsFlutterBindingFramePolicy.fullyLive], which a test sets with
-/// [useLiveFrames].
-Future<void> runFrameBeforeBrowserMoves(WidgetTester tester) async {
-  final binding = tester.binding as LiveTestWidgetsFlutterBinding;
-  // The end of the turn, where the history brings the browser in line.
-  for (var i = 0; i < 4; i++) {
-    await Future<void>.value();
-  }
-  binding
-    ..handleBeginFrame(null)
-    ..handleDrawFrame();
-  // The engine takes the Router's report in microtasks.
-  for (var i = 0; i < 20; i++) {
-    await Future<void>.value();
-  }
-}
-
-/// Lets a test run frames itself, as [runFrameBeforeBrowserMoves] does, for
-/// each test of the group or file it is called in.
-void useLiveFrames() {
-  LiveTestWidgetsFlutterBinding binding() =>
-      TestWidgetsFlutterBinding.instance as LiveTestWidgetsFlutterBinding;
-  setUp(() => binding().framePolicy = .fullyLive);
-  tearDown(() => binding().framePolicy = .fadePointers);
-}
