@@ -596,11 +596,12 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
 
   void _handleRebuild() {
     final context = controller.navigatorKey.currentContext;
-    // The history writes the browser entries of these changes itself: the
-    // router's report only repeats the entry on top, as a replace, with any
-    // route information provider.
-    if ((urlState.shouldReplace ||
-            controller.navigationHistory.writesBrowserEntries) &&
+    final history = controller.navigationHistory;
+    // The history writes the browser entries of these changes itself and has
+    // the router report the url once they are in, as a replace that only
+    // repeats the entry on top, with any route information provider.
+    if (history.writesBrowserEntries && !history.reportsWrittenEntry) return;
+    if ((urlState.shouldReplace || history.reportsWrittenEntry) &&
         context != null) {
       // Flutter's default route information provider ignores
       // AutoRouteInformation.replace; it replaces the browser entry only when

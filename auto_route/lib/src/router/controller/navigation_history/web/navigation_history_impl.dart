@@ -55,6 +55,13 @@ class NavigationHistoryImpl extends NavigationHistory {
   // Whether the end of this turn's account is scheduled.
   bool _isEndScheduled = false;
 
+  // Whether the router's report of the last turn waits for the browser to
+  // land on the entry a step back moves it to.
+  bool _reportsAfterMove = false;
+
+  // Whether the router is being told to report the turn's url now.
+  bool _isReportingTurn = false;
+
   // What to write once the browser reports the step back that the end of a
   // turn made, each with whether it replaces the entry the browser is on.
   List<(UrlState, bool)> _writesAfterMove = const [];
@@ -173,7 +180,24 @@ class NavigationHistoryImpl extends NavigationHistory {
   }
 
   @override
-  bool get writesBrowserEntries => _frameStartEntries != null;
+  bool get writesBrowserEntries =>
+      _frameStartEntries != null || _reportsAfterMove;
+
+  @override
+  bool get reportsWrittenEntry => _isReportingTurn;
+
+  // Has the router report the turn's url, now that the browser holds the
+  // turn's entries: AutoRouterDelegate reports it as a replace of the entry on
+  // top, which only repeats it. Never while a step back is under way: the
+  // report would overwrite the entry the browser is leaving.
+  void _reportTurn() {
+    _isReportingTurn = true;
+    try {
+      notifyListeners();
+    } finally {
+      _isReportingTurn = false;
+    }
+  }
 
   // Ends this turn's account: brings the browser to the entries the app's
   // pages ask for.
@@ -190,6 +214,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     final provider = _provider;
     if (start == null || provider == null) return;
     _reconcile(start, _frameStartIndex, provider);
+    if (!_reportsAfterMove) _reportTurn();
   }
 
   // Brings the browser from the entries it held at the frame's start, [start],
@@ -292,6 +317,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     if (moveTo < standsOn && steps < 0) {
       _ownMoveUrl = start[moveTo]?.url;
       _writesAfterMove = writes;
+      _reportsAfterMove = true;
       _history.go(steps);
       return;
     }
@@ -454,8 +480,13 @@ class NavigationHistoryImpl extends NavigationHistory {
     final isOwn =
         ownMoveUrl != null && _isSameUrl(configuration.url, ownMoveUrl);
     // The step back of a turn's end has landed; the entries after it follow,
-    // then the account of a later turn that waited for it.
+    // the router's report of that turn, then the account of a later turn that
+    // waited for it.
     if (isOwn) writes.forEach(_write);
+    if (_reportsAfterMove) {
+      _reportsAfterMove = false;
+      _reportTurn();
+    }
     if (_frameStartEntries != null && !_isEndScheduled) {
       _isEndScheduled = true;
       scheduleMicrotask(_endFrame);

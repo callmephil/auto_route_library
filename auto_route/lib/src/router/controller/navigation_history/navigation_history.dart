@@ -150,12 +150,20 @@ abstract class NavigationHistory with ChangeNotifier {
   /// Whether this history writes the browser entries of the changes being
   /// made now itself, as the web history does for the navigations of one turn.
   ///
-  /// [AutoRouterDelegate] then has the Router report them as a replace, which
-  /// only repeats the entry on top: the Router writes one url a frame, with
-  /// one kind for the frame, which can't hold several navigations. Always
-  /// false on native platforms.
+  /// [AutoRouterDelegate] then holds the Router's report of them: the Router
+  /// writes one url a frame, with one kind for the frame, which can't hold
+  /// several navigations, and a report made while the browser steps back
+  /// would overwrite the entry it is leaving. Always false on native
+  /// platforms.
   @internal
   bool get writesBrowserEntries => false;
+
+  /// Whether the Router is to report the url now, after this history wrote the
+  /// browser entries of a turn's changes: [AutoRouterDelegate] reports it as a
+  /// replace of the entry on top, which only repeats it. Always false on
+  /// native platforms.
+  @internal
+  bool get reportsWrittenEntry => false;
 
   /// Whether a Router writes this history's urls to the platform, which it
   /// does once it has built the router's [AutoRouterDelegate].
