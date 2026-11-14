@@ -186,6 +186,9 @@ class App extends StatelessWidget {
   }
 }
 ```
+
+Pass `config()` as it is: it brings the router's own `routeInformationProvider`. An app that passes only `routerDelegate: _appRouter.delegate()` and `routeInformationParser: _appRouter.defaultRouteParser()` runs with Flutter's route information provider. On the web, when such an app is opened at a url the router writes otherwise, such as `/books?sort=`, `/books/` or the path of a `RedirectRoute`, the browser keeps both urls as entries, so the first press of its back button shows the same page again.
+
 ## Usage without code generation
 You can use auto_route without code generation by providing an inline `NamedRouteDef` with a page builder function, as name suggests, you must provide a name for the route so you can navigate to it later by name or path.
 ### Declaring Named Routes

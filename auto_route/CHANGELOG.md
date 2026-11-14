@@ -462,6 +462,12 @@
   keeps the named page when it was pushed in the same handler: from Home, `push(A)` then
   `pushAndPopUntil(D, predicate: ModalRoute.withName('ARoute'))` ends on Home, A, D. It ended on D alone, with no page
   to go back to, because the predicate was asked about a stand-in that was no `ModalRoute`.
+- **FIX**: on the web, with `neglectWhen` keeping a page's url out of the address bar, a `replace` of that page gives
+  the new page a browser entry of its own. It wrote the new url over the entry of the page under it, so back left the
+  app or skipped that page.
+- **DOCS**: the README's "Setup And Usage" says what an app gets on the web when it passes `delegate()` and
+  `defaultRouteParser()` without the `routeInformationProvider` that `config()` brings: opened at a url the router
+  writes otherwise, the browser keeps both urls as entries.
 
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
