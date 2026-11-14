@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -48,7 +49,10 @@ void main() {
     // Steps: start the app at '/slots/user:5', then navigate the nested router
     // to the slot 'user:5'.
     // Was: the slot page was on the nested stack twice.
-    // Should: one slot page, over the slot list.
+    // Should: one slot page. Off the web it sits over the slot list, which
+    // the link opens below it as a prefix match. On the web a url opens the
+    // one page it names, as a browser loads the one document at an address,
+    // so the slot is the nested stack's only page.
     testWidgets('A slot opened by its link and then by its route is one page', (
       tester,
     ) async {
@@ -72,7 +76,7 @@ void main() {
           nested?.stackData.map((data) => data.name).join(' '),
           find.text('Slot user:5').evaluate().length,
         ),
-        ('SlotListRoute SlotRoute', 1),
+        (kIsWeb ? 'SlotRoute' : 'SlotListRoute SlotRoute', 1),
       );
     });
   });
