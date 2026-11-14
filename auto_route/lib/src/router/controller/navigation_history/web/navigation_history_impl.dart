@@ -258,6 +258,13 @@ class NavigationHistoryImpl extends NavigationHistory {
       // A step back to the last entry they share, then each new entry in turn,
       // which drops the browser's entries after it, as new entries do.
       moveTo = shared - 1;
+      if (start[moveTo] == null) {
+        // A step back never ends on an entry this history doesn't know, as one
+        // from before a reload: it ends on the first entry that differs, which
+        // the app's entry replaces.
+        moveTo = shared;
+        replacesFirst = true;
+      }
     }
     final writes = [
       for (final (index, entry) in wanted.indexed.skip(shared))
