@@ -21,15 +21,23 @@ import 'browser_history.dart';
 // web history counted an entry for the page kept out, which the browser
 // never got, so its next step back was history.go(0) (e8ca1958).
 //
+// And a replace of the page kept out gives the new page an entry of its own:
+// on Home, push A, then replace it with B, and the browser shows /b with
+// Home's entry still under it, so its back button returns to Home. The web
+// history took the replace for one of an entry, but the page kept out has
+// none, so B's url wrote over Home's entry and back left the app.
+//
 // Native behavior this holds to: the HTML History API; history.go(0) reloads
-// the document, and a page kept out of the address bar has no entry to step
-// back over.
+// the document, a page kept out of the address bar has no entry to step
+// back over, and replaceState changes only the current entry, which the
+// page kept out never had.
 RootStackRouter _router() => .build(
   routes: [
     for (final (name, path) in [
       ('HomeRoute', '/'),
       ('ARoute', '/a'),
       ('BRoute', '/b'),
+      ('CRoute', '/c'),
     ])
       NamedRouteDef(name: name, path: path, builder: (_, _) => Text(name)),
   ],
@@ -65,21 +73,33 @@ List<String> _historyGoCalls() {
   return text.isEmpty ? const [] : text.split(',');
 }
 
+typedef _Reading = (int, String, String);
+
 void main() {
   useRealBrowserHistory();
   setUp(rewindBrowserHistory);
 
-  // Steps: with /a kept out of the address bar, push A and pop it (a pop from
-  // the page kept out); and push A, push B, pop (a pop back onto it). Each
-  // call a frame apart.
-  for (final (calls, expected) in [
-    (['ARoute'], (0, '/', 'HomeRoute')),
-    (['ARoute', 'BRoute'], (0, '/', 'HomeRoute ARoute')),
+  // With /a kept out of the address bar, each case runs its steps a frame
+  // apart, then presses the browser's back button until it is at Home's entry
+  // again. A letter pushes that page, 'pop' pops, 'rB' replaces the top with
+  // B and 'root' pops until the root. Each reading is the browser's entry,
+  // counted from Home's, its url, and the names on the router's stack.
+  for (final (steps, expected) in <(String, List<_Reading>)>[
+    ('A pop', [(0, '/', 'HomeRoute')]),
+    ('A B pop', [(0, '/', 'HomeRoute ARoute')]),
+    ('A rB', [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')]),
+    (
+      'B A rC',
+      [
+        (2, '/c', 'HomeRoute BRoute CRoute'),
+        (1, '/b', 'HomeRoute BRoute'),
+        (0, '/', 'HomeRoute'),
+      ],
+    ),
+    ('B A root', [(0, '/', 'HomeRoute')]),
   ]) {
-    testWidgets('On web, with /a kept out of the address bar, a push of '
-        '${calls.join(' and ')} and a pop never reload the page', (
-      tester,
-    ) async {
+    testWidgets('On web, with /a kept out of the address bar, $steps keep the '
+        'browser history and never reload the page', (tester) async {
       final router = _router();
       await pumpRouterConfigApp(
         tester,
@@ -87,24 +107,36 @@ void main() {
       );
       await settleBrowser(tester);
       final home = browserSerialCount;
-      _recordHistoryGo();
-      for (final name in calls) {
-        unawaited(router.push(NamedRoute(name)));
-        await settleBrowser(tester);
-      }
-      router.pop();
-      await settleBrowser(tester);
-      final shown = (
+      _Reading shown() => (
         browserSerialCount - home,
         browserPath,
         router.stack.map((page) => page.name).join(' '),
       );
+      _recordHistoryGo();
+      for (final step in steps.split(' ')) {
+        switch (step) {
+          case 'pop':
+            router.pop();
+          case 'root':
+            router.popUntilRoot();
+          case final replace when replace.startsWith('r'):
+            unawaited(
+              router.replace(NamedRoute('${replace.substring(1)}Route')),
+            );
+          default:
+            unawaited(router.push(NamedRoute('${step}Route')));
+        }
+        await settleBrowser(tester);
+      }
+      final readings = [shown()];
+      while (readings.length < expected.length && browserSerialCount > home) {
+        await pressBrowserBack(tester);
+        readings.add(shown());
+      }
       // The Chrome runner doesn't print a failed expectation.
-      printOnFailure('after the pop: $shown; history.go: ${_historyGoCalls()}');
-      expect(
-        (shown, _historyGoCalls().any((steps) => int.parse(steps) >= 0)),
-        (expected, false),
-      );
+      printOnFailure('readings: $readings; history.go: ${_historyGoCalls()}');
+      expect(readings, expected);
+      expect(_historyGoCalls().where((step) => int.parse(step) >= 0), isEmpty);
     });
   }
 }

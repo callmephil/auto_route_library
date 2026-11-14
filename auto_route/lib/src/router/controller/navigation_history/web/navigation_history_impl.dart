@@ -74,7 +74,9 @@ class NavigationHistoryImpl extends NavigationHistory {
     final browserIndex = _currentIndex;
     final browserPath = ui_web.urlStrategy?.getPath();
     _recordCurrentEntry();
-    final isNewUrl = !_isSameUrl(urlState.url, newState.url);
+    // The url state before this change, which it replaces once notified.
+    final shownBefore = urlState;
+    final isNewUrl = !_isSameUrl(shownBefore.url, newState.url);
     // A page pushed over one with the same url gets a browser entry of its own,
     // so that going back returns to the page under it.
     final isPushedOverSameUrl =
@@ -131,12 +133,14 @@ class NavigationHistoryImpl extends NavigationHistory {
       _frameStartEntries?[browserIndex] = newState;
       if (_frameStartEntries != null) _frameStartIndex = browserIndex;
     } else if (notify && (isNewUrl || isPushedOverSameUrl || isNewPage)) {
+      // A replace takes the place of the replaced page's entry; a page the
+      // app keeps out of the address bar has none, so the page replacing it
+      // gets one of its own instead of writing over the entry under it.
+      final replacesEntry = newState.shouldReplace && !_isKeptOut(shownBefore);
       final appIndex = _appIndex;
       _record(
         newState,
-        appIndex == null
-            ? browserIndex
-            : appIndex + (newState.shouldReplace ? 0 : 1),
+        appIndex == null ? browserIndex : appIndex + (replacesEntry ? 0 : 1),
       );
     }
   }
@@ -161,7 +165,7 @@ class NavigationHistoryImpl extends NavigationHistory {
   // there is nothing to account for, as when an app navigates before runApp.
   bool _startFrame() {
     if (_frameStartEntries == null) {
-      if (!isShownByRouter || _provider == null) return false;
+      if (_provider == null) return false;
       _frameStartEntries = Map.of(_entries);
       _frameStartIndex = _appIndex ?? _currentIndex;
     }
@@ -172,8 +176,22 @@ class NavigationHistoryImpl extends NavigationHistory {
     return true;
   }
 
-  // The route information provider of the Router that shows this history.
+  // Whether the app keeps [state]'s url out of the address bar with
+  // neglectWhen, so that it has no browser entry.
+  bool _isKeptOut(UrlState state) {
+    final provider = _provider;
+    if (provider is! AutoRouteInformationProvider || !state.hasSegments) {
+      return false;
+    }
+    final location = state.url.isEmpty ? '/' : state.uri.toString();
+    return provider.neglectIf?.call(location) ?? false;
+  }
+
+  // The route information provider of the Router that shows this history,
+  // none before a Router shows it, as when an app navigates before runApp,
+  // when there may be no binding to look one up through.
   RouteInformationProvider? get _provider {
+    if (!isShownByRouter) return null;
     final context = router.navigatorKey.currentContext;
     if (context == null) return null;
     return Router.maybeOf<Object?>(context)?.routeInformationProvider;
@@ -407,7 +425,14 @@ class NavigationHistoryImpl extends NavigationHistory {
           (!isSameUrl || entry.topMatch?.id == state.topMatch?.id);
     }
 
-    final target = !doesHold(index, popped)
+    // A popped page the app keeps out of the address bar has no entry of its
+    // own: it stood above the entry the app stands on, so the way back starts
+    // there.
+    final isPoppedKeptOut =
+        !isSameUrl && !doesHold(index, popped) && _isKeptOut(popped);
+    final target = isPoppedKeptOut
+        ? _entryBeforeClosedPages(index + 1, (i) => doesHold(i, newState))
+        : !doesHold(index, popped)
         ? null
         : isPop
         ? _entryBeforeClosedPages(index, (i) => doesHold(i, newState))
@@ -421,8 +446,8 @@ class NavigationHistoryImpl extends NavigationHistory {
       }
       _appIndex = target;
       // Within a frame its end steps the browser back; outside one, the step
-      // is made here.
-      if (hasFrame) return;
+      // is made here, if there is one.
+      if (hasFrame || target == index) return;
       _ownMoveUrl = newUrl;
       if (isPop) {
         _scheduleStepBack(target);
