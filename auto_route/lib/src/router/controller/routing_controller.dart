@@ -592,9 +592,47 @@ abstract class RoutingController with ChangeNotifier {
       onFailure: onFailure,
     );
     if (scope != null) {
-      return scope.router._navigateAll(scope.matches, onFailure: onFailure);
+      final router = scope.router;
+      // An absolute path reaches the router that holds its last part at
+      // once, past the open pages that hold that router. The dialogs over
+      // those pages close as a navigate to them closes them: once the
+      // navigation is let in.
+      final closeAbove = path.startsWith('/')
+          ? _closingPagesAbove(router)
+          : null;
+      if (router is StackRouter) {
+        return router._navigateAll(
+          scope.matches,
+          onFailure: onFailure,
+          onLetIn: closeAbove,
+        );
+      }
+      closeAbove?.call();
+      return router._navigateAll(scope.matches, onFailure: onFailure);
     }
     return SynchronousFuture(null);
+  }
+
+  // Closes the dialogs over the pages that hold [router], from its parent
+  // up, as long as each is the top page of its stack router; null when
+  // [router] is the root's or no such page holds it.
+  VoidCallback? _closingPagesAbove(RoutingController router) {
+    final holders = <StackRouter>[];
+    for (var child = router; child._parent is StackRouter;) {
+      final parent = child._parent! as StackRouter;
+      final top = parent.stackData.lastOrNull;
+      if (top == null || parent._innerControllerOfMatch(top.matchId) != child) {
+        break;
+      }
+      holders.add(parent);
+      child = parent;
+    }
+    if (holders.isEmpty) return null;
+    return () {
+      for (final holder in holders) {
+        holder._closePagelessRoutesOverTop();
+      }
+    };
   }
 
   Future<T?> _navigate<T extends Object?>(

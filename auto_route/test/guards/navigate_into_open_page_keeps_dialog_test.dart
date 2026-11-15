@@ -8,15 +8,17 @@ import '../router_test_utils.dart';
 
 // Found by the links chat while fixing a link turned down inside another
 // tab. On dev too, with no upstream issue.
-// The app's own navigate or navigatePath into a page already open closed the
-// dialogs over that page before the guards of its nested router had
-// answered: the root closed them as soon as it had reached the page, and the
-// nested router asked its guards after. So a navigation those guards
-// rejected still closed the dialog, such as an unsaved draft, and while a
-// slow guard decided the dialog was already gone. A link's dialogs wait
-// already. The dialogs now close once the nested guards let the navigation
-// in, also two routers deep. A nested router not built yet asks its guards
-// only once its page is in, so there the dialogs still close first.
+// The app's own navigate into a page already open closed the dialogs over
+// that page before the guards of its nested router had answered: the root
+// closed them as soon as it had reached the page, and the nested router
+// asked its guards after. So a navigation those guards rejected still closed
+// the dialog, such as an unsaved draft, and while a slow guard decided the
+// dialog was already gone. A link's dialogs wait already. navigatePath with
+// an absolute path went straight to the nested router and never closed them,
+// let in or not, although it pops until its path as navigate does. The
+// dialogs now close once the nested guards let the navigation in, for both
+// calls, also two routers deep. A nested router not built yet asks its
+// guards only once its page is in, so there the dialogs still close first.
 // Steps: Mail is open on message 42, with a dialog over it. The app calls
 // navigate or navigatePath to a message whose guard rejects it or lets it
 // in, at once or after a request. The same one router deeper: Mail's folder,
@@ -24,7 +26,8 @@ import '../router_test_utils.dart';
 // Native behavior this holds to: a navigation that is refused changes
 // nothing, as on the web a canceled navigation keeps the document, an open
 // <dialog> included, and as on iOS and Android a screen that isn't shown
-// leaves the one presented on top.
+// leaves the one presented on top. One let in pops until its page, as
+// Flutter's Navigator.popUntil pops the dialogs above the route it stops at.
 void main() {
   Completer<bool>? slowAnswer;
 
@@ -127,24 +130,19 @@ void main() {
         expect(router.currentUrl, '$prefix/42');
       });
 
-      // navigatePath reaches the deepest stack router at once, so it closes
-      // no dialog of the root's, let in or not; it is here for the
-      // rejections only.
-      if (!isPath) {
-        testWidgets('$how $where to a page a guard lets in at once closes the '
-            'dialog', (tester) async {
-          final router = await openWithDialog(tester);
+      testWidgets('$how $where to a page a guard lets in at once closes the '
+          'dialog', (tester) async {
+        final router = await openWithDialog(tester);
 
-          go(router, '14');
-          await tester.pumpAndSettle();
+        go(router, '14');
+        await tester.pumpAndSettle();
 
-          expect(find.text('Unsaved draft'), findsNothing);
-          expect(find.text('Mail 14'), findsOneWidget);
-          expect(router.currentUrl, '$prefix/14');
-        });
-      }
+        expect(find.text('Unsaved draft'), findsNothing);
+        expect(find.text('Mail 14'), findsOneWidget);
+        expect(router.currentUrl, '$prefix/14');
+      });
 
-      for (final isLetIn in [false, if (!isPath) true]) {
+      for (final isLetIn in [false, true]) {
         testWidgets('$how $where to a page whose guard answers later keeps the '
             'dialog while it decides, and '
             '${isLetIn ? 'closes it once let in' : 'after it rejects'}', (
