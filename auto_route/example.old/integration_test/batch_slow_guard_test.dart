@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'support/app.dart';
+
 // The pages of a batch stay off the screen until every guard has answered,
 // then go on together or not at all, as Flutter's Navigator takes a new list
 // of pages as one update and Android applies a fragment transaction as one
@@ -58,7 +60,7 @@ void main() {
       addTearDown(router.dispose);
       var brightness = Brightness.light;
       late StateSetter setAppState;
-      tester.binding.handleAppLifecycleStateChanged(.resumed);
+      bringAppToForeground(tester);
       await tester.pumpWidget(
         StatefulBuilder(
           builder: (context, setState) {

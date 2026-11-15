@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'support/app.dart';
+
 // A page stays on screen, with its State, when the app rebuilds while the
 // guard that is asked again still runs its check, as a sign-in check in
 // flight leaves the screen up on iOS and Android.
@@ -52,7 +54,7 @@ void main() {
         deepLinkBuilder: (link) => link.initial ? DeepLink.defaultPath : link,
       );
       addTearDown(router.dispose);
-      tester.binding.handleAppLifecycleStateChanged(.resumed);
+      bringAppToForeground(tester);
       await tester.pumpWidget(
         ListenableBuilder(
           listenable: session,

@@ -2,6 +2,8 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'app.dart';
+
 /// An app with state restoration that builds a new router each time it
 /// starts, as an app the platform ended and restored does.
 ///
@@ -43,14 +45,12 @@ class _RestorableRouterAppState extends State<RestorableRouterApp> {
 /// and waits for its first page.
 ///
 /// Like pumpRouterApp in app.dart, it first brings the app to the
-/// foreground: the test binding forgets the app's lifecycle state after
-/// each test, and while it's unknown Flutter stops telling Android whether
-/// it handles back.
+/// foreground, with [bringAppToForeground].
 Future<void> pumpRestorableApp(
   WidgetTester tester,
   RootStackRouter Function() buildRouter,
 ) async {
-  tester.binding.handleAppLifecycleStateChanged(.resumed);
+  bringAppToForeground(tester);
   await tester.pumpWidget(RestorableRouterApp(buildRouter));
   await tester.pumpAndSettle();
 }

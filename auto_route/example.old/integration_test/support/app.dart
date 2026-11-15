@@ -28,7 +28,7 @@ Future<void> pumpRouterApp(
   NavigatorObserversBuilder navigatorObservers =
       AutoRouterDelegate.defaultNavigatorObserversBuilder,
 }) async {
-  _bringAppToForeground(tester);
+  bringAppToForeground(tester);
   await tester.pumpWidget(
     MaterialApp.router(
       theme: theme,
@@ -65,7 +65,7 @@ Future<void> pumpRouterConfigApp(
   WidgetTester tester,
   RouterConfig<UrlState> config,
 ) async {
-  _bringAppToForeground(tester);
+  bringAppToForeground(tester);
   await tester.pumpWidget(MaterialApp.router(routerConfig: config));
   await tester.pumpAndSettle();
 }
@@ -88,7 +88,7 @@ Future<void> pumpAppAtDeepLink(
   addTearDown(dispatcher.clearDefaultRouteNameTestValue);
   dispatcher.defaultRouteNameTestValue = link;
   if (kIsWeb) browser.openBrowserAt(link);
-  _bringAppToForeground(tester);
+  bringAppToForeground(tester);
   tester.binding.attachRootWidget(tester.binding.wrapWithDefaultView(app));
   tester.binding.buildOwner!.buildScope(tester.binding.rootElement!);
   await tester.pumpAndSettle();
@@ -115,11 +115,47 @@ Future<void> expectAppWroteDeepLinkEntry(int index) async {
   );
 }
 
-// The test binding forgets the app's lifecycle state after each test, and
-// while it's unknown Flutter stops telling Android whether it handles back
-// (see systemBack). A running app is in the foreground.
-void _bringAppToForeground(WidgetTester tester) {
+/// Puts the app in the foreground for a test that pumps its own app.
+///
+/// The test binding forgets the app's lifecycle state after each test, and
+/// while it's unknown Flutter stops telling Android whether it handles back
+/// (see [systemBack]). A running app is in the foreground.
+///
+/// On macOS, the window's visibility is no longer passed on to the app from
+/// then on. When another window covers it, as the iOS simulator's or the
+/// Android emulator's can while their tests run beside it, the engine
+/// reports the app hidden, and a hidden app draws no frames. A test would
+/// then wait for nothing and check the screen in the middle of a move. A
+/// scroll view that still settles takes no taps, so a page on it isn't hit
+/// testable. The tests drive the app whether or not its window can be seen.
+void bringAppToForeground(WidgetTester tester) {
+  _ignoreWindowVisibility();
   tester.binding.handleAppLifecycleStateChanged(.resumed);
+}
+
+var _ignoresWindowVisibility = false;
+
+// Takes the engine's lifecycle messages in place of the framework, passing
+// on all but hidden and paused, the ones a covered or minimized window sends.
+void _ignoreWindowVisibility() {
+  if (kIsWeb || defaultTargetPlatform != .macOS || _ignoresWindowVisibility) {
+    return;
+  }
+  _ignoresWindowVisibility = true;
+  final binding = TestWidgetsFlutterBinding.instance;
+  // The engine names a state as its enum value prints, such as
+  // 'AppLifecycleState.resumed'.
+  final states = {
+    for (final each in AppLifecycleState.values) each.toString(): each,
+  };
+  SystemChannels.lifecycle.setMessageHandler((message) async {
+    switch (states[message]) {
+      case final shown? when shown != .hidden && shown != .paused:
+        binding.handleAppLifecycleStateChanged(shown);
+      case _:
+    }
+    return null;
+  });
 }
 
 /// Pumps frames until [finder] finds a widget, for at most [timeout], then

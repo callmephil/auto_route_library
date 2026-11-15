@@ -64,7 +64,7 @@ void main() {
             AutoRoute(page: _DetailsRoute.page, path: '/details'),
           ],
         );
-        tester.binding.handleAppLifecycleStateChanged(.resumed);
+        bringAppToForeground(tester);
         await tester.pumpWidget(
           flutter.MaterialApp.router(
             theme: flutter.ThemeData(

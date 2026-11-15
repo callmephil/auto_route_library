@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'support/app.dart';
+
 // The pages stay on screen, with their State, while a guard of replaceAll
 // decides, and a rejection changes nothing, as iOS swaps a navigation stack
 // in one step and Flutter's Router keeps building the current pages while its
@@ -61,7 +63,7 @@ void main() {
       addTearDown(router.dispose);
       var brightness = Brightness.light;
       late StateSetter setAppState;
-      tester.binding.handleAppLifecycleStateChanged(.resumed);
+      bringAppToForeground(tester);
       await tester.pumpWidget(
         StatefulBuilder(
           builder: (context, setState) {

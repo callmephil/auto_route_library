@@ -54,7 +54,7 @@ void main() {
       addTearDown(signedIn.dispose);
       final isSignedIn = ValueNotifier(false);
       addTearDown(isSignedIn.dispose);
-      tester.binding.handleAppLifecycleStateChanged(.resumed);
+      bringAppToForeground(tester);
       await tester.pumpWidget(
         ValueListenableBuilder(
           valueListenable: isSignedIn,

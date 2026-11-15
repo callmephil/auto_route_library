@@ -18,6 +18,7 @@ import 'bool_query_param_test.dart' as bool_query_param;
 import 'camel_case_path_test.dart' as camel_case_path;
 import 'change_during_guard_check_test.dart' as change_during_guard_check;
 import 'child_route_fragment_test.dart' as child_route_fragment;
+import 'covered_window_test.dart' as covered_window;
 import 'cupertino_page_pop_scope_with_drawer_test.dart'
     as cupertino_page_pop_scope_with_drawer;
 import 'cupertino_title_after_page_update_test.dart'
@@ -403,6 +404,7 @@ void main() {
   camel_case_path.main();
   change_during_guard_check.main();
   child_route_fragment.main();
+  covered_window.main();
   cupertino_page_pop_scope_with_drawer.main();
   cupertino_title_after_page_update.main();
   current_hierarchy.main();
