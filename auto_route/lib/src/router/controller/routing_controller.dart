@@ -4675,6 +4675,7 @@ abstract class StackRouter extends RoutingController {
     bool keepsUnnamedPages = false,
     _PagesReplacement? replacement,
     int? link,
+    VoidCallback? onLetIn,
   }) async {
     // A reevaluation closes the pages its guards reject, and a guard may show
     // a page of its own meanwhile, so the pages it closes are reported once
@@ -4698,6 +4699,11 @@ abstract class StackRouter extends RoutingController {
     if (managedByWidget) _onNavigate(routes);
     Future<T?>? popped;
     if (routes.isNotEmpty) {
+      // What the navigation does once the guards of this router, and of the
+      // nested router of the page it reaches, have let it in: [onLetIn], what
+      // the router above does then, and closing the dialogs over that page.
+      // A router the app's widgets manage asks no guard.
+      var lettingIn = managedByWidget ? onLetIn : null;
       // Read in the call, before the first wait: the link the delegate is
       // starting is known only then.
       final ofLink = isReevaluating ? null : (link ?? root._startingLink);
@@ -4754,7 +4760,10 @@ abstract class StackRouter extends RoutingController {
             if (!_isDisposed) notifyAll();
           }
         } else if (pushed.isCompleted) {
-          _closePagelessRoutesOverTop(link: ofLink);
+          lettingIn = () {
+            _closePagelessRoutesOverTop(link: ofLink);
+            onLetIn?.call();
+          };
           _openChildrenInKeptScreens(keptScreens, onFailure: onFailure);
         }
       }
@@ -4784,8 +4793,23 @@ abstract class StackRouter extends RoutingController {
       if (newChildren.isNotEmpty &&
           (keptScreens.contains(mayUpdateRoute.id) ||
               _shownTopTakenOverBy(mayUpdateRoute) != null)) {
+        lettingIn?.call();
         return null;
       }
+      // The dialogs over a page whose nested router is asked next close only
+      // once its guards let the navigation in, as a refused navigation
+      // changes nothing; a link's do already. A nested router not built yet
+      // asks its guards only once its page is in.
+      if (mayUpdateController is StackRouter && newChildren.isNotEmpty) {
+        return await mayUpdateController._navigateAll(
+          newChildren,
+          onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
+          link: ofLink,
+          onLetIn: lettingIn,
+        );
+      }
+      lettingIn?.call();
       if (mayUpdateController != null) {
         return await mayUpdateController._navigateAll(
           newChildren,

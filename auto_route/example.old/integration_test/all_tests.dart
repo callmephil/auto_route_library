@@ -107,6 +107,8 @@ import 'navigate_after_dialog_test.dart' as navigate_after_dialog;
 import 'navigate_awaits_test.dart' as navigate_awaits;
 import 'navigate_inherited_path_params_test.dart'
     as navigate_inherited_path_params;
+import 'navigate_into_open_page_keeps_dialog_test.dart'
+    as navigate_into_open_page_keeps_dialog;
 import 'navigate_nested_update_test.dart' as navigate_nested_update;
 import 'navigate_open_shell_no_children_test.dart'
     as navigate_open_shell_no_children;
@@ -475,6 +477,7 @@ void main() {
   navigate_after_dialog.main();
   navigate_awaits.main();
   navigate_inherited_path_params.main();
+  navigate_into_open_page_keeps_dialog.main();
   navigate_nested_update.main();
   navigate_open_shell_no_children.main();
   navigate_over_pageless_route.main();
