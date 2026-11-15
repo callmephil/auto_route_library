@@ -271,6 +271,7 @@ import 'replace_all_slow_guard_test.dart' as replace_all_slow_guard;
 import 'replace_all_then_push_test.dart' as replace_all_then_push;
 import 'replace_changed_path_param_test.dart' as replace_changed_path_param;
 import 'replace_path_rejected_test.dart' as replace_path_rejected;
+import 'replace_push_pop_test.dart' as replace_push_pop;
 import 'replace_rejected_test.dart' as replace_rejected;
 import 'replace_same_route_children_test.dart' as replace_same_route_children;
 import 'replace_then_pop_test.dart' as replace_then_pop;
@@ -607,6 +608,7 @@ void main() {
   replace_all_then_push.main();
   replace_changed_path_param.main();
   replace_path_rejected.main();
+  replace_push_pop.main();
   replace_rejected.main();
   replace_same_route_children.main();
   replace_then_pop.main();

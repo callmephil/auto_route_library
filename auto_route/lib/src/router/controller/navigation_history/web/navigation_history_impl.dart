@@ -184,13 +184,21 @@ class NavigationHistoryImpl extends NavigationHistory {
     _entries[index] = newState;
     _appIndex = index;
     final standsOn = _frameBrowserIndex;
-    if (standsOn != null && index == standsOn + 1 && _doesFrameReplace) {
+    if (standsOn == null) return;
+    _pendingIndex = index;
+    if (index == standsOn + 1 && _doesFrameReplace) {
       // The router writes this frame's url as a replace: the new entry goes
-      // in now, and that write repeats it in place.
-      _pendingIndex = null;
-      _writeEntryNow(index);
-    } else if (standsOn != null) {
-      _pendingIndex = index;
+      // in at the end of this turn, before that write, which repeats it in
+      // place. A page popped later in the turn, never shown, then gets no
+      // entry, and the pop goes back to the entry under it (see
+      // [_entryUnderUnshownPage]).
+      scheduleMicrotask(() {
+        if (_pendingIndex != index || !identical(_entries[index], newState)) {
+          return;
+        }
+        _pendingIndex = null;
+        _writeEntryNow(index);
+      });
     }
   }
 

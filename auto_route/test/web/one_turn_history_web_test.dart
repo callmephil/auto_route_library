@@ -389,4 +389,20 @@ void main() {
       opens: _onA,
     );
   });
+
+  // From A over Home, a replace of A with B, a push of C and a pop, in one
+  // turn. Was: the browser held '/', '/b', '/c', '/b', and back showed C.
+  testWidgets('On web, a replace, a push and a pop in one turn end on the '
+      "replacing page's entry", (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.replace(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+        router.pop();
+      },
+      [(1, '/b', 'HomeRoute BRoute'), (0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
 }
