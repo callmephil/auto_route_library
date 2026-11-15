@@ -8,6 +8,8 @@ import 'app_smoke_test.dart' as app_smoke;
 import 'app_tab_change_waits_for_nested_guards_test.dart'
     as app_tab_change_waits_for_nested_guards;
 import 'async_simple_guard_test.dart' as async_simple_guard;
+import 'back_after_closing_unbuilt_page_test.dart'
+    as back_after_closing_unbuilt_page;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
@@ -401,6 +403,7 @@ void main() {
   app_smoke.main();
   app_tab_change_waits_for_nested_guards.main();
   async_simple_guard.main();
+  back_after_closing_unbuilt_page.main();
   back_in_tabs.main();
   back_rejected_by_guard.main();
   back_same_route_params.main();

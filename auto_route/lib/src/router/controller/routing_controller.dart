@@ -3044,8 +3044,21 @@ abstract class StackRouter extends RoutingController {
       return false;
     }
     top.routeData.onPopInvoked(result);
-    _removeRoute(top.routeData._route);
+    _removeRoute(top.routeData._route, notify: false);
+    _notifyOfClosedUnbuilt([top]);
     return true;
+  }
+
+  // Tells the listeners, as [notifyAll] does, that [closed] were taken off
+  // the stack before the navigator built them, and rebuilds the url. No
+  // navigator reports the pop of such a page, so the app's own history is
+  // told here to drop its entries, or a later back() would open it again.
+  void _notifyOfClosedUnbuilt(Iterable<AutoRoutePage<Object?>> closed) {
+    notifyListeners();
+    navigationHistory.rebuildUrlAfterClosingUnbuilt([
+      for (final page in closed) page.routeData.matchId,
+    ]);
+    if (!isRoot) root.notifyListeners();
   }
 
   // The pages the app took off the stack for good, as replace, removeLast,
@@ -3952,7 +3965,7 @@ abstract class StackRouter extends RoutingController {
         !navigator.widget.pages.every(_pages.contains)) {
       return false;
     }
-    var didRemove = false;
+    final removed = <AutoRoutePage<Object?>>[];
     var isAccepted = false;
     while (!isAccepted) {
       final top = _pages.lastOrNull;
@@ -3965,10 +3978,10 @@ abstract class StackRouter extends RoutingController {
       }
       if (!isAccepted) {
         _removeRoute(top.routeData._route, notify: false);
-        didRemove = true;
+        removed.add(top);
       }
     }
-    if (didRemove) notifyAll(forceUrlRebuild: true);
+    if (removed.isNotEmpty) _notifyOfClosedUnbuilt(removed);
     return isAccepted;
   }
 

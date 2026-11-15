@@ -55,6 +55,18 @@ abstract class NavigationHistory with ChangeNotifier {
   @internal
   void rebuildUrlAfterPop({LocalKey? poppedPageId}) => rebuildUrl();
 
+  /// Rebuilds the url after pages were closed before a navigator built them,
+  /// as a pop right after a push closes the pushed page.
+  ///
+  /// [closedPageIds] are the ids of those pages' routes. Such a page got its
+  /// entry as it was pushed, and no navigator reports its pop. The native
+  /// history drops the entries that showed it, as [rebuildUrlAfterPop] drops
+  /// a popped page's, or a later [back] would open the closed page again. The
+  /// web history rebuilds the url as after any other change.
+  @internal
+  void rebuildUrlAfterClosingUnbuilt(Iterable<LocalKey> closedPageIds) =>
+      rebuildUrl();
+
   /// Whether [configuration], a route the platform just reported, only
   /// confirms a move through the browser history that this history made itself.
   ///

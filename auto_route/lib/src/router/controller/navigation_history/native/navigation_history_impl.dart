@@ -70,6 +70,12 @@ class NavigationHistoryImpl extends NavigationHistory {
   }
 
   @override
+  void rebuildUrlAfterClosingUnbuilt(Iterable<LocalKey> closedPageIds) {
+    _entries.removeWhere((entry) => closedPageIds.any(entry.showsPage));
+    rebuildUrl();
+  }
+
+  @override
   bool get canNavigateBack => length > 1 && !_isNavigatingBack;
 
   @override
