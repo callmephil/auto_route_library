@@ -85,23 +85,14 @@ class NavigationHistoryImpl extends NavigationHistory {
     // there. A notification now would make the router write it as a new
     // entry.
     final doesNotify = notify && !_isSteppingBack;
-    // A url the app keeps out of the address bar with neglectWhen gets no
-    // browser entry, as the provider never writes it; the page under it,
-    // shown again once it leaves, still has the app's entry.
     final records =
-        doesNotify &&
-        !didBrowserMoveFirst &&
-        (isNewUrl || isPushedOverSameUrl) &&
-        !_isKeptOut(newState) &&
-        !_isAppEntryPage(newState);
+        doesNotify && !didBrowserMoveFirst && (isNewUrl || isPushedOverSameUrl);
     final backTo = records && !newState.shouldReplace
         ? _entryUnderUnshownPage(newState)
         : null;
-    // A replace of a page kept out of the address bar takes no entry's place,
-    // since that page has none: the new page gets an entry of its own.
-    final replacesEntry = newState.shouldReplace && !_isKeptOut(urlState);
     final index =
-        backTo ?? ((_appIndex ?? browserIndex) + (replacesEntry ? 0 : 1));
+        backTo ??
+        ((_appIndex ?? browserIndex) + (newState.shouldReplace ? 0 : 1));
     final reported = backTo != null
         ? _stepBackTo(backTo, newState)
         : records
@@ -305,21 +296,11 @@ class NavigationHistoryImpl extends NavigationHistory {
           (!isSameUrl || entry.topMatch?.id == state.topMatch?.id);
     }
 
-    // A page the app keeps out of the address bar has no entry: the way back
-    // to it is the entry of the page under it that a stack still holds.
-    final isKeptOut = _isKeptOut(newState);
-    bool isTarget(int i) {
-      final pageId = _entries[i]?.topMatch?.id;
-      return isKeptOut
-          ? pageId != null && controllerOfPage(pageId) != null
-          : doesHold(i, newState);
-    }
-
     final target = !doesHold(index, popped)
         ? null
         : isPop
-        ? _entryBeforeClosedPages(index, isTarget)
-        : (index > 0 && isTarget(index - 1) ? index - 1 : null);
+        ? _entryBeforeClosedPages(index, (i) => doesHold(i, newState))
+        : (index > 0 && doesHold(index - 1, newState) ? index - 1 : null);
     if (target != null) {
       _isSteppingBack = true;
       try {
@@ -328,7 +309,7 @@ class NavigationHistoryImpl extends NavigationHistory {
         _isSteppingBack = false;
       }
       _appIndex = target;
-      _ownMoveUrl = isKeptOut ? _entries[target]!.url : newUrl;
+      _ownMoveUrl = newUrl;
       if (isPop) {
         _scheduleStepBack(target);
       } else {
@@ -479,30 +460,6 @@ class NavigationHistoryImpl extends NavigationHistory {
     return index != _appIndex &&
         pageId != null &&
         _entries[index]?.topMatch?.id == pageId;
-  }
-
-  // Whether the app keeps [state]'s url out of the address bar with
-  // neglectWhen, so that the browser never gets an entry for it.
-  bool _isKeptOut(UrlState state) {
-    final context = isShownByRouter ? router.navigatorKey.currentContext : null;
-    final provider = context == null
-        ? null
-        : Router.maybeOf<Object?>(context)?.routeInformationProvider;
-    if (provider is! AutoRouteInformationProvider || !state.hasSegments) {
-      return false;
-    }
-    final location = state.url.isEmpty ? '/' : state.uri.toString();
-    return provider.neglectIf?.call(location) ?? false;
-  }
-
-  // Whether [state] shows the page of the app's own entry, with its url.
-  bool _isAppEntryPage(UrlState state) {
-    final entry = _entries[_appIndex];
-    final pageId = state.topMatch?.id;
-    return entry != null &&
-        pageId != null &&
-        entry.topMatch?.id == pageId &&
-        _isSameUrl(entry.url, state.url);
   }
 
   // Whether [newState] shows a page pushed over the app's current page with the
