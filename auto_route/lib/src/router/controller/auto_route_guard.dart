@@ -512,10 +512,28 @@ class NavigationResolver {
       _checkGuard(guard, router);
 
   // Holds, in the zone a guard's call runs in, the resolver the guard was
-  // given: what that call does, also after an await and in what it starts,
-  // can be told as the guard's own, as the pages it puts on a stack are, see
-  // [_reportPageGoesOn].
+  // given. What that call does can then be told as the guard's own, also
+  // after an await and in what the call starts: the pages it puts on a
+  // stack, see [_reportPageGoesOn], and a change it makes to the listenable
+  // the guards are asked again for, see [_isOwnCodeRunning].
   static final _askedZone = Object();
+
+  // Whether the code that runs now is the guard's that was given this
+  // resolver.
+  bool get _isOwnCodeRunning => identical(Zone.current[_askedZone], this);
+
+  // Whether the state the guards are asked again for changed while this
+  // guard, asked for a navigation, ran its check, and the change was not the
+  // guard's own: its answer is from before the change, see
+  // [StackRouter._canNavigate].
+  bool _isAnswerStale = false;
+
+  // Whether the guard has put a page of its own on a stack since it was
+  // asked, as one that awaits its own push of a login page does. From then
+  // on it waits behind that page and answers from what happens there, as a
+  // guard behind its redirect does: a change meanwhile, such as the sign-in
+  // on that page, leaves its answer fresh.
+  bool _hasShownPage = false;
 
   // Told with the router each time code of the guard puts a page on a stack
   // while the guard has not answered, see [_checkGuard].
@@ -529,7 +547,9 @@ class NavigationResolver {
   static void _reportPageGoesOn(StackRouter router) {
     final asked = Zone.current[_askedZone];
     if (asked is NavigationResolver && !asked.isResolved) {
-      asked._onShowsPage?.call(router);
+      asked
+        .._hasShownPage = true
+        .._onShowsPage?.call(router);
     }
   }
 

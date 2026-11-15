@@ -2793,11 +2793,15 @@ abstract class StackRouter extends RoutingController {
       final entry = activeGuardObserver.value[i];
       final resolver = entry._resolver;
       if (resolver.isResolved) continue;
-      // The guard of a page being reevaluated is running its check, which
-      // began before this change.
-      if (resolver._waitingCompleter != null &&
-          resolver.route is ReevaluatableRouteMatch) {
-        _askAgainAfterReevaluation();
+      // The guard is running its check, which began before this change.
+      if (resolver._waitingCompleter != null) {
+        if (resolver.route is ReevaluatableRouteMatch) {
+          // Of a page being reevaluated.
+          _askAgainAfterReevaluation();
+        } else if (!resolver._isOwnCodeRunning && !resolver._hasShownPage) {
+          // Of a navigation: it is asked again before its page goes in.
+          resolver._isAnswerStale = true;
+        }
       }
       resolver._isReevaluating = true;
 
@@ -4976,6 +4980,64 @@ abstract class StackRouter extends RoutingController {
       return result;
     }
 
+    // Asks [guard]. Returns its answer when that ends the check, and null
+    // when it lets the route through.
+    //
+    // A guard whose answer is from before a change of the state the guards
+    // are asked again for, see [reevaluateGuards], is asked once more before
+    // its page goes in, so a sign-out that lands while a guard awaits a
+    // request never opens the page it guards: the last change wins, as
+    // Flutter's Router drops the answer of an older route parse when newer
+    // route information arrives. Not for a change the guard makes itself,
+    // and [timesLeft] times at most: a guard whose check changes that state
+    // through code of the app, as one that refreshes a session the app
+    // listens to, would be asked without end.
+    FutureOr<ResolverResult?> ask(
+      AutoRouteGuard guard, {
+      int timesLeft = _kMaxAsksAgainInARow,
+    }) {
+      final resolver = NavigationResolver(
+        this,
+        Completer(),
+        routeToCheck,
+        pendingRoutes: pendingRoutes,
+        isReevaluating: isReevaluating,
+      );
+      final guardEntry = GuardEntry(guard, resolver);
+      activeGuardObserver._add(guardEntry);
+      final checking = resolver._checkGuard(
+        guard,
+        this,
+        onLeftUndecided: onLeftUndecided,
+        onShowsPage: onShowsPage,
+      );
+      final answer = resolver._result;
+      if (answer == null) {
+        return checking
+            // Also when the guard throws, as an async guard does when the
+            // request it awaits fails: the navigation is over, so no guard
+            // of it is in progress and no reevaluation asks it again.
+            .whenComplete(() => activeGuardObserver._remove(guardEntry))
+            .then((result) {
+              // The stale answer is dropped whole, with the route it names.
+              final isAskedAgain =
+                  result.continueNavigation &&
+                  resolver._isAnswerStale &&
+                  timesLeft > 0 &&
+                  !_isDisposed;
+              return isAskedAgain
+                  ? ask(guard, timesLeft: timesLeft - 1)
+                  : rejectionOf(result, guard);
+            });
+      }
+      // The guard answered in its own call: the navigation goes on now.
+      // What the guard does after its answer no longer changes it; an
+      // error it throws then is reported as any uncaught error is.
+      unawaited(checking);
+      activeGuardObserver._remove(guardEntry);
+      return rejectionOf(answer, guard);
+    }
+
     FutureOr<ResolverResult> askRest() {
       while (guards.moveNext()) {
         final guard = guards.current;
@@ -4987,36 +5049,10 @@ abstract class StackRouter extends RoutingController {
           );
           continue;
         }
-        final resolver = NavigationResolver(
-          this,
-          Completer(),
-          routeToCheck,
-          pendingRoutes: pendingRoutes,
-          isReevaluating: isReevaluating,
-        );
-        final guardEntry = GuardEntry(guard, resolver);
-        activeGuardObserver._add(guardEntry);
-        final checking = resolver._checkGuard(
-          guard,
-          this,
-          onLeftUndecided: onLeftUndecided,
-          onShowsPage: onShowsPage,
-        );
-        final answer = resolver._result;
-        if (answer == null) {
-          return checking
-              // Also when the guard throws, as an async guard does when the
-              // request it awaits fails: the navigation is over, so no guard
-              // of it is in progress and no reevaluation asks it again.
-              .whenComplete(() => activeGuardObserver._remove(guardEntry))
-              .then((result) => rejectionOf(result, guard) ?? askRest());
+        final rejection = ask(guard);
+        if (rejection is Future<ResolverResult?>) {
+          return rejection.then((result) => result ?? askRest());
         }
-        // The guard answered in its own call: the navigation goes on now.
-        // What the guard does after its answer no longer changes it; an
-        // error it throws then is reported as any uncaught error is.
-        unawaited(checking);
-        activeGuardObserver._remove(guardEntry);
-        final rejection = rejectionOf(answer, guard);
         if (rejection != null) return rejection;
       }
       return ResolverResult(
@@ -5709,6 +5745,12 @@ typedef _RoutesChange = List<RouteMatch<Object?>> Function(
 // Called when a guard returns without an answer, after it started a redirect
 // or not.
 typedef _GuardHoldsCallback = void Function({required bool isRedirecting});
+
+// How many times in a row a guard is asked again because the state the
+// guards are asked again for changed while it ran its check. A guard whose
+// own check changes that state through code of the app, as one that
+// refreshes a session the app listens to, would be asked without end.
+const _kMaxAsksAgainInARow = 3;
 
 // What replaceAll does to the pages it replaces, as its guards answer.
 class _PagesReplacement {

@@ -9,8 +9,11 @@ import 'package:material_ui/material_ui.dart';
 // Was: the re-check called the callback a second time, because the simple
 // guard dropped the callback's future, and the second resolver.next() failed
 // "Make sure `resolver.next()` is only called once."
-// Should: the re-check waits for the running callback, which runs once, and
-// the guarded page opens.
+// Should: the re-check waits for the running callback and starts no second
+// call beside it, and the guarded page opens. The change came while the
+// guard ran its check, so once that call has answered the guard is asked
+// once more before its page goes in: two calls, one after the other. See
+// reevaluatable_router/change_during_navigation_guard_test.dart.
 void main() {
   testWidgets(
     'a guard re-check waits for an async simple guard still running',
@@ -55,7 +58,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(guardCalls, 1);
+      expect(guardCalls, 2);
       expect(router.topRoute.name, 'ProfileRoute');
       expect(find.text('ProfileRoute'), findsOneWidget);
     },
