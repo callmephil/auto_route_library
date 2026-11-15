@@ -58,6 +58,8 @@ import 'dialog_then_page_animates_test.dart' as dialog_then_page_animates;
 import 'dialog_then_page_pop_test.dart' as dialog_then_page_pop;
 import 'disposed_nested_router_test.dart' as disposed_nested_router;
 import 'dollar_names_test.dart' as dollar_names;
+import 'dropped_tab_without_initial_child_test.dart'
+    as dropped_tab_without_initial_child;
 import 'duplicate_path_test.dart' as duplicate_path;
 import 'eager_tabs_test.dart' as eager_tabs;
 import 'empty_list_query_param_test.dart' as empty_list_query_param;
@@ -435,6 +437,7 @@ void main() {
   dialog_then_page_pop.main();
   disposed_nested_router.main();
   dollar_names.main();
+  dropped_tab_without_initial_child.main();
   duplicate_path.main();
   eager_tabs.main();
   empty_list_query_param.main();

@@ -1644,6 +1644,9 @@ class TabsRouter extends RoutingController {
   void setupRoutes(List<PageRouteInfo>? routes) {
     final routesToPush = _resolveRoutes(routes);
     _listedTabArgs = [for (final route in routesToPush) route.args];
+    _listedTabChildren = [
+      for (final route in routesToPush) route.children ?? const [],
+    ];
     // Tabs restored after the app was ended each come with their own stack.
     // The last pending one is the active tab.
     final pendingChildren = _routeData.pendingChildren;
@@ -1830,6 +1833,9 @@ class TabsRouter extends RoutingController {
   void replaceAll(List<PageRouteInfo>? routes, int fromIndex) {
     final routesToPush = _resolveRoutes(routes);
     _listedTabArgs = [for (final route in routesToPush) route.args];
+    _listedTabChildren = [
+      for (final route in routesToPush) route.children ?? const [],
+    ];
     final previousTabs = List.of(_pages);
     final previousActivePage = previousTabs.elementAtOrNull(fromIndex);
     final previousTabPage = switch (_previousIndex) {
@@ -2076,11 +2082,12 @@ class TabsRouter extends RoutingController {
     if (oldData == null) return mayUpdateRoute;
     var routeToBeUpdated = mayUpdateRoute.withId(oldData._route.id);
     // navigate to a route object that names no children, for a tab whose
-    // nested router isn't built yet, keeps the children the tab has, such as
-    // the ones the tabs list gave it: they are what the tab shows when it
-    // opens. A built nested router keeps its own pages. A path names the
-    // whole state, so with no children the tab opens with none.
-    final oldChildren = oldData._route.children ?? const [];
+    // nested router isn't built yet, keeps the pages the tab waits for, such
+    // as the ones the tabs list gave it: they are what the tab shows when it
+    // opens, by setActiveIndex as by navigate. A built nested router keeps
+    // its own pages. A path names the whole state, so with no children the
+    // tab opens with none.
+    final oldChildren = List.of(oldData.pendingChildren);
     if (keepsUnnamedPages &&
         mayUpdateRoute is! ReevaluatableRouteMatch &&
         (mayUpdateRoute.children ?? const []).isEmpty &&
@@ -2109,6 +2116,33 @@ class TabsRouter extends RoutingController {
   // The args each tab has in the routes the tabs are shown with, by index.
   // Not the page's own: those may be from a navigation, which a url replaces.
   var _listedTabArgs = const <Object?>[];
+
+  // The children each tab has in the routes the tabs are shown with, by
+  // index: the pages it opens with when the tabs list names them.
+  var _listedTabChildren = const <List<RouteMatch<Object?>>>[];
+
+  // The nested router of a tab goes while its tab stays when the tab keeps
+  // no state (maintainState: false) and another tab shows. Built again, it
+  // opens the pages its tab still waits for, else its initial child. With
+  // neither it would show no page, so a tab whose router has no initial
+  // child waits again for the pages the tabs list gave it, as it did when it
+  // first opened. A tab with an initial child opens on that child, as
+  // before.
+  @override
+  void removeChildController(RoutingController childController) {
+    super.removeChildController(childController);
+    final index = _pages.indexWhere(
+      (page) => page.routeData.matchId == childController.matchId,
+    );
+    final data = _pages.elementAtOrNull(index)?.routeData;
+    if (data == null ||
+        data.hasPendingChildren ||
+        childController.matcher.match('') != null) {
+      return;
+    }
+    final listed = _listedTabChildren.elementAtOrNull(index) ?? const [];
+    if (listed.isNotEmpty) data._pendingChildren = List.of(listed);
+  }
 
   // A url can't hold constructor args, so a tab it opens gets [tabArgs], the
   // ones the tabs list gave it. Not when the url has params: a page's args
