@@ -184,4 +184,102 @@ void main() {
 
     expect(find.text('Unsaved draft'), findsNothing);
   });
+
+  // Into a page of a tab's nested router, with the dialog over the tabs page
+  // at the root, and one router deeper. An absolute path stops at the tabs
+  // router on its way down, so the root navigates and closes the dialog as
+  // navigate does once the navigation is let in.
+  group('in a tab', () {
+    RootStackRouter buildTabs() => .build(
+      routes: [
+        NamedRouteDef(
+          name: 'TabsRoute',
+          path: '/tabs',
+          initial: true,
+          builder: (_, _) => const Scaffold(
+            body: AutoTabsRouter(
+              routes: [NamedRoute('FirstTab'), NamedRoute('MailTab')],
+            ),
+          ),
+          children: [
+            NamedRouteDef(
+              name: 'FirstTab',
+              path: 'first',
+              builder: (_, _) => const Text('FirstTab'),
+            ),
+            NamedRouteDef(
+              name: 'MailTab',
+              path: 'mail',
+              builder: (_, _) => const AutoRouter(),
+              children: [
+                NamedRouteDef(
+                  name: 'FolderRoute',
+                  path: 'folder',
+                  builder: (_, _) => const AutoRouter(),
+                  children: [message('FolderMessageRoute')],
+                ),
+                message('MessageRoute'),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+
+    for (final isDeeper in [false, true]) {
+      final prefix = isDeeper ? '/tabs/mail/folder' : '/tabs/mail';
+      for (final isPath in [false, true]) {
+        final how = isPath ? 'navigatePath' : 'navigate';
+        testWidgets(
+          '$how to a page of the tab ${isDeeper ? 'one router deeper ' : ''}'
+          'that a guard lets in closes the dialog over the tabs',
+          (tester) async {
+            final router = buildTabs();
+            await pumpRouterConfigApp(tester, router.config());
+            unawaited(router.navigatePath('$prefix/42'));
+            await tester.pumpAndSettle();
+            showDialog<void>(
+              context: router.navigatorKey.currentContext!,
+              builder: (_) => const AlertDialog(title: Text('Unsaved draft')),
+            );
+            await tester.pumpAndSettle();
+
+            const page = NamedRoute('MessageRoute', params: {'id': '14'});
+            const deeperPage = NamedRoute(
+              'FolderMessageRoute',
+              params: {'id': '14'},
+            );
+            unawaited(
+              isPath
+                  ? router.navigatePath('$prefix/14')
+                  : router.navigate(
+                      NamedRoute(
+                        'TabsRoute',
+                        children: [
+                          NamedRoute(
+                            'MailTab',
+                            children: [
+                              if (isDeeper)
+                                const NamedRoute(
+                                  'FolderRoute',
+                                  children: [deeperPage],
+                                )
+                              else
+                                page,
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+            );
+            await tester.pumpAndSettle();
+
+            expect(find.text('Unsaved draft'), findsNothing);
+            expect(find.text('Mail 14'), findsOneWidget);
+            expect(router.currentUrl, '$prefix/14');
+          },
+        );
+      }
+    }
+  });
 }
