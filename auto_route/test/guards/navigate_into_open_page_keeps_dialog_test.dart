@@ -242,8 +242,9 @@ void main() {
 
   // Into a page of a tab's nested router, with the dialog over the tabs page
   // at the root, and one router deeper. An absolute path stops at the tabs
-  // router on its way down, so the root navigates and closes the dialog as
-  // navigate does once the navigation is let in.
+  // router on its way down, so the root navigates, as for navigate. The
+  // dialog over the tabs closes once the guards inside the tab let the
+  // navigation in.
   group('in a tab', () {
     RootStackRouter buildTabs() => .build(
       routes: [
@@ -285,55 +286,98 @@ void main() {
       final prefix = isDeeper ? '/tabs/mail/folder' : '/tabs/mail';
       for (final isPath in [false, true]) {
         final how = isPath ? 'navigatePath' : 'navigate';
-        testWidgets(
-          '$how to a page of the tab ${isDeeper ? 'one router deeper ' : ''}'
-          'that a guard lets in closes the dialog over the tabs',
-          (tester) async {
-            final router = buildTabs();
-            await pumpRouterConfigApp(tester, router.config());
-            unawaited(router.navigatePath('$prefix/42'));
-            await tester.pumpAndSettle();
-            showDialog<void>(
-              context: router.navigatorKey.currentContext!,
-              builder: (_) => const AlertDialog(title: Text('Unsaved draft')),
-            );
-            await tester.pumpAndSettle();
+        final inTab =
+            'a page of the tab${isDeeper ? ' one router deeper' : ''}';
 
-            const page = NamedRoute('MessageRoute', params: {'id': '14'});
-            const deeperPage = NamedRoute(
-              'FolderMessageRoute',
-              params: {'id': '14'},
-            );
-            unawaited(
-              isPath
-                  ? router.navigatePath('$prefix/14')
-                  : router.navigate(
-                      NamedRoute(
-                        'TabsRoute',
-                        children: [
-                          NamedRoute(
-                            'MailTab',
-                            children: [
-                              if (isDeeper)
-                                const NamedRoute(
-                                  'FolderRoute',
-                                  children: [deeperPage],
-                                )
-                              else
-                                page,
-                            ],
-                          ),
-                        ],
-                      ),
+        Future<RootStackRouter> openWithDialog(WidgetTester tester) async {
+          final router = buildTabs();
+          await pumpRouterConfigApp(tester, router.config());
+          unawaited(router.navigatePath('$prefix/42'));
+          await tester.pumpAndSettle();
+          showDialog<void>(
+            context: router.navigatorKey.currentContext!,
+            builder: (_) => const AlertDialog(title: Text('Unsaved draft')),
+          );
+          await tester.pumpAndSettle();
+          return router;
+        }
+
+        void go(RootStackRouter router, String id) {
+          final page = NamedRoute(
+            isDeeper ? 'FolderMessageRoute' : 'MessageRoute',
+            params: {'id': id},
+          );
+          unawaited(
+            isPath
+                ? router.navigatePath('$prefix/$id')
+                : router.navigate(
+                    NamedRoute(
+                      'TabsRoute',
+                      children: [
+                        NamedRoute(
+                          'MailTab',
+                          children: [
+                            if (isDeeper)
+                              NamedRoute('FolderRoute', children: [page])
+                            else
+                              page,
+                          ],
+                        ),
+                      ],
                     ),
-            );
+                  ),
+          );
+        }
+
+        testWidgets('$how to $inTab that a guard lets in closes the dialog '
+            'over the tabs', (tester) async {
+          final router = await openWithDialog(tester);
+
+          go(router, '14');
+          await tester.pumpAndSettle();
+
+          expect(find.text('Unsaved draft'), findsNothing);
+          expect(find.text('Mail 14'), findsOneWidget);
+          expect(router.currentUrl, '$prefix/14');
+        });
+
+        testWidgets('$how to $inTab that a guard rejects keeps the dialog '
+            'over the tabs', (tester) async {
+          final router = await openWithDialog(tester);
+
+          go(router, '13');
+          await tester.pumpAndSettle();
+
+          expect(find.text('Unsaved draft'), findsOneWidget);
+          expect(find.text('Mail 42'), findsOneWidget);
+          expect(router.currentUrl, '$prefix/42');
+        });
+
+        for (final isLetIn in [false, true]) {
+          testWidgets('$how to $inTab whose guard answers later keeps the '
+              'dialog over the tabs while it decides, and '
+              '${isLetIn ? 'closes it once let in' : 'after it rejects'}', (
+            tester,
+          ) async {
+            final router = await openWithDialog(tester);
+
+            go(router, '77');
+            await tester.pumpAndSettle();
+            expect(find.text('Unsaved draft'), findsOneWidget);
+
+            slowAnswer!.complete(isLetIn);
             await tester.pumpAndSettle();
 
-            expect(find.text('Unsaved draft'), findsNothing);
-            expect(find.text('Mail 14'), findsOneWidget);
-            expect(router.currentUrl, '$prefix/14');
-          },
-        );
+            expect(
+              find.text('Unsaved draft'),
+              isLetIn ? findsNothing : findsOneWidget,
+            );
+            expect(
+              find.text('Mail 77'),
+              isLetIn ? findsOneWidget : findsNothing,
+            );
+          });
+        }
       }
     }
   });

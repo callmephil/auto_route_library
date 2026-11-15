@@ -998,12 +998,17 @@ abstract class RoutingController with ChangeNotifier {
   // [link] is the count of the link whose navigation this is, handed down by
   // the batch of the router above; without it, the link whose navigation
   // the delegate is starting in this call, if any.
+  //
+  // [onLetIn] is what the router above does once this router, and the
+  // nested router of the page or tab it reaches, have let the navigation in,
+  // such as closing the dialogs over its page; a rejection drops it.
   Future<T?> _navigateAll<T extends Object?>(
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
     int? link,
+    VoidCallback? onLetIn,
   });
 
   Future<void> _navigateAllRoutes(
@@ -1248,12 +1253,19 @@ class TabsRouter extends RoutingController {
     bool remember = true,
     bool keepsUnnamedPages = false,
     int? link,
+    VoidCallback? onLetIn,
   }) {
-    if (_activeIndex == index) return _TabChange.done;
+    if (_activeIndex == index) {
+      onLetIn?.call();
+      return _TabChange.done;
+    }
     // A view asks again for the tab it moved to while its guards decide.
     if (route == null && _pendingTab == index) return _pendingChange!;
     final match = route ?? _pages.elementAtOrNull(index)?.routeData._route;
-    if (match == null) return _TabChange.done;
+    if (match == null) {
+      onLetIn?.call();
+      return _TabChange.done;
+    }
     final change = ++_tabChanges;
     // What a link that changes the tab does once the tab's guards let it in.
     final onLinkAccepted = link == null ? null : root._takeLinkStep(link);
@@ -1270,6 +1282,7 @@ class TabsRouter extends RoutingController {
         checked,
         onLinkAccepted: onLinkAccepted,
         link: link,
+        onLetIn: onLetIn,
         notify: notify,
         update: route != null,
         onFailure: onFailure,
@@ -1287,6 +1300,7 @@ class TabsRouter extends RoutingController {
         result,
         onLinkAccepted: onLinkAccepted,
         link: link,
+        onLetIn: onLetIn,
         update: route != null,
         onFailure: onFailure,
         remember: remember,
@@ -1329,6 +1343,7 @@ class TabsRouter extends RoutingController {
     ResolverResult result, {
     VoidCallback? onLinkAccepted,
     int? link,
+    VoidCallback? onLetIn,
     bool notify = true,
     bool update = false,
     OnNavigationFailure? onFailure,
@@ -1359,6 +1374,7 @@ class TabsRouter extends RoutingController {
         link: link,
         onLinkAccepted: onLinkAccepted,
         show: () => _showTab(index, notify: notify, remember: remember),
+        then: onLetIn,
         onFailure: onFailure,
       );
       return .done;
@@ -1373,13 +1389,16 @@ class TabsRouter extends RoutingController {
           )
         : null;
     _showTab(index, notify: notify, remember: remember);
-    if (updated != null) {
+    if (updated == null) {
+      onLetIn?.call();
+    } else {
       unawaited(
         _navigateInsideTab(
           updated,
           onFailure: onFailure,
           keepsUnnamedPages: keepsUnnamedPages,
           link: link,
+          onLetIn: onLetIn,
         ),
       );
     }
@@ -1412,8 +1431,9 @@ class TabsRouter extends RoutingController {
   }
 
   // Opens the pages of the link [route] names in the nested router of the
-  // tab at [index], and runs [show] and [onLinkAccepted] once their guards let
-  // the link in, unless the change [change] was replaced meanwhile. A tab
+  // tab at [index], and runs [show], [onLinkAccepted] and [then] once their
+  // guards let the link in, unless the change [change] was replaced
+  // meanwhile. A tab
   // whose nested router is not built yet is built offstage first, on its
   // first page, as preload builds it, so the guards are asked with the tab
   // the user is on still on screen.
@@ -1424,11 +1444,13 @@ class TabsRouter extends RoutingController {
     required int link,
     required VoidCallback onLinkAccepted,
     required VoidCallback show,
+    VoidCallback? then,
     OnNavigationFailure? onFailure,
   }) {
     void onLetIn() {
       if (!_isDisposed && change == _tabChanges) show();
       onLinkAccepted();
+      then?.call();
     }
 
     void openInside(RouteMatch<Object?> tab) {
@@ -1950,6 +1972,7 @@ class TabsRouter extends RoutingController {
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
     int? link,
+    VoidCallback? onLetIn,
   }) async {
     final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
@@ -1964,6 +1987,7 @@ class TabsRouter extends RoutingController {
             onFailure: onFailure,
             keepsUnnamedPages: keepsUnnamedPages,
             link: ofLink,
+            onLetIn: onLetIn,
           );
         } else {
           // A navigation to the tab on screen is the latest choice: it calls
@@ -1994,6 +2018,7 @@ class TabsRouter extends RoutingController {
                   isReevaluating: isReevaluating,
                   keepsUnnamedPages: keepsUnnamedPages,
                   link: ofLink,
+                  onLetIn: onLetIn,
                 );
           if (isReevaluating) {
             await inside;
@@ -2003,6 +2028,7 @@ class TabsRouter extends RoutingController {
         }
       }
       if (!isReevaluating && pageToUpdateIndex == -1) {
+        onLetIn?.call();
         _updateSharedPathData(
           queryParams: mayUpdateRoute.queryParams.rawMap,
           fragment: mayUpdateRoute.fragment,
@@ -2160,22 +2186,30 @@ class TabsRouter extends RoutingController {
       : route.copyWith(args: tabArgs);
 
   // Navigates the nested router of the tab holding [route] to its children.
-  // Answers once that router has, or null when the tab has none.
+  // Answers once that router has, or null when the tab has none. [onLetIn]
+  // runs once that router lets the navigation in; at once when the tab has
+  // no nested router yet or [route] names no children for it.
   Future<void>? _navigateInsideTab(
     RouteMatch<Object?> route, {
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     bool keepsUnnamedPages = false,
     int? link,
+    VoidCallback? onLetIn,
   }) {
     // By match id: a tab sharing its route with another has its own nested
     // router.
-    return _innerControllerOfMatch(route.id)?._navigateAll(
-      route.children ?? const [],
+    final inner = _innerControllerOfMatch(route.id);
+    final children = route.children ?? const [];
+    final isAsked = inner != null && children.isNotEmpty;
+    if (!isAsked) onLetIn?.call();
+    return inner?._navigateAll(
+      children,
       onFailure: onFailure,
       isReevaluating: isReevaluating,
       keepsUnnamedPages: keepsUnnamedPages,
       link: link,
+      onLetIn: isAsked ? onLetIn : null,
     );
   }
 
@@ -4871,11 +4905,11 @@ abstract class StackRouter extends RoutingController {
         lettingIn?.call();
         return null;
       }
-      // The dialogs over a page whose nested router is asked next close only
-      // once its guards let the navigation in, as a refused navigation
-      // changes nothing; a link's do already. A nested router not built yet
-      // asks its guards only once its page is in.
-      if (mayUpdateController is StackRouter && newChildren.isNotEmpty) {
+      // The dialogs over a page whose nested router or tabs are asked next
+      // close only once their guards let the navigation in, as a refused
+      // navigation changes nothing; a link's do already. A nested router not
+      // built yet asks its guards only once its page is in.
+      if (mayUpdateController != null && newChildren.isNotEmpty) {
         return await mayUpdateController._navigateAll(
           newChildren,
           onFailure: onFailure,
