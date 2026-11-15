@@ -52,7 +52,7 @@ void main() {
       await pumpRouterApp(tester, router);
       final tabs = router.innerRouterOf<TabsRouter>('HomeRoute')!;
 
-      await tester.fling(find.text('TabA'), const Offset(-400, 0), 1000);
+      await swipeToNextPage(tester, find.text('TabA'));
       await tester.pumpAndSettle();
 
       expect(tabs.activeIndex, 1);

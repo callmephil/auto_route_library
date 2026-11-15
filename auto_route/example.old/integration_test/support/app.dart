@@ -205,6 +205,32 @@ Future<void> swipeBack(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+/// Swipes the page view under [from] toward its next page until the view has
+/// gone past the middle of the page, then lets go without a fling, so the
+/// view settles on the next page.
+///
+/// For a swipe that must reach the next page at any device speed: on a device
+/// [WidgetTester.fling] measures its speed in real time, and a slow frame
+/// turns it into a slow drag that settles back.
+Future<void> swipeToNextPage(WidgetTester tester, Finder from) async {
+  final view = tester
+      .state<ScrollableState>(
+        find.ancestor(of: from, matching: find.byType(Scrollable)).first,
+      )
+      .position;
+  final start = view.pixels;
+  final gesture = await tester.startGesture(tester.getCenter(from));
+  for (
+    var step = 0;
+    step < 40 && view.pixels - start < view.viewportDimension * 0.6;
+    step++
+  ) {
+    await gesture.moveBy(const Offset(-30, 0));
+    await tester.pump();
+  }
+  await gesture.up();
+}
+
 /// Waits until the browser's address bar shows [expected], then checks it.
 ///
 /// Does nothing off the web, where there is no address bar.

@@ -59,7 +59,7 @@ void main() {
       final tabs = router.innerRouterOf<TabsRouter>('HomeRoute')!;
 
       for (var swipe = 0; swipe < 2; swipe++) {
-        await tester.fling(find.text('TabA'), const Offset(-400, 0), 1000);
+        await swipeToNextPage(tester, find.text('TabA'));
         await tester.pumpAndSettle();
         expect(tabs.activeIndex, 0);
         expect(find.text('TabA').hitTestable(), findsOneWidget);
