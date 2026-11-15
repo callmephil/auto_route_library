@@ -2839,6 +2839,14 @@ abstract class StackRouter extends RoutingController {
       if (childCtrl != null) {
         final childMatches = await childCtrl._composeMatchesForReevaluate();
         match = match.copyWith(children: childMatches);
+      } else if (page.routeData.hasPendingChildren) {
+        // A page whose nested router is not built yet keeps the pages it is
+        // to open with, as one that replaceAll set aside and put back does,
+        // see [_replaceAllMatches]: they are not the children its route
+        // came with.
+        match = match.copyWith(
+          children: List.of(page.routeData.pendingChildren),
+        );
       }
       page.routeData._onStartReevaluating(match);
 
@@ -3881,6 +3889,18 @@ abstract class StackRouter extends RoutingController {
             : root._guardStateChanges;
       }
       _setAsideByReplaceAll.addAll(leaving);
+      // A page's nested router leaves with its screen. The pages it has
+      // open are kept for the router the page gets if it comes back, which
+      // opens them as a router built anew opens the pages its page names.
+      for (final page in leaving) {
+        final data = page.routeData;
+        final inner = _innerControllerOfMatch(data.matchId);
+        if (inner == null || inner.managedByWidget) continue;
+        final open = inner._openMatches();
+        data.pendingChildren
+          ..clear()
+          ..addAll(open);
+      }
       _markLeaving(leaving, .replaced);
       _pages.removeWhere(leaving.contains);
       placeTaker ??= isPageOn ? _pages.firstOrNull?.routeData : null;
@@ -3954,10 +3974,21 @@ abstract class StackRouter extends RoutingController {
             setAside = const [];
             return;
           }
+          // A change of the state the guards read passed the pages by while
+          // they were off the stack.
+          final isChangePassedBy = changesAtSetAside != root._guardStateChanges;
           // Back as they were. Another replaceAll that had set them aside
           // for its own guard's page has put them back before this.
           for (final page in setAside) {
-            page.routeData._isReplaced = false;
+            final data = page.routeData.._isReplaced = false;
+            // The pages its nested router opens again are asked as they go
+            // in, as the pages on this stack are below.
+            if (isChangePassedBy && data.hasPendingChildren) {
+              final toAsk = _withGuardsToAsk(data.pendingChildren);
+              data.pendingChildren
+                ..clear()
+                ..addAll(toAsk);
+            }
           }
           // Under the pages put on meanwhile, such as a page the guard
           // still shows.
@@ -3965,18 +3996,30 @@ abstract class StackRouter extends RoutingController {
           setAside = const [];
           markUrlStateForReplace();
           notifyAll(forceUrlRebuild: true);
-          // A change of the state the guards read passed the pages by while
-          // they were off the stack: a reevaluation asks only about pages
-          // on the stack, and drops the answer of a guard whose page left
-          // meanwhile. They are asked now, as a page that comes back into
-          // view after a sign-out is checked again on iOS and Android.
-          if (changesAtSetAside != root._guardStateChanges) {
-            unawaited(reevaluateGuards());
-          }
+          // A reevaluation asks only about pages on the stack, and drops
+          // the answer of a guard whose page left meanwhile. They are asked
+          // now, as a page that comes back into view after a sign-out is
+          // checked again on iOS and Android.
+          if (isChangePassedBy) unawaited(reevaluateGuards());
         },
       ),
     );
   }
+
+  // [matches] and their children, with every guard still to be asked when
+  // their pages are opened.
+  static List<RouteMatch<Object?>> _withGuardsToAsk(
+    List<RouteMatch<Object?>> matches,
+  ) => [
+    for (final match in matches)
+      match.copyWith(
+        evaluatedGuards: const [],
+        children: switch (match.children) {
+          final children? => _withGuardsToAsk(children),
+          null => null,
+        },
+      ),
+  ];
 
   // [matches], where each match the navigator will show in the route of a
   // page of [previous] has that page's match id. The navigator updates a
