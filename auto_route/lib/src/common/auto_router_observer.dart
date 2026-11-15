@@ -171,6 +171,14 @@ class AutoRouteObserver extends AutoRouterObserver {
   // The key each tab page's subscriber was filed under.
   final Map<AutoRouteAware, LocalKey> _tabKeyOfSubscriber = {};
 
+  // The tab each tab's init came from, as observers heard it, kept to the
+  // end of the frame. A page its init opens subscribes as it is built, after
+  // the report, and hears the same tab. The tabs router's previousIndex can't
+  // name it when a change of the tabs list opened the page: the tab that left
+  // has no index in the new list.
+  final Map<LocalKey, TabPageRoute?> _previousOfInit = {};
+  var _isForgettingInits = false;
+
   /// Subscribe [AutoRouteAware] to be informed about changes to [route].
   ///
   /// Going forward, [AutoRouteAware] will be informed about qualifying changes
@@ -199,7 +207,9 @@ class AutoRouteObserver extends AutoRouterObserver {
     }
     _subscribeToAncestors(routeAware, route);
     final router = route.router;
-    if (router is TabsRouter) {
+    if (router is TabsRouter && _previousOfInit.containsKey(route.key)) {
+      routeAware.didInitTabRoute(_previousOfInit[route.key]);
+    } else if (router is TabsRouter) {
       final previousIndex = router.previousIndex;
       final previous = previousIndex == null || previousIndex < 0
           ? null
@@ -375,6 +385,14 @@ class AutoRouteObserver extends AutoRouterObserver {
 
   @override
   void didInitTabRoute(TabPageRoute route, TabPageRoute? previousRoute) {
+    _previousOfInit[route.routeInfo.key] = previousRoute;
+    if (!_isForgettingInits) {
+      _isForgettingInits = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _isForgettingInits = false;
+        _previousOfInit.clear();
+      });
+    }
     final subscribers = _listeners[route.routeInfo.key]?.toList();
     if (subscribers != null) {
       for (final routeAware in subscribers) {

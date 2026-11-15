@@ -16,7 +16,9 @@ import '../router_test_utils.dart';
 // heard nothing. The page-view and tab-bar tabs never reported the init of a
 // tab opened this way, and later reported its returns as changes. Each kind
 // took the new active tab over without a report, and the tab that left had
-// no index in the new list to name it.
+// no index in the new list to name it. The page that opened then heard
+// FeedTab as its previous tab, the tab before ProfileTab, followed into the
+// new list.
 // Native behavior this holds to: UIKit calls viewWillAppear on the view
 // controller a UITabBarController selects when the selected one leaves its
 // viewControllers. Flutter's Navigator pops a page that leaves its pages
@@ -84,7 +86,7 @@ Future<void> _expectEvents(
   }
   expect(atListChange, [
     'init OrdersTab from ProfileTab',
-    'OrdersTab hears init',
+    'OrdersTab hears init from ProfileTab',
   ]);
   expect(_events, [
     'change FeedTab from OrdersTab',
@@ -168,11 +170,10 @@ class _AwarePage extends StatefulWidget {
 
 class _AwarePageState extends State<_AwarePage>
     with AutoRouteAwareStateMixin<_AwarePage> {
-  // The tab a page names as previous on its init comes from the tabs
-  // router's previousIndex as the page subscribes, not from this report.
   @override
-  void didInitTabRoute(TabPageRoute? previousRoute) =>
-      _events.add('${widget.name} hears init');
+  void didInitTabRoute(TabPageRoute? previousRoute) => _events.add(
+    '${widget.name} hears init from ${previousRoute?.name ?? 'none'}',
+  );
 
   @override
   void didChangeTabRoute(TabPageRoute previousRoute) =>
