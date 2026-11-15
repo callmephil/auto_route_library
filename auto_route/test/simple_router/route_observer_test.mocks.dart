@@ -30,22 +30,18 @@ import 'package:mockito/mockito.dart' as _i1;
 class MockAutoRouterObserver extends _i1.Mock
     implements _i2.AutoRouterObserver {
   @override
-  void didInitTabRoute(
-    _i2.TabPageRoute? route,
-    _i2.TabPageRoute? previousRoute,
-  ) => super.noSuchMethod(
-    Invocation.method(#didInitTabRoute, [route, previousRoute]),
-    returnValueForMissingStub: null,
-  );
+  void didInitTabRoute(_i2.TabPageRoute? _0, _i2.TabPageRoute? _1) =>
+      super.noSuchMethod(
+        Invocation.method(#didInitTabRoute, [_0, _1]),
+        returnValueForMissingStub: null,
+      );
 
   @override
-  void didChangeTabRoute(
-    _i2.TabPageRoute? route,
-    _i2.TabPageRoute? previousRoute,
-  ) => super.noSuchMethod(
-    Invocation.method(#didChangeTabRoute, [route, previousRoute]),
-    returnValueForMissingStub: null,
-  );
+  void didChangeTabRoute(_i2.TabPageRoute? _0, _i2.TabPageRoute? _1) =>
+      super.noSuchMethod(
+        Invocation.method(#didChangeTabRoute, [_0, _1]),
+        returnValueForMissingStub: null,
+      );
 
   @override
   void didPush(_i3.Route<dynamic>? route, _i3.Route<dynamic>? previousRoute) =>
