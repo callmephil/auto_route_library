@@ -443,13 +443,6 @@
 - **FIX**: of two links into a nested router, the one handed over last stays on screen when the guard of the first
   answers later. The first landed over it as a second page with the same key, which a debug build reports as a duplicate
   page key.
-- **FIX**: on the web, several navigations in one turn leave the browser's history where the same calls a frame apart
-  leave it, such as two `popAndPush`, `popUntilRoot` and then two pushes, two pushes and then `popUntilRoot`, or
-  `replace`, `pop` and `push`; a page opened and closed again within the turn, never shown, gets no entry. Some of them
-  kept the entry of a closed page, so back reopened it, or wrote one entry for two pages.
-- **FIX**: on the web, an app opened at a url the router writes otherwise, such as `/a?b=`, whose empty query value it
-  leaves out, keeps one browser entry: the url as written takes the place of the one the app was opened at. It was added
-  as a second entry, so back went to the url as typed.
 - **FIX**, **BEHAVIOR CHANGE**: a push right after `popUntilRoot`, `popUntil` or `popUntilRouteWithName` stays when
   pages were pushed earlier in the same handler: from Home, `push(A)`, `popUntilRoot()`, `push(D)` ends on Home, D. D
   was lost, and with two pages pushed before it Flutter's "An OverlayEntry should be removed only once" assertion failed
@@ -465,9 +458,6 @@
 - **FIX**: on the web, with `neglectWhen` keeping a page's url out of the address bar, a `replace` of that page gives
   the new page a browser entry of its own. It wrote the new url over the entry of the page under it, so back left the
   app or skipped that page.
-- **DOCS**: the README's "Setup And Usage" says what an app gets on the web when it passes `delegate()` and
-  `defaultRouteParser()` without the `routeInformationProvider` that `config()` brings: opened at a url the router
-  writes otherwise, the browser keeps both urls as entries.
 
 ## 12.6.0
 - **FIX**, **BEHAVIOR CHANGE**: the future that `push`, `navigate`, `navigatePath` or `replaceAll` returns now completes
