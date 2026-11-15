@@ -22,8 +22,12 @@ class PagelessRoutesObserver extends NavigatorObserver with ChangeNotifier {
   /// The top-most visible route inside [Navigator]
   Route<Object?>? current;
 
-  /// Whether the top-most route is a pageless route
-  bool get hasPagelessTopRoute => _hasPagelessTopRoute;
+  /// Whether the top-most route is a pageless route, such as a dialog.
+  ///
+  /// False once the [Navigator] this observer watches has gone: a navigator
+  /// that leaves the tree tells its observers nothing, it only clears their
+  /// [navigator], and the routes it held, its dialogs too, go with it.
+  bool get hasPagelessTopRoute => _hasPagelessTopRoute && navigator != null;
 
   /// The route the [Navigator] shows [page] with, or null while it has not
   /// built one for it yet.
