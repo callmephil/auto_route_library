@@ -24,9 +24,19 @@ import 'browser_history.dart';
 // Native behavior this holds to: the HTML History API; history.go(0) reloads
 // the document, and a page kept out of the address bar has no entry to step
 // back over.
+//
+// And in one turn: on Home, push B, push A, then pop twice or popUntilRoot,
+// and the browser ends on Home's entry, as the same calls a frame apart. Was:
+// a second '/' entry over Home's, or '/', '/b', '/' with back showing B, a
+// closed page: the history counted an entry for A, which the browser never
+// got.
 RootStackRouter _router() => .build(
   routes: [
-    for (final (name, path) in [('HomeRoute', '/'), ('ARoute', '/a')])
+    for (final (name, path) in [
+      ('HomeRoute', '/'),
+      ('ARoute', '/a'),
+      ('BRoute', '/b'),
+    ])
       NamedRouteDef(name: name, path: path, builder: (_, _) => Text(name)),
   ],
 );
@@ -93,4 +103,47 @@ void main() {
       ((0, '/', 'HomeRoute'), false),
     );
   });
+
+  // Steps, in one turn: with /a kept out of the address bar, on Home push B,
+  // push A, then pop twice, or popUntilRoot.
+  for (final (name, closeBoth) in <(String, void Function(RootStackRouter))>[
+    (
+      'two pops',
+      (router) {
+        for (var i = 0; i < 2; i++) {
+          router.pop();
+        }
+      },
+    ),
+    ('popUntilRoot', (router) => router.popUntilRoot()),
+  ]) {
+    testWidgets('On web, with /a kept out of the address bar, a push of B and '
+        'of A and $name in one turn end on the entry of Home', (tester) async {
+      final router = _router();
+      await pumpRouterConfigApp(
+        tester,
+        router.config(neglectWhen: (location) => location == '/a'),
+      );
+      await settleBrowser(tester);
+      final home = browserSerialCount;
+      _recordHistoryGo();
+      unawaited(router.push(const NamedRoute('BRoute')));
+      unawaited(router.push(const NamedRoute('ARoute')));
+      closeBoth(router);
+      await settleBrowser(tester);
+      final shown = (
+        browserSerialCount - home,
+        browserPath,
+        router.stack.map((page) => page.name).join(' '),
+      );
+      printOnFailure(
+        'after the calls: $shown; history.go: '
+        '${_historyGoCalls()}',
+      );
+      expect(
+        (shown, _historyGoCalls().any((steps) => int.parse(steps) >= 0)),
+        ((0, '/', 'HomeRoute'), false),
+      );
+    });
+  }
 }
