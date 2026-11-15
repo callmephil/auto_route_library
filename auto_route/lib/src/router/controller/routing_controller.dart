@@ -2425,6 +2425,14 @@ abstract class StackRouter extends RoutingController {
   // pushed rather than the one below it.
   final _landingPushes = <Future<void>>{};
 
+  /// Whether a navigation called on this router has not started yet, as one
+  /// called while widgets are built, which starts a microtask later.
+  ///
+  /// The app's own history asks it after a step back, to tell a navigation
+  /// the router has taken from one still to come.
+  @internal
+  bool get hasNavigationWaitingToStart => _landingPushes.isNotEmpty;
+
   // The animations of pages the navigator popped, while they leave the
   // screen; see [waitForTransitions].
   final _leavingAnimations = <Animation<Object?>>{};

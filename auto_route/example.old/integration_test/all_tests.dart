@@ -12,6 +12,7 @@ import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
 import 'back_same_url_test.dart' as back_same_url;
+import 'back_twice_in_one_turn_test.dart' as back_twice_in_one_turn;
 import 'back_twice_test.dart' as back_twice;
 import 'batch_rejected_keeps_caller_test.dart' as batch_rejected_keeps_caller;
 import 'batch_rejected_keeps_stack_test.dart' as batch_rejected_keeps_stack;
@@ -404,6 +405,7 @@ void main() {
   back_rejected_by_guard.main();
   back_same_route_params.main();
   back_same_url.main();
+  back_twice_in_one_turn.main();
   back_twice.main();
   batch_rejected_keeps_caller.main();
   batch_rejected_keeps_stack.main();

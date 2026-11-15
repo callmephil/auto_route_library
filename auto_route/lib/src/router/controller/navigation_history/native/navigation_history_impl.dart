@@ -26,8 +26,8 @@ class NavigationHistoryImpl extends NavigationHistory {
   void onNewUrlState(UrlState newState, {bool notify = true}) {
     super.onNewUrlState(newState, notify: notify);
     if (_isNavigatingBack && newState.url == _backTargetUrl) {
-      // Ends after the current call, so a back() called right after one that
-      // reports its url synchronously still waits for it.
+      // Ends after the current call, which may still report urls on its way.
+      // A step back the router has taken as back() returns ends there.
       final backCount = _backCount;
       scheduleMicrotask(() {
         if (backCount == _backCount) _stopNavigatingBack();
@@ -133,8 +133,17 @@ class NavigationHistoryImpl extends NavigationHistory {
       final backCount = ++_backCount;
       _backTargetUrl = last.url;
       removePagesAbove(last.pageId);
+      final navigation = router.navigateAll([last.route]);
+      // The router shows the entry as the navigation returns, as it does when
+      // no guard makes it wait, so this step back is done: a back() called
+      // right after it takes the next step, as two calls of history.back() in
+      // one task take a browser back two entries. A navigation that has not
+      // started yet, as one called while widgets are built, is still to come.
+      if (!router.hasNavigationWaitingToStart && _isLastEntry(urlState)) {
+        _stopNavigatingBack();
+      }
       unawaited(
-        router.navigateAll([last.route]).whenComplete(() {
+        navigation.whenComplete(() {
           if (backCount != _backCount) return;
           // The router never reported the entry's url and still shows the
           // page left, as when a guard rejects it: a refused navigation
