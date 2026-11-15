@@ -86,6 +86,7 @@ import 'guard_throws_tab_test.dart' as guard_throws_tab;
 import 'guard_throws_test.dart' as guard_throws;
 import 'guarded_tab_link_after_tabs_left_test.dart'
     as guarded_tab_link_after_tabs_left;
+import 'held_back_page_after_rebuild_test.dart' as held_back_page_after_rebuild;
 import 'hero_controller_builder_test.dart' as hero_controller_builder;
 import 'hero_nested_router_test.dart' as hero_nested_router;
 import 'home_index_back_test.dart' as home_index_back;
@@ -475,6 +476,7 @@ void main() {
   guard_throws_tab.main();
   guard_throws.main();
   guarded_tab_link_after_tabs_left.main();
+  held_back_page_after_rebuild.main();
   hero_controller_builder.main();
   hero_nested_router.main();
   home_index_back.main();

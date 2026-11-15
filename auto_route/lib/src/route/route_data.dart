@@ -274,8 +274,14 @@ class RouteData<R> {
   ///
   /// A guard reevaluation that collected the stack before the pop does not
   /// add the page back.
+  ///
+  /// Returns false, and records nothing, when the navigator only let go of a
+  /// page a reevaluation holds off the stack until its guard answers: that
+  /// page may go back on, so it was not popped, and the code that opened it
+  /// goes on waiting for its result.
   @internal
-  void onPoppedByNavigator() {
+  bool onPoppedByNavigator() {
+    if (_isLetGoWhileHeldBack) return false;
     _isPoppedByNavigator = true;
     if ((router, animation) case (
       final StackRouter stackRouter,
@@ -283,6 +289,24 @@ class RouteData<R> {
     )) {
       stackRouter._addLeavingAnimation(leaving);
     }
+    return true;
+  }
+
+  // Whether a reevaluation holds this page off the stack, see
+  // [StackRouter._heldBackByReevaluation], and the navigator has been given
+  // the pages without it. The navigator then closes the page's route as it
+  // closes one that was popped. While the navigator still shows the page, a
+  // pop is the user's, as a back press on it is.
+  bool get _isLetGoWhileHeldBack {
+    final stack = router;
+    if (stack is! StackRouter ||
+        !stack._heldBackByReevaluation.any((held) => identical(held, this))) {
+      return false;
+    }
+    final shown = stack.navigatorKey.currentState?.widget.pages ?? const [];
+    return !shown.any(
+      (page) => page is AutoRoutePage && page.routeData == this,
+    );
   }
 
   // The pop completer while the code that opened this route still waits on

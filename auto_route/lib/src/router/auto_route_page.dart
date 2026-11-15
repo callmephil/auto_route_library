@@ -123,16 +123,15 @@ class AutoRoutePage<T> extends Page<T> {
   @override
   PopInvokedWithResultCallback<T> get onPopInvoked {
     return (didPop, result) {
-      if (didPop) {
+      // Not when the navigator only let go of a page that may go back on.
+      if (didPop && routeData.onPoppedByNavigator()) {
         final router = routeData.router;
         // As Route.didComplete does, a pop without a result, such as the
         // back gesture, completes with the route's currentResult.
         final shownRoute = router is StackRouter
             ? router.pagelessRoutesObserver.routeOf(this)
             : null;
-        routeData
-          ..onPoppedByNavigator()
-          ..onPopInvoked(result ?? shownRoute?.currentResult as T?);
+        routeData.onPopInvoked(result ?? shownRoute?.currentResult as T?);
       }
     };
   }
