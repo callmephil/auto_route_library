@@ -354,4 +354,39 @@ void main() {
       opens: _onA,
     );
   });
+
+  // From A over Home, two pushes, of B and C, and popUntilRoot, in one turn:
+  // the browser ends on Home's entry, with no entry of the pages closed in
+  // the turn on top of it.
+  testWidgets('On web, two pushes and popUntilRoot in one turn end on the '
+      'entry of Home', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        unawaited(router.push(const NamedRoute('BRoute')));
+        unawaited(router.push(const NamedRoute('CRoute')));
+        router.popUntilRoot();
+      },
+      [(0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
+
+  // From A over Home, a pop, a push of A again and a pop, in one turn: the
+  // browser ends on Home's entry, and back doesn't show A, a page already
+  // closed. The push of A, whose url the browser still shows, is not the
+  // browser's own move.
+  testWidgets('On web, a pop, a push of the same page again and a pop in one '
+      'turn end on the entry of Home', (tester) async {
+    await _expectAfter(
+      tester,
+      (router) {
+        router.pop();
+        unawaited(router.push(const NamedRoute('ARoute')));
+        router.pop();
+      },
+      [(0, '/', 'HomeRoute')],
+      opens: _onA,
+    );
+  });
 }

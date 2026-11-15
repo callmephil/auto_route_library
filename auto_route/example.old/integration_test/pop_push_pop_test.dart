@@ -17,8 +17,6 @@ void main() {
   group('pop, push, pop', () {
     // Steps: on Home, push A. On A, tap 'Close, reopen, close', which pops
     // A, pushes A again and pops it, in the same turn.
-    // Was: the browser held '/', '/a', '/', and back showed A, a page
-    // already closed.
     // Should: the browser stands on Home's entry.
     // Native behavior: the HTML History API; back(), pushState and back()
     // one after another end on the entry before.
