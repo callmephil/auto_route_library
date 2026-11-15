@@ -8,6 +8,14 @@ typedef OnNavigation = FutureOr<void> Function(
 
 /// A middleware for stacked routes where clients
 /// can either resume or abort the navigation event
+///
+/// A guard of a route inside a nested router is asked by that router, once
+/// the router above has let the route that holds it through. When that
+/// router isn't built yet, as for a page that isn't open or a tab never
+/// opened, it asks its guards only once its page or tab is in, a frame later:
+/// a rejection then leaves that page or tab open, on its first page. A link
+/// into a tab never opened builds the tab off the screen first instead, and a
+/// rejection keeps the tab the user is on.
 abstract class AutoRouteGuard {
   /// Default constructor
   const new();
