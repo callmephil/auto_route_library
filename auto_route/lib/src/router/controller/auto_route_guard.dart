@@ -512,8 +512,9 @@ class NavigationResolver {
       _checkGuard(guard, router);
 
   // Holds, in the zone a guard's call runs in, the resolver the guard was
-  // given, for the pages that call puts on a stack to be told as the
-  // guard's, see [_reportPageGoesOn].
+  // given: what that call does, also after an await and in what it starts,
+  // can be told as the guard's own, as the pages it puts on a stack are, see
+  // [_reportPageGoesOn].
   static final _askedZone = Object();
 
   // Told with the router each time code of the guard puts a page on a stack
@@ -554,12 +555,10 @@ class NavigationResolver {
     // Kept for a later call of this guard too, as a reevaluation makes.
     _onShowsPage = onShowsPage ?? _onShowsPage;
     try {
-      await (_onShowsPage == null
-          ? guard.onNavigation(this, router)
-          : runZoned(
-              () => guard.onNavigation(this, router),
-              zoneValues: {_askedZone: this},
-            ));
+      await runZoned(
+        () => guard.onNavigation(this, router),
+        zoneValues: {_askedZone: this},
+      );
     } finally {
       // Not when a redirect ended this check and a later one began meanwhile.
       if (identical(_waitingCompleter, waiting)) _endCheck();
