@@ -2978,6 +2978,7 @@ abstract class StackRouter extends RoutingController {
       await Future.wait(_landingPushes);
     }
     if (_didPopUnbuiltTop(result)) return true;
+    _removeLeftRoutesOverTop();
     final navigator = _navigatorKey.currentState;
     if (await navigator?.maybePop<T>(result) ?? false) {
       return true;
@@ -3008,6 +3009,7 @@ abstract class StackRouter extends RoutingController {
       return;
     }
     if (_didPopUnbuiltTop(result)) return;
+    _removeLeftRoutesOverTop();
     final navigator = _navigatorKey.currentState;
     // The routes callback of a declarative router decides its pages, so its
     // only page can't be popped from under it: the page holding it closes.
@@ -3035,6 +3037,35 @@ abstract class StackRouter extends RoutingController {
     top.routeData.onPopInvoked(result);
     _removeRoute(top.routeData._route);
     return true;
+  }
+
+  // Takes from the navigator the routes of pages that have left the stack and
+  // still lie over its top page, with the pageless routes over them. The
+  // page a replace, removeLast or navigate took off keeps its route until
+  // the navigator is rebuilt, and Navigator.pop and maybePop act on the
+  // navigator's top route: a pop in the same turn would close that route, a
+  // page already gone, and leave the stack's top page open. Flutter's own
+  // Navigator no longer counts a route as present from the call that
+  // replaced or removed it, so its next pop takes the route below.
+  void _removeLeftRoutesOverTop() {
+    final navigator = _navigatorKey.currentState;
+    final top = _pages.lastOrNull;
+    if (navigator == null || top == null) return;
+    final shown = navigator.widget.pages;
+    final topIndex = shown.indexOf(top);
+    // A top page not built yet has no route for a pop to reach.
+    if (topIndex == -1) return;
+    for (final page in shown.skip(topIndex + 1).toList().reversed) {
+      final route = pagelessRoutesObserver.routeOf(page);
+      // A route already popped is leaving by itself.
+      if (route == null || route.navigator != navigator || !route.isActive) {
+        continue;
+      }
+      pagelessRoutesObserver
+          .pagelessRoutesOver(route)
+          .forEach(navigator.removeRoute);
+      navigator.removeRoute(route);
+    }
   }
 
   /// Removes the very last entry from [_pages]
