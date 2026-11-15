@@ -135,6 +135,13 @@ mixin AutoRouteAwareStateMixin<T extends StatefulWidget> on State<T>
 /// example useful to keep track of page transitions, e.g. a
 /// `RouteObserver<PageRoute>` will inform subscribed [AutoRouteAware]s whenever
 /// the user navigates away from the current page route to another page route.
+///
+/// A subclass that overrides [didPush], [didPop], [didRemove], [didReplace],
+/// [didInitTabRoute] or [didChangeTabRoute] must call `super` in it. These
+/// methods tell the subscribers what happened to their routes, and the first
+/// four also forget each route that leaves the [Navigator]. Without `super`,
+/// the subscribers of the routes involved hear nothing, and a route that
+/// left keeps its subscribers until they unsubscribe.
 class AutoRouteObserver extends AutoRouterObserver {
   // Subscribers of the pages in this observer's navigator, keyed by the route
   // that shows each page, as Flutter's RouteObserver keys them. Two pages of
