@@ -2452,6 +2452,12 @@ abstract class StackRouter extends RoutingController {
   /// Whether a reevaluation is in progress
   bool _isReevaluating = false;
 
+  // On the root router: how many times the guards were asked again, by a
+  // change of the listenable or a call of [reevaluateGuards] on any router
+  // of the app. A replaceAll that puts back pages it had set aside reads it
+  // to tell whether a change passed them by, see [_replaceAllMatches].
+  var _guardStateChanges = 0;
+
   // How many rounds in a row the reevaluation in progress has asked again:
   // 0 in the round a change started, see [_isAskingAgainDue].
   var _roundsAskedAgain = 0;
@@ -2725,7 +2731,10 @@ abstract class StackRouter extends RoutingController {
   ///
   /// Called again while a guard still runs its check, it asks the guards once
   /// more when that round ends, so the last change wins.
-  Future<void> reevaluateGuards() => _reevaluateGuards(roundsAskedAgain: 0);
+  Future<void> reevaluateGuards() {
+    root._guardStateChanges++;
+    return _reevaluateGuards(roundsAskedAgain: 0);
+  }
 
   Future<void> _reevaluateGuards({required int roundsAskedAgain}) async {
     final requestsBefore = _askAgainRequests;
@@ -3854,6 +3863,10 @@ abstract class StackRouter extends RoutingController {
     // Whether a guard's call has returned without an answer, and the guard
     // has not answered since: it waits for something outside its call.
     var isGuardWaiting = false;
+    // [_guardStateChanges] as the first pages were set aside, or null when
+    // a reevaluation was asking about them then.
+    int? changesAtSetAside;
+    var isSetAside = false;
     // Sets the pages to replace aside for the page that goes on next in
     // their place, or with [isPageOn] for one that is on already.
     void setPagesAside({bool isPageOn = false}) {
@@ -3861,6 +3874,12 @@ abstract class StackRouter extends RoutingController {
       final leaving = [...?pagesBefore?.where(_pages.contains)];
       if (leaving.isEmpty) return;
       setAside = [...setAside, ...leaving];
+      if (!isSetAside) {
+        isSetAside = true;
+        changesAtSetAside = _reevaluationsInProgress > 0
+            ? null
+            : root._guardStateChanges;
+      }
       _setAsideByReplaceAll.addAll(leaving);
       _markLeaving(leaving, .replaced);
       _pages.removeWhere(leaving.contains);
@@ -3946,6 +3965,14 @@ abstract class StackRouter extends RoutingController {
           setAside = const [];
           markUrlStateForReplace();
           notifyAll(forceUrlRebuild: true);
+          // A change of the state the guards read passed the pages by while
+          // they were off the stack: a reevaluation asks only about pages
+          // on the stack, and drops the answer of a guard whose page left
+          // meanwhile. They are asked now, as a page that comes back into
+          // view after a sign-out is checked again on iOS and Android.
+          if (changesAtSetAside != root._guardStateChanges) {
+            unawaited(reevaluateGuards());
+          }
         },
       ),
     );

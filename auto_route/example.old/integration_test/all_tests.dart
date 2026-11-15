@@ -328,6 +328,8 @@ import 'screen_reached_again_keeps_caller_test.dart'
     as screen_reached_again_keeps_caller;
 import 'screen_reached_again_keeps_leave_listener_test.dart'
     as screen_reached_again_keeps_leave_listener;
+import 'set_aside_page_asked_when_back_test.dart'
+    as set_aside_page_asked_when_back;
 import 'set_query_param_read_test.dart' as set_query_param_read;
 import 'set_query_param_test.dart' as set_query_param;
 import 'sign_in_closes_awaited_redirect_test.dart'
@@ -673,6 +675,7 @@ void main() {
   same_route_tabs_reevaluation.main();
   screen_reached_again_keeps_caller.main();
   screen_reached_again_keeps_leave_listener.main();
+  set_aside_page_asked_when_back.main();
   set_query_param_read.main();
   set_query_param.main();
   sign_in_closes_awaited_redirect.main();
