@@ -100,9 +100,11 @@ class HistoryEntryList {
     // see [didDropClosed].
     if (!keepsClosedUnder) _handOverEntries([...under, state]);
     final shown = _showOnTop(state, keepsClosedUnder: keepsClosedUnder);
-    _sharing.removeWhere((pageId, _) => !isPageOpen(pageId));
-    _linkPages.removeWhere((pageId) => !isPageOpen(pageId));
     final topId = shown.topMatch?.id;
+    _sharing.removeWhere((pageId, _) => !isPageOpen(pageId));
+    // The page shown may be on its way in, not open yet, as while a guard
+    // of its nested router decides: its entry is still a link's.
+    _linkPages.removeWhere((pageId) => pageId != topId && !isPageOpen(pageId));
     if (topId != null) {
       _sharing.remove(topId);
       if (isLink) _linkPages.add(topId);
