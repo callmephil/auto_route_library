@@ -132,6 +132,13 @@ class HistoryWriter {
   // landing is followed like the user's.
   bool _isAppStep = false;
 
+  // Whether the user's step landed while a step of the writer's own was on
+  // its way: the browser takes both, and the app follows where they end.
+  bool _isUserStepMixedIn = false;
+
+  // The entries the writer was asked to bring the browser to last.
+  _Entries? _lastWanted;
+
   // The url of the entry a step of the writer's own landed on, until the
   // platform's report of that landing is taken.
   String? _ownLandingUrl;
@@ -248,7 +255,9 @@ class HistoryWriter {
   /// whatever the app reported.
   void bringTo(List<UrlState> entries, {bool isReplace = false}) {
     if (entries.isEmpty || _isDisposed) return;
-    _queue.add(_Entries(List.unmodifiable(entries), isReplace: isReplace));
+    final wanted = _Entries(List.unmodifiable(entries), isReplace: isReplace);
+    _lastWanted = wanted;
+    _queue.add(wanted);
     _run();
   }
 
@@ -319,11 +328,13 @@ class HistoryWriter {
   }
 
   // The browser landed on the entry [landedAt], which it did not stand on
-  // before. Returns whether that is the step the writer asked for, for
-  // itself; any other landing is followed by the app.
+  // before. Returns whether the app has nothing to follow there: the step
+  // the writer asked for, for itself, landed, or the user's step landed
+  // first and the writer's is still to come. Any other landing is followed
+  // by the app.
   bool _didOwnStepLand(int landedAt) {
     final isStep = landedAt == _stepTarget;
-    if (isStep && !_isAppStep) {
+    if (isStep && !_isAppStep && !_isUserStepMixedIn) {
       _index = landedAt;
       _endStep(didLand: true);
       return true;
@@ -333,7 +344,16 @@ class HistoryWriter {
     } else if (_stepTarget != null) {
       // A step of the user's landed first. The browser counts the writer's
       // step, still on its way, from there.
-      _stepTarget = landedAt + _stepDelta;
+      final target = _stepTarget = landedAt + _stepDelta;
+      // When that step stays among the app's entries, the app follows where
+      // the two end, once the writer's lands, and never the entry between
+      // them, which the app may have left already. A step under the app's
+      // first entry would leave the app, or is lost.
+      if (!_isAppStep && target >= first) {
+        _index = landedAt;
+        _isUserStepMixedIn = true;
+        return true;
+      }
     }
     _followUser();
     return false;
@@ -568,10 +588,28 @@ class HistoryWriter {
   // The step never landed: the browser had no such entry, or the event was
   // lost.
   void _readWhereBrowserStands() {
-    if (_stepTarget == null) return;
+    final target = _stepTarget;
+    if (target == null) return;
+    final wasUserStepMixedIn = _isUserStepMixedIn;
     final landedAt = _browser.index;
-    if (landedAt != _index && _didOwnStepLand(landedAt)) return;
+    if (landedAt != _index) {
+      // A landing no event told of: the writer's own step, or another,
+      // which the app follows.
+      if (landedAt == target && _didOwnStepLand(landedAt)) return;
+      if (_stepTarget != null) {
+        _endStep(didLand: false);
+        _followUser();
+      }
+      return;
+    }
     _endStep(didLand: false);
+    // The user's step landed, which the app did not follow, and the
+    // writer's never did: the writer brings the browser back to the
+    // entries the app shows.
+    final wanted = _lastWanted;
+    if (wasUserStepMixedIn && _queue.isEmpty && wanted != null) {
+      _queue.add(wanted);
+    }
   }
 
   void _endStep({required bool didLand}) {
@@ -579,6 +617,7 @@ class HistoryWriter {
     _landingTimer = null;
     _stepTarget = null;
     _isAppStep = false;
+    _isUserStepMixedIn = false;
     final landing = _landing;
     _landing = null;
     landing?.complete(didLand);
