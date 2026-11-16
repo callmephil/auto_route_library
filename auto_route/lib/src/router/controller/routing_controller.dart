@@ -5973,8 +5973,24 @@ abstract class StackRouter extends RoutingController {
         }
         return await popped;
       }
-      final mayUpdateController = _topInnerControllerOf(mayUpdateRoute.key);
       final newChildren = mayUpdateRoute.children ?? const [];
+      // A new page whose nested router, built with the page, asks its guards
+      // only then: the navigation is let in once they let it in. It goes
+      // into no other router, not even that of an earlier page of the same
+      // route, as one an earlier navigation to the same page put on while
+      // its guards decide: that navigation goes on there on its own.
+      final waiting = newChildren.isNotEmpty
+          ? _NestedLetIn.waitingOn(
+              _pages
+                  .lastWhereOrNull(
+                    (page) => page.routeData.matchId == mayUpdateRoute.id,
+                  )
+                  ?.routeData,
+            )
+          : null;
+      final mayUpdateController = waiting != null
+          ? null
+          : _topInnerControllerOf(mayUpdateRoute.key);
       // A page that took over this nested router has opened its children in
       // it; opening them again would stack them twice.
       if (newChildren.isNotEmpty &&
@@ -5997,17 +6013,6 @@ abstract class StackRouter extends RoutingController {
           onGuardShowsPage: onNestedGuardShowsPage,
         );
       }
-      // A new page whose nested router, built with the page, asks its guards
-      // only then: the navigation is let in once they let it in.
-      final waiting = mayUpdateController == null && newChildren.isNotEmpty
-          ? _NestedLetIn.waitingOn(
-              _pages
-                  .lastWhereOrNull(
-                    (page) => page.routeData.matchId == mayUpdateRoute.id,
-                  )
-                  ?.routeData,
-            )
-          : null;
       if (waiting != null && lettingIn != null) {
         waiting.addLetIn(lettingIn);
       } else {
