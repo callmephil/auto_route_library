@@ -2445,6 +2445,7 @@ abstract class StackRouter extends RoutingController {
       ..._takenOffByOpenBatches,
       ..._takenOffForNewPage,
       ..._setAsideByReplaceAll,
+      ..._waitingForLetGoGuards,
     });
   }
 
@@ -2519,6 +2520,11 @@ abstract class StackRouter extends RoutingController {
   // How many reevaluations of this router's pages are in progress, the one
   // a router above runs here among them.
   var _reevaluationsInProgress = 0;
+
+  // The pages of [_heldBackByReevaluation] whose guard let go of them: they
+  // wait off the stack and the screen for its answer after the reevaluation
+  // that asked it has ended, see [_awaitLetGoAnswer].
+  final _waitingForLetGoGuards = <AutoRoutePage<Object?>>{};
 
   // Whether the app took the page of [match] off since the reevaluation that
   // asks about it began, as replace, replaceAll, removeWhere and navigate
@@ -2671,7 +2677,8 @@ abstract class StackRouter extends RoutingController {
             !stillShown.contains(page.routeData) &&
             !shownWaits.contains(page.routeData._popCompleter) &&
             !_takenOffByOpenBatches.contains(page) &&
-            !_setAsideByReplaceAll.contains(page),
+            !_setAsideByReplaceAll.contains(page) &&
+            !_waitingForLetGoGuards.contains(page),
       ),
     );
   }
@@ -2755,8 +2762,13 @@ abstract class StackRouter extends RoutingController {
   /// While a guard's check runs, its page stays in the stack and on screen,
   /// with the pages above it; only the guard's answer closes it. A guard that
   /// returns without an answer, and without
-  /// [NavigationResolver.redirectUntil], holds its page back until it gives
-  /// one.
+  /// [NavigationResolver.redirectUntil], lets go of its page: the page leaves
+  /// the stack and the screen at once, with the pages above it, while the
+  /// code that opened it goes on waiting. Once the guard lets it through, the
+  /// page goes back on top of the stack as it then is, and the pages that
+  /// were above it follow as their guards let them; a rejection closes it for
+  /// good. A guard that wants its page kept while it decides awaits its
+  /// answer inside its call.
   ///
   /// A page the app takes off while a guard still decides, as [replace],
   /// [replaceAll], [removeWhere] and [navigate] do, stays off whatever the
@@ -4597,7 +4609,7 @@ abstract class StackRouter extends RoutingController {
     // Android. Only the guard's answer closes a page, with the pages above
     // it, which the reevaluation has not asked yet. This takes off the pages
     // of the routes from the one at [index] up.
-    void takeOffPagesFrom(int index) {
+    List<AutoRoutePage<Object?>> takeOffPagesFrom(int index) {
       final leaving = {
         for (final route in routes.skip(index))
           if (route is ReevaluatableRouteMatch) route.currentPage.routeData,
@@ -4607,7 +4619,14 @@ abstract class StackRouter extends RoutingController {
           .toList();
       _pages.removeWhere(onStack.contains);
       _heldBackByReevaluation.addAll(onStack.map((page) => page.routeData));
+      return onStack;
     }
+
+    // Completed with null when the guard of a page this reevaluation asks
+    // returns without an answer: from then on the reevaluation goes on
+    // without that page and the pages above it, see [_awaitLetGoAnswer].
+    final letGo = Completer<ResolverResult?>();
+    var letGoPages = const <AutoRoutePage<Object?>>[];
 
     // A batch over pages already on screen, such as pushAll or a link with
     // the pages below its own, goes in as one step: the stack stays as it is
@@ -4714,21 +4733,30 @@ abstract class StackRouter extends RoutingController {
               .whereIndexed((index, element) => index > i)
               .toList(),
           isReevaluating: isReevaluating,
-          // A guard asked again that returns without an answer holds its
-          // page back until it gives one, as it holds back a page being
-          // pushed. The page waits off the stack, with the pages above it,
-          // and goes back on once the guard lets it through. The navigator
-          // isn't told, so the screen stays unless the guard shows a page of
-          // its own. A page under the guard's redirect stays, see
-          // redirectUntil.
+          // A guard asked again that returns without an answer lets go of
+          // its page: the page leaves the stack and the screen at once, with
+          // the pages above it, and comes back once the guard lets it
+          // through, see [_awaitLetGoAnswer]. The reevaluation goes on
+          // without them. A guard that wants its page kept while it decides
+          // awaits its answer inside its call. A page under what its guard
+          // shows the user stays: under its redirect, see redirectUntil, or
+          // a page or a dialog it puts on screen in its call, which Flutter's
+          // Navigator would close with the page.
           //
           // A guard of replaceAll that returns without an answer waits for
           // something outside its call: from then on a page that goes on
           // takes the place of the pages to replace whoever puts it on, see
           // [_replaceAllMatches].
-          onLeftUndecided: ({required isRedirecting}) {
+          onLeftUndecided: ({required isWaitingOnUser}) {
             if (!isReevaluating) return replacement?.onGuardReturned();
-            if (!isRedirecting) takeOffPagesFrom(i);
+            // A later guard of the same page returned without an answer too.
+            if (isWaitingOnUser || letGo.isCompleted) return;
+            letGoPages = takeOffPagesFrom(i);
+            // As a guard that closes its page: the page below takes its
+            // history entry, and the pages heard they were removed.
+            _markLeaving(letGoPages, .removed);
+            markUrlStateForReplace();
+            letGo.complete(null);
           },
           // The page a guard of replaceAll shows itself takes their place
           // also while its call still runs; and a tab that waits for these
@@ -4741,7 +4769,24 @@ abstract class StackRouter extends RoutingController {
         // batch the app calls are on the stack as the call returns, and a
         // reevaluation leaves no gap in which a page could be replaced
         // between its guard's answer and its place on the stack.
-        final result = answer is ResolverResult ? answer : await answer;
+        // A reevaluation stops waiting once the guard lets go of its page.
+        final waited = isReevaluating && answer is Future<ResolverResult>
+            ? Future.any<ResolverResult?>([answer, letGo.future])
+            : answer;
+        final result = waited is Future<ResolverResult?>
+            ? await waited
+            : waited;
+        if (result == null) {
+          unawaited(
+            _awaitLetGoAnswer(
+              answer,
+              letGoPages,
+              routes.sublist(i + 1),
+              onFailure: onFailure,
+            ),
+          );
+          break;
+        }
         replacement?.onGuardAnswered();
         if (_isDisposed) break;
         // A later link was let in while a guard decided. The pages this
@@ -4834,9 +4879,9 @@ abstract class StackRouter extends RoutingController {
           // below, as a pop does; a new entry would lead back to the guard.
           if (match is ReevaluatableRouteMatch<Object?, Object?>) {
             _markLeaving([match.currentPage], .removed);
-            _pages.remove(match.currentPage);
+            final wasOnStack = _pages.remove(match.currentPage);
             takeOffPagesFrom(i + 1);
-            markUrlStateForReplace();
+            if (wasOnStack) markUrlStateForReplace();
           } else if (replacement != null) {
             replacement.onRejected();
           } else if (held.isNotEmpty) {
@@ -4853,7 +4898,11 @@ abstract class StackRouter extends RoutingController {
       _endWaitOfTakenOff(takenOff);
       _openReplacements.remove(replacement);
       if (isReevaluating && --_reevaluationsInProgress == 0) {
-        _heldBackByReevaluation.clear();
+        // Not the pages whose guard let go of them: they wait for its answer.
+        _heldBackByReevaluation.retainWhere(
+          (data) =>
+              _waitingForLetGoGuards.any((page) => page.routeData == data),
+        );
       }
     }
     return null;
@@ -4910,6 +4959,55 @@ abstract class StackRouter extends RoutingController {
     }
     notifyAll(forceUrlRebuild: true);
     return true;
+  }
+
+  // Waits for [answer], the answer of the guard that let go of the first of
+  // [pages]: the pages a reevaluation took off the stack and the screen with
+  // it, which went on without them, see [_pushAllGuarded]. A yes puts the
+  // page back on top of the stack as it then is, as a page whose guard lets
+  // it through goes on, and then asks the guards of [above], the routes of
+  // the pages that were above it. A no leaves them off, and so does a yes
+  // for a page the app took off meanwhile, as replaceAll does. The callers of
+  // the pages that stay off hear null; the others go on waiting.
+  Future<void> _awaitLetGoAnswer(
+    FutureOr<ResolverResult> answer,
+    List<AutoRoutePage<Object?>> pages,
+    List<RouteMatch<Object?>> above, {
+    OnNavigationFailure? onFailure,
+  }) async {
+    _waitingForLetGoGuards.addAll(pages);
+    try {
+      final result = await answer;
+      final match = result.route;
+      if (_isDisposed ||
+          !result.continueNavigation ||
+          match is! ReevaluatableRouteMatch<Object?, Object?> ||
+          !_heldBackByReevaluation.contains(match.currentPage.routeData)) {
+        return;
+      }
+      _addReevaluatedPage(match, notify: false);
+      if (result.reevaluateNext && above.isNotEmpty) {
+        await _pushAllGuarded<void>(
+          above,
+          onFailure: onFailure,
+          notify: false,
+          updateAncestorsPathData: false,
+          isReevaluating: true,
+        );
+      }
+    } finally {
+      _waitingForLetGoGuards.removeAll(pages);
+      _heldBackByReevaluation.removeWhere(
+        (data) => pages.any((page) => page.routeData == data),
+      );
+      if (!_isDisposed) {
+        final back = {for (final page in _pages) page.routeData};
+        _completeFuturesOf(
+          pages.where((page) => !back.contains(page.routeData)),
+        );
+        notifyAll();
+      }
+    }
   }
 
   // Runs [step], which takes pages off for a new page: the top page that
@@ -6205,9 +6303,10 @@ typedef _RoutesChange = List<RouteMatch<Object?>> Function(
   List<RouteMatch<Object?>> accepted,
 );
 
-// Called when a guard returns without an answer, after it started a redirect
-// or not.
-typedef _GuardHoldsCallback = void Function({required bool isRedirecting});
+// Called when a guard returns without an answer. [isWaitingOnUser] says it
+// waits on the user, on screen: behind a redirect it started, or a page or a
+// dialog it put on screen in its call.
+typedef _GuardHoldsCallback = void Function({required bool isWaitingOnUser});
 
 // How many times in a row a guard is asked again because the state the
 // guards are asked again for changed while it ran its check. A guard whose

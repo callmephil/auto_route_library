@@ -9,6 +9,8 @@ import 'support/app.dart';
 
 // A pop while a guard that was asked again has not answered closes the page
 // on screen, as Flutter's Navigator.pop closes the route the user sees.
+// Since Phil's decision 4 of 2026-11-16 the guard's page leaves the screen
+// at once, so that is the page under it.
 // Headless test:
 // auto_route/test/reevaluatable_router/pop_while_held_back_test.dart
 void main() {
@@ -19,13 +21,14 @@ void main() {
       body: SafeArea(child: Column(children: [Text(name), ...buttons])),
     );
 
-    // Steps: open Home, the account and its bills. The session changes, so
+    // Steps: open Home, the bills and the account. The session changes, so
     // the account's guard is asked again; it returns without an answer and
-    // answers later, from a callback. Before it answers, tap 'Close' on the
-    // bills, which calls pop. Then the guard lets the account stay.
+    // answers later, from a callback, and the account leaves the screen.
+    // Before it answers, tap 'Close' on the bills, which calls pop. Then the
+    // guard lets the account back.
     // Was: the pop left no page on the stack and an empty screen.
-    // Should: the bills close and the account shows, and stays once its
-    // guard has answered.
+    // Should: the bills close and Home shows; the account comes back over
+    // Home once its guard has answered.
     testWidgets('The page on screen closes and the page under it shows', (
       tester,
     ) async {
@@ -64,16 +67,17 @@ void main() {
         ],
       );
       await pumpRouterApp(tester, router, reevaluationNotifier: session);
-      for (final name in ['AccountRoute', 'BillsRoute']) {
+      for (final name in ['BillsRoute', 'AccountRoute']) {
         unawaited(router.push(NamedRoute(name)));
         await tester.pumpAndSettle();
       }
 
       session.value++;
       await tester.pumpAndSettle();
+      final shownWhileAsked = find.text('AccountRoute').evaluate().length;
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
-      final shownWhileAsked = find.text('AccountRoute').evaluate().length;
+      expectTopPage(router, 'HomeRoute');
       for (final answer in answers) {
         answer();
       }
@@ -81,7 +85,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(answers, hasLength(1));
-      expect(shownWhileAsked, 1);
+      expect(shownWhileAsked, 0);
       expect(router.stack.map((page) => page.name), [
         'HomeRoute',
         'AccountRoute',

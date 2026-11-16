@@ -27,9 +27,14 @@ import '../router_test_utils.dart';
 // went, and the pop then closed the page under them.
 // Should: the pop closes the page on screen, which stays closed whatever
 // the guard answers, and the pages under it are as the guard decides.
+// Since Phil's decision 4 of 2026-11-16 the held-back pages leave the
+// screen at once (held_back_page_leaves_screen_test.dart), so the page on
+// screen is the one under Account: a pop closes Notes, and on Home alone
+// there is nothing to pop. A later yes puts Account back on top, with the
+// pages that were above it.
 // Native behavior this holds to: Flutter's Navigator.pop closes the route
 // on top, the one the user sees. On Android a back press finishes the
-// activity on screen, also while a check it started is still running.
+// activity on screen, and on a root activity it leaves the app.
 void Function({required bool isLetIn})? _answer;
 var _isAskedAgain = false;
 
@@ -77,27 +82,37 @@ void main() {
     _isAskedAgain = false;
   });
 
-  final pops = <String, FutureOr<void> Function(WidgetTester, StackRouter)>{
-    'pop': (_, router) => router.pop(),
-    'maybePop': (_, router) async {
-      expect(await router.maybePop(), isTrue);
-    },
-    'the system back button': (tester, _) async {
-      expect(await tester.binding.handlePopRoute(), isTrue);
-    },
-  };
+  // Each checks, where it answers, whether it closed a page as [isPopping]
+  // says it should.
+  final pops =
+      <
+        String,
+        FutureOr<void> Function(
+          WidgetTester,
+          StackRouter, {
+          required bool isPopping,
+        })
+      >{
+        'pop': (_, router, {required isPopping}) => router.pop(),
+        'maybePop': (_, router, {required isPopping}) async =>
+            expect(await router.maybePop(), isPopping),
+        'the system back button': (tester, _, {required isPopping}) async =>
+            expect(await tester.binding.handlePopRoute(), isPopping),
+      };
 
-  // The pages opened over Home, and what one pop in the guard's wait leaves
-  // once the guard lets its page stay.
-  for (final (opened, afterPop) in [
-    (['AccountRoute', 'BillsRoute'], ['HomeRoute', 'AccountRoute']),
-    (['NotesRoute', 'AccountRoute'], ['HomeRoute', 'NotesRoute']),
-    (['AccountRoute'], ['HomeRoute']),
+  // The pages opened over Home.
+  for (final opened in [
+    ['AccountRoute', 'BillsRoute'],
+    ['NotesRoute', 'AccountRoute'],
+    ['AccountRoute'],
   ]) {
     for (final MapEntry(key: call, value: pop) in pops.entries) {
+      // pop on the root's one page takes it off, as Flutter's Navigator.pop
+      // does, guard or not: not what this test is about.
+      if (call == 'pop' && opened.firstOrNull == 'AccountRoute') continue;
       for (final isLetIn in [true, false]) {
         testWidgets('On Home, ${opened.join(', ')}, while the guard of '
-            'Account, asked again, has not answered, $call closes the page '
+            'Account, asked again, has not answered, $call acts on the page '
             'on screen; then the guard '
             '${isLetIn ? 'lets its page stay' : 'rejects'}', (tester) async {
           final session = _Session();
@@ -109,28 +124,33 @@ void main() {
             await tester.pumpAndSettle();
           }
           final guardedAt = opened.indexOf('AccountRoute') + 1;
+          final shownWhileHeld = ['HomeRoute', ...opened.take(guardedAt - 1)];
+          final isPopping = shownWhileHeld.length > 1;
 
           _isAskedAgain = true;
           session.changed();
           await tester.pumpAndSettle();
           final whileHeld = (_names(router), _onScreen());
-          await pop(tester, router);
+          await pop(tester, router, isPopping: isPopping);
           await tester.pumpAndSettle();
-          final afterCall = _onScreen();
+          final afterCall = (_names(router), _onScreen());
           _answer?.call(isLetIn: isLetIn);
           await tester.pumpAndSettle();
 
+          final afterPop = isPopping
+              ? shownWhileHeld.take(shownWhileHeld.length - 1).toList()
+              : shownWhileHeld;
           final left = [
-            for (final name in afterPop)
-              if (isLetIn || name != 'AccountRoute') name,
+            ...afterPop,
+            if (isLetIn) ...opened.skip(guardedAt - 1),
           ];
           expect(tester.takeException(), isNull);
-          // Held off the stack from Account up, and still on screen.
+          // Held off the stack and the screen from Account up.
           expect(whileHeld, (
-            ['HomeRoute', ...opened.take(guardedAt - 1)].join(' '),
-            opened.lastOrNull,
+            shownWhileHeld.join(' '),
+            shownWhileHeld.lastOrNull,
           ));
-          expect(afterCall, isNot(opened.lastOrNull));
+          expect(afterCall, (afterPop.join(' '), afterPop.lastOrNull));
           expect(
             (_names(router), _onScreen()),
             (left.join(' '), left.lastOrNull),

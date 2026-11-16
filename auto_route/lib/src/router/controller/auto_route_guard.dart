@@ -600,7 +600,11 @@ class NavigationResolver {
       // Not when a redirect ended this check and a later one began meanwhile.
       if (identical(_waitingCompleter, waiting)) _endCheck();
     }
-    if (!isResolved) onLeftUndecided?.call(isRedirecting: _isRedirecting);
+    if (!isResolved) {
+      onLeftUndecided?.call(
+        isWaitingOnUser: _isRedirecting || _isWaitingOnUser,
+      );
+    }
     return await future;
   }
 }

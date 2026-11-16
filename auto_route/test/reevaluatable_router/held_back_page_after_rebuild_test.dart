@@ -130,21 +130,27 @@ void main() {
     expect(answers, [null]);
   });
 
-  // The navigator still shows the page while nothing has rebuilt the pages,
-  // so the user can close it. It stays closed, and this passes before the
-  // fix too.
-  testWidgets('A page held back for a guard that answers later stays closed '
-      'when the user closed it meanwhile', (tester) async {
+  // Since Phil's decision 4 of 2026-11-16 the held-back page leaves the
+  // screen at once, without a rebuild, so the user can no longer close it
+  // meanwhile; held_back_page_leaves_screen_test.dart tests what a pop then
+  // does.
+  testWidgets('A page held back for a guard that answers later leaves the '
+      'screen before any rebuild, with the caller still waiting', (
+    tester,
+  ) async {
     final router = await signOutOnAccount(tester);
 
-    await tester.tap(find.byType(BackButton));
-    await tester.pumpAndSettle();
-    final answersAfterBack = List.of(answers);
+    final whileHeld = (
+      find.text('HomeRoute').evaluate().length,
+      find.text('AccountRoute').evaluate().length,
+      answers.length,
+    );
     asking.singleOrNull?.next();
     await tester.pumpAndSettle();
 
-    expect(answersAfterBack, [null]);
-    expect(stackNames(router), ['HomeRoute']);
-    expect(find.text('HomeRoute'), findsOneWidget);
+    expect(whileHeld, (1, 0, 0));
+    expect(stackNames(router), ['HomeRoute', 'AccountRoute']);
+    expect(find.text('AccountRoute'), findsOneWidget);
+    expect(answers, isEmpty);
   });
 }
