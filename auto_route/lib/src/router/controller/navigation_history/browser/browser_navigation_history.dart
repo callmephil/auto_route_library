@@ -134,7 +134,8 @@ class BrowserNavigationHistory extends NavigationHistory {
     _isDropScheduled = true;
     scheduleMicrotask(() {
       _isDropScheduled = false;
-      if (!_isDisposed && _list.didDropClosed()) {
+      if (!_isDisposed &&
+          _list.didDropClosed(wayBack: [...pagesUnderTop(router), urlState])) {
         _writer.bringTo(_list.entries);
       }
     });

@@ -42,6 +42,9 @@ bool isSameHistoryUrl(String a, String b) {
 /// * Every open page under the page on top that the back button should
 ///   reach has an entry too, see [show]: pages the app opened together get
 ///   one each, and pages a link opened together share the link's entry.
+///   When the page that holds a shared entry leaves from under the entry of
+///   another page, the nearest page that shared it takes it over, so the
+///   pages left still have a way back.
 class HistoryEntryList {
   /// Creates an empty list that asks [isPageOpen] whether a stack still holds
   /// the page with a given id.
@@ -53,8 +56,8 @@ class HistoryEntryList {
   final _entries = <UrlState>[];
 
   // The pages that share the entry of a page over them, as the pages a link
-  // opened under its page.
-  final _sharing = <LocalKey>{};
+  // opened under its page, each with the page whose entry it shares.
+  final _sharing = <LocalKey, LocalKey>{};
 
   // The pages whose entry a link made.
   final _linkPages = <LocalKey>{};
@@ -86,8 +89,11 @@ class HistoryEntryList {
     List<UrlState> under = const [],
     bool isLink = false,
   }) {
+    // Entries kept while their pages leave are handed over once dropped,
+    // see [didDropClosed].
+    if (!keepsClosedUnder) _handOverEntries([...under, state]);
     final shown = _showOnTop(state, keepsClosedUnder: keepsClosedUnder);
-    _sharing.removeWhere((pageId) => !isPageOpen(pageId));
+    _sharing.removeWhere((pageId, _) => !isPageOpen(pageId));
     _linkPages.removeWhere((pageId) => !isPageOpen(pageId));
     final topId = shown.topMatch?.id;
     if (topId != null) {
@@ -107,7 +113,7 @@ class HistoryEntryList {
       final pageId = page.topMatch?.id;
       if (pageId == null ||
           place == wayBack.length - 1 ||
-          _sharing.contains(pageId) ||
+          _sharing.containsKey(pageId) ||
           hasEntry(page)) {
         continue;
       }
@@ -119,7 +125,7 @@ class HistoryEntryList {
           ?.id;
       if (overId == null) continue;
       if (isLink || _linkPages.contains(overId)) {
-        _sharing.add(pageId);
+        _sharing[pageId] = overId;
         continue;
       }
       // After the entry of the nearest page under it that has one, else
@@ -137,6 +143,38 @@ class HistoryEntryList {
                 1;
       _entries.insert(at, _withoutReplaceMark(page));
     }
+  }
+
+  // Hands the entry of each page that has left, with another entry over it,
+  // to the nearest page of [wayBack], the open pages first page first, that
+  // shared it: that page takes the entry's place with its own url, and the
+  // others that shared it share it with that page. Without it they would
+  // have no entry once it is dropped, and the back button would skip them.
+  // Returns whether one was handed over.
+  //
+  // The entry of a page on top is not handed over: the page that comes on
+  // top in its place takes that place, as before.
+  bool _handOverEntries(List<UrlState> wayBack) {
+    var didHandOver = false;
+    final underTop = _entries.indexed
+        .where((placed) => placed.$1 < _entries.length - 1)
+        .toList();
+    for (final (place, entry) in underTop) {
+      final holderId = entry.topMatch?.id;
+      if (holderId == null || _isPageOpen(entry)) continue;
+      final heir = wayBack.lastWhereOrNull(
+        (page) => _sharing[page.topMatch?.id] == holderId,
+      );
+      final heirId = heir?.topMatch?.id;
+      if (heir == null || heirId == null) continue;
+      _entries[place] = _withoutReplaceMark(heir);
+      _sharing
+        ..remove(heirId)
+        ..updateAll((_, sharedId) => sharedId == holderId ? heirId : sharedId);
+      _linkPages.add(heirId);
+      didHandOver = true;
+    }
+    return didHandOver;
   }
 
   UrlState _showOnTop(UrlState state, {required bool keepsClosedUnder}) {
@@ -169,11 +207,17 @@ class HistoryEntryList {
   }
 
   /// Drops every entry whose page has left a stack, and returns whether
-  /// there was one.
-  bool didDropClosed() {
+  /// the entries changed.
+  ///
+  /// [wayBack] holds the url state of each open page the back button
+  /// reaches, the first page first, the page on top last. An entry that
+  /// pages of it shared, as the pages a link opened under its page, goes to
+  /// the nearest of them instead of being dropped, see [show].
+  bool didDropClosed({List<UrlState> wayBack = const []}) {
+    final didHandOver = _handOverEntries(wayBack);
     final lengthBefore = _entries.length;
     _entries.removeWhere((entry) => !_isPageOpen(entry));
-    return _entries.length < lengthBefore;
+    return didHandOver || _entries.length < lengthBefore;
   }
 
   /// Adds [state] as a new entry whatever the entry before it holds, as
