@@ -22,9 +22,10 @@ import '../router_test_utils.dart';
 // Should: Mail shows its inbox, at '/mail'. Since the guard's "no" takes
 // back a page that was not open, Home shows instead, at '/', unless Mail is
 // the app's only page, as when the app starts at the link without the pages
-// below it. A link turned down inside a tab
-// that is not on screen leaves the tab on screen as it is, and the other
-// tab's nested router on its inbox.
+// below it. A link, and since the app's own path waits off the screen as a
+// link does, a path turned down inside a tab that is not on screen leaves
+// the tab on screen as it is, and the other tab's nested router on its
+// inbox.
 // Native behavior this holds to: on the web a navigation that is canceled
 // leaves the url of the document on screen. Flutter's Navigator shows the
 // pages its list holds and takes no empty list. On Android a screen that
@@ -138,21 +139,23 @@ void main() {
     return (router, router.innerRouterOf<TabsRouter>('TabsRoute')!);
   }
 
-  // A path the app calls itself goes to the tab, whose guards let it in, and
-  // is turned down inside it.
-  testWidgets('navigatePath to a rejected page in a tab never opened shows '
-      "the tab's first page", (tester) async {
+  // A path the app calls itself into a tab never opened waits off the
+  // screen for the guards of the tab's nested router, as a link does: a
+  // rejection keeps the tab the user is on, and leaves the other on its
+  // first page.
+  testWidgets('navigatePath to a rejected page in a tab never opened keeps '
+      'the tab on screen', (tester) async {
     final (router, tabs) = await openFirstTab(tester);
 
     unawaited(router.navigatePath('/tabs/mail/13'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(tabs.current.name, 'MailTab');
+    expect(tabs.current.name, 'FirstTab');
+    expect(find.text('FirstTab'), findsOneWidget);
     expect(stackNames(tabs.innerRouterOf('MailTab')), ['InboxRoute']);
-    expect(find.text('InboxRoute'), findsOneWidget);
-    expect(find.text('Mail 13'), findsNothing);
-    expect(router.currentUrl, '/tabs/mail');
+    expect(find.text('Mail 13', skipOffstage: false), findsNothing);
+    expect(router.currentUrl, '/tabs/first');
   });
 
   // A link the app turns down changes nothing: the tab the user is on stays

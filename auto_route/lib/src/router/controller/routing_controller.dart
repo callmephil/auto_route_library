@@ -1355,16 +1355,31 @@ class TabsRouter extends RoutingController {
     // link's change does: one they reject leaves the tab on screen and the
     // open dialogs as they were. Or before, when one of them shows a page of
     // its own in the tab while it decides. A tab whose nested router isn't
-    // built yet shows first: its router asks its guards only once the tab is
-    // in.
+    // built yet is built off the screen first, as a link's is, when a guard
+    // is to be asked there; with none to ask, it shows in the call.
     final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
     final tabRouter = tabMatchId == null
         ? null
         : _innerControllerOfMatch(tabMatchId);
-    if (onLinkAccepted == null &&
+    final goesInside =
+        onLinkAccepted == null &&
         isUpdated &&
-        (result.route.children ?? const []).isNotEmpty &&
-        tabRouter != null) {
+        (result.route.children ?? const []).isNotEmpty;
+    if (goesInside &&
+        tabRouter == null &&
+        _asksGuards(result.route.children ?? const [])) {
+      _showTabOnceLinkLetIn(
+        change,
+        index,
+        result.route,
+        show: () => _showTab(index, notify: notify, remember: remember),
+        then: onLetIn,
+        onFailure: onFailure,
+        keepsUnnamedPages: keepsUnnamedPages,
+      );
+      return .done;
+    }
+    if (goesInside && tabRouter != null) {
       final updated = _updateTabPage(
         index,
         result.route,
@@ -1464,10 +1479,21 @@ class TabsRouter extends RoutingController {
     return false;
   }
 
-  // Opens the pages of the link [route] names in the nested router of the
-  // tab at [index], and runs [show], [onLinkAccepted] and [then] once their
-  // guards let the link in, unless the change [change] was replaced
-  // meanwhile. A tab
+  // Whether opening [routes], and the routes they name for the nested
+  // routers of their pages, asks a guard: one of their own, or one of the
+  // app's global guards, which every stack asks.
+  bool _asksGuards(List<RouteMatch<Object?>> routes) =>
+      root.guards.isNotEmpty ||
+      routes.any(
+        (route) =>
+            route.guards.isNotEmpty || _asksGuards(route.children ?? const []),
+      );
+
+  // Opens the pages [route] names in the nested router of the tab at
+  // [index], and runs [show], [onLinkAccepted] and [then] once their guards
+  // let the navigation in, unless the change [change] was replaced
+  // meanwhile. A navigation of a [link] hands those steps to the link's
+  // step; the app's own runs them as the nested router lets it in. A tab
   // whose nested router is not built yet is built offstage first, on its
   // first page, as preload builds it, so the guards are asked with the tab
   // the user is on still on screen.
@@ -1475,27 +1501,30 @@ class TabsRouter extends RoutingController {
     int change,
     int index,
     RouteMatch<Object?> route, {
-    required int link,
-    required VoidCallback onLinkAccepted,
     required VoidCallback show,
+    int? link,
+    VoidCallback? onLinkAccepted,
     VoidCallback? then,
     OnNavigationFailure? onFailure,
+    bool keepsUnnamedPages = false,
   }) {
     final showOnce = _showingTabOnce(change, show);
     void onLetIn() {
       showOnce();
-      onLinkAccepted();
+      onLinkAccepted?.call();
       then?.call();
     }
 
     void openInside(RouteMatch<Object?> tab) {
-      root._handLinkStepOn(link, onLetIn);
+      if (link != null) root._handLinkStepOn(link, onLetIn);
       final tabRouter = _innerControllerOfMatch(tab.id);
       unawaited(
         _navigateInsideTab(
           tab,
           onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
           link: link,
+          onLetIn: link == null ? onLetIn : null,
           onGuardShowsPage: (router) {
             if (tabRouter != null && _isInside(router, tabRouter)) showOnce();
           },
@@ -1503,15 +1532,21 @@ class TabsRouter extends RoutingController {
       );
       // A nested router whose navigation asks no guard, such as a
       // declarative one, leaves the step: the tab shows at once.
-      root._takeLinkStep(link)?.call();
+      if (link != null) root._takeLinkStep(link)?.call();
     }
 
     final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
     if (tabMatchId != null && _innerControllerOfMatch(tabMatchId) != null) {
-      return openInside(_updateTabPage(index, route));
+      return openInside(
+        _updateTabPage(index, route, keepsUnnamedPages: keepsUnnamedPages),
+      );
     }
     final children = route.children;
-    final firstPage = _updateTabPage(index, route.copyWith(children: const []));
+    final firstPage = _updateTabPage(
+      index,
+      route.copyWith(children: const []),
+      keepsUnnamedPages: keepsUnnamedPages,
+    );
     if (!preload(index)) {
       // A tab that can't be built offstage shows as before the guards ask.
       onLetIn();
@@ -1519,6 +1554,7 @@ class TabsRouter extends RoutingController {
         _navigateInsideTab(
           firstPage.copyWith(children: children),
           onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
           link: link,
         ),
       );

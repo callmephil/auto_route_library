@@ -4,6 +4,8 @@ import 'active_guard_observer_test.dart' as active_guard_observer;
 import 'active_tab_removed_test.dart' as active_tab_removed;
 import 'ancestor_path_params_test.dart' as ancestor_path_params;
 import 'android_back_in_app_test.dart' as android_back_in_app;
+import 'app_call_into_unopened_tab_waits_test.dart'
+    as app_call_into_unopened_tab_waits;
 import 'app_smoke_test.dart' as app_smoke;
 import 'app_tab_change_waits_for_nested_guards_test.dart'
     as app_tab_change_waits_for_nested_guards;
@@ -422,6 +424,7 @@ void main() {
   active_tab_removed.main();
   ancestor_path_params.main();
   android_back_in_app.main();
+  app_call_into_unopened_tab_waits.main();
   app_smoke.main();
   app_tab_change_waits_for_nested_guards.main();
   async_simple_guard.main();
