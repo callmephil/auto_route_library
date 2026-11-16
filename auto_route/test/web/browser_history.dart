@@ -3,6 +3,8 @@ import 'dart:ui_web' as ui_web;
 
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
+import 'package:flutter/foundation.dart'
+    show ErrorToConsoleDumper, debugPrintSynchronously;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show Router, Widget;
 import 'package:flutter_test/flutter_test.dart';
@@ -21,8 +23,14 @@ import 'package:web/web.dart' show WindowEventGetters, window;
 /// and on the default fake clock a message still waiting when a test ends
 /// blocks every later one, so this also switches the file to
 /// [LiveTestWidgetsFlutterBinding], which runs on the real clock.
+///
+/// On web, Flutter dumps a failed expectation (its "Expected / Actual" lines)
+/// to the browser console, which the test runner does not show; this also
+/// prints each dump so it appears in the run's output.
 void useRealBrowserHistory() {
   LiveTestWidgetsFlutterBinding.ensureInitialized();
+  ErrorToConsoleDumper.clearWebDumpListeners();
+  ErrorToConsoleDumper.addWebDumpListener(debugPrintSynchronously);
   ui_web.TestEnvironment.setUp(
     const ui_web.TestEnvironment(
       forceTestFonts: true,
