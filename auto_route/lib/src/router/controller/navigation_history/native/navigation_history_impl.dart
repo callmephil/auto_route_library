@@ -48,8 +48,8 @@ class NavigationHistoryImpl extends NavigationHistory {
   // The pages whose entry a link made.
   final _linkPages = <LocalKey>{};
 
-  // The ids of the pages on the way back at the last change: only a page
-  // new on it gets an entry under the page on top.
+  // The ids of the pages on the way back at the last url report: only a page
+  // new on it since gets an entry under the page on top.
   var _wayBackIds = <LocalKey>{};
 
   @override
@@ -67,7 +67,11 @@ class NavigationHistoryImpl extends NavigationHistory {
     _isTopFree = false;
     _addTopEntry(newState, isTopFree: didDropTop);
     _giveLinkEntryToTop();
-    _giveEntriesUnderTop();
+    _giveEntriesUnderTop(urlState);
+    _wayBackIds = {
+      for (final page in [...pagesUnderTop(router), urlState])
+        ?page.topMatch?.id,
+    };
   }
 
   // Brings the entries to the stacks after a change that may report no url:
@@ -77,6 +81,9 @@ class NavigationHistoryImpl extends NavigationHistory {
   void _onStacksChanged() {
     if (_dropClosed()) _isTopFree = true;
     _giveLinkEntryToTop();
+    // Pages that go in with no url report, as those of a nested router built
+    // a frame after the call that put its page on, get their entries now.
+    _giveEntriesUnderTop(UrlState.fromSegments(router.currentSegments));
   }
 
   // Gives the last entry, made by a link for a page not open yet, to the
@@ -127,16 +134,17 @@ class NavigationHistoryImpl extends NavigationHistory {
   // entry a link made, such as the first page of a nested router built a
   // frame after its page: the user made one navigation, and back() leaves it
   // as one. The same rules as the web's entry list.
-  void _giveEntriesUnderTop() {
+  //
+  // [top] is the page on top: the url state reported, or the one the stacks
+  // show between reports.
+  void _giveEntriesUnderTop(UrlState top) {
     final under = pagesUnderTop(router);
-    final wayBack = [...under, urlState];
-    final known = _wayBackIds;
-    _wayBackIds = {for (final page in wayBack) ?page.topMatch?.id};
+    final wayBack = [...under, top];
     _sharing.removeWhere((pageId, _) => controllerOfPage(pageId) == null);
     _linkPages.removeWhere((pageId) => controllerOfPage(pageId) == null);
     if (_isNavigatingBack) return;
     final isLink = router.root.isShowingLink;
-    final topId = urlState.topMatch?.id;
+    final topId = top.topMatch?.id;
     if (topId != null) {
       _sharing.remove(topId);
       if (isLink) _linkPages.add(topId);
@@ -144,7 +152,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     for (final (place, page) in under.indexed) {
       final pageId = page.topMatch?.id;
       if (pageId == null ||
-          known.contains(pageId) ||
+          _wayBackIds.contains(pageId) ||
           _sharing.containsKey(pageId) ||
           _hasEntry(pageId)) {
         continue;
