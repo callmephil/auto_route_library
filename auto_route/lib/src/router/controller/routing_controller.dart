@@ -1071,12 +1071,16 @@ class TabsRouter extends RoutingController {
       return onFailure(RouteNotFoundFailure(route.name));
     }
     if (link != null) return;
-    throw FlutterError(
-      'Can not navigate to ${route.name}: it is not one of the tabs of the '
-      'tabs router of ${routeData.name}. Add it to the routes of its '
-      'AutoTabsRouter, or show it in a router of its own.',
-    );
+    throw _notListedError(route);
   }
+
+  // What the app's own call to [route], not one of the tabs, throws when it
+  // gave no onFailure.
+  FlutterError _notListedError(RouteMatch<Object?> route) => .new(
+    'Can not navigate to ${route.name}: it is not one of the tabs of the '
+    'tabs router of ${routeData.name}. Add it to the routes of its '
+    'AutoTabsRouter, or show it in a router of its own.',
+  );
 
   RouteData<Object?> _routeData;
   int _activeIndex = 0;
@@ -1925,9 +1929,23 @@ class TabsRouter extends RoutingController {
   void _turnDownPendingRoute(RouteMatch<Object?> route) {
     final waiting = _NestedLetIn.claim(_routeData);
     if (waiting == null) return;
+    final page = _routeData;
     SchedulerBinding.instance
       ..addPostFrameCallback((_) {
-        waiting.onFailure?.call(RouteNotFoundFailure(route.name));
+        final onFailure = waiting.onFailure;
+        // The app's own call without onFailure gets the error from its
+        // future, as it does when the tabs page is open: the future of the
+        // page it put on, which is taken back. A link has no caller to tell,
+        // and a page that stays answers when it closes.
+        final caller =
+            onFailure == null &&
+                waiting.link == null &&
+                waiting.takeBack != null &&
+                !ignorePopCompleters
+            ? page._pendingPopCompleter
+            : null;
+        onFailure?.call(RouteNotFoundFailure(route.name));
+        caller?.completeError(_notListedError(route), .current);
         waiting.turnDown();
       })
       ..ensureVisualUpdate();

@@ -475,6 +475,34 @@ void main() {
     expect(router.navigationHistory.length, 1);
   });
 
+  for (final way in ['navigate', 'navigatePath']) {
+    testWidgets("The app's $way without onFailure to the tabs page on the "
+        'removed tab, from another page, takes the tabs page back and '
+        'throws', (tester) async {
+      list.value = const [_feed, _settings];
+      final router = _build(.indexedStack, list, hasLanding: true);
+      await pumpRouterConfigApp(tester, router.config());
+      final heard = <String>[];
+
+      unawaited(
+        (way == 'navigate'
+                ? router.navigate(
+                    const NamedRoute('HomeRoute', children: [_profile]),
+                  )
+                : router.navigatePath('/home/profile'))
+            .then(
+              (_) => heard.add('done'),
+              onError: (Object thrown) => heard.add('${thrown.runtimeType}'),
+            ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(_state(router), 'shown LandingRoute, root LandingRoute, url /');
+      expect(heard, ['FlutterError']);
+    });
+  }
+
   testWidgets('A path to the removed tab of tabs inside a tab is turned '
       'down', (tester) async {
     final inner = ValueNotifier<List<PageRouteInfo>>(const [
