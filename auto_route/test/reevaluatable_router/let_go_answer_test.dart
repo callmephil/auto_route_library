@@ -378,4 +378,111 @@ void main() {
       );
     });
   });
+
+  // Finding 4, as the orchestrator decided by rule 8. Steps: the guarded
+  // page is the only page of the root, or of a nested router (a shell whose
+  // one child is guarded). The user signs out: the guard returns without an
+  // answer. Then the user signs in again, or a later change ends as a no.
+  // Was: the root's stack emptied and nothing showed until the yes; the
+  // nested router emptied, opened its first route again, a second page
+  // whose push waited on the same guard, and the sign-in put both on.
+  // Should: a let-go never takes a router's last page. It stays on the stack
+  // and on screen until the guard answers, while later changes go on as for
+  // any let-go guard; a yes leaves one copy, and a no does what a no on that
+  // page in a reevaluation does: the root shows no page, and the nested
+  // router opens its first route again, through its guards.
+  // Native behavior this holds to: Flutter's Navigator refuses an empty
+  // page list (navigator.dart), UINavigationController never takes its
+  // root view controller off, and an emptied Android task closes the app.
+  group("A router's only page", () {
+    late List<String> asked;
+
+    setUp(() => asked = []);
+
+    final onlyGuard = AutoRouteGuard.simple((resolver, _) {
+      asked.add(resolver.routeName);
+      if (session.isSignedIn) return resolver.next();
+      // A later change that ends as a no.
+      if (!session.isPremium) resolver.reject();
+    });
+
+    // The pages of [router] and the pages a tap reaches.
+    String pagesOf(StackRouter? router) {
+      final names = [...?router?.stack.map((page) => page.routeData.name)];
+      final shown = [
+        for (final name in {...names, 'HomeRoute'})
+          if (find.text(name).hitTestable().evaluate().isNotEmpty) name,
+      ];
+      return '${names.join(' ')} | shown: ${shown.join(' ')}';
+    }
+
+    for (final isLetIn in [true, false]) {
+      testWidgets('stays on the root while its guard decides; then the guard '
+          'says ${isLetIn ? 'yes' : 'no'}', (tester) async {
+        final router = RootStackRouter.build(
+          routes: [
+            page('AccountRoute', '/', guard: onlyGuard),
+            page('HomeRoute', '/home'),
+          ],
+        );
+        await pumpRouterApp(tester, router, reevaluationNotifier: session);
+        session.set(signedIn: false);
+        await tester.pumpAndSettle();
+        final seen = [pagesOf(router)];
+
+        session.set(signedIn: isLetIn, premium: isLetIn);
+        await tester.pumpAndSettle();
+        seen.add(pagesOf(router));
+
+        expect(tester.takeException(), isNull);
+        expect(seen, [
+          'AccountRoute | shown: AccountRoute',
+          if (isLetIn) 'AccountRoute | shown: AccountRoute' else ' | shown: ',
+        ]);
+        expect(router.activeGuardObserver.guardInProgress, isFalse);
+      });
+
+      testWidgets('stays in a nested router while its guard decides; then '
+          'the guard says ${isLetIn ? 'yes' : 'no'}', (tester) async {
+        final router = RootStackRouter.build(
+          routes: [
+            page('HomeRoute', '/'),
+            NamedRouteDef(
+              name: 'ShellRoute',
+              path: '/shell',
+              builder: (_, _) => const AutoRouter(),
+              children: [page('NestedAccountRoute', '', guard: onlyGuard)],
+            ),
+          ],
+        );
+        await pumpRouterApp(tester, router, reevaluationNotifier: session);
+        unawaited(router.pushPath('/shell'));
+        await tester.pumpAndSettle();
+        final shell = router.innerRouterOf<StackRouter>('ShellRoute');
+        session.set(signedIn: false);
+        await tester.pumpAndSettle();
+        final seen = [pagesOf(shell)];
+        final askedWhileHeld = asked.length;
+
+        session.set(signedIn: isLetIn, premium: isLetIn);
+        await tester.pumpAndSettle();
+        seen.add(pagesOf(shell));
+
+        expect(tester.takeException(), isNull);
+        expect(seen, [
+          'NestedAccountRoute | shown: NestedAccountRoute',
+          if (isLetIn)
+            'NestedAccountRoute | shown: NestedAccountRoute'
+          else
+            ' | shown: ',
+        ]);
+        // Asked when opened, at the sign-out, and at the later change. After
+        // a no, the first route opened again is asked too, once more when
+        // the reevaluation that saw the page leave opens it again after it
+        // was turned down.
+        expect(askedWhileHeld, 2);
+        expect(asked.length, isLetIn ? 3 : greaterThanOrEqualTo(4));
+      });
+    }
+  });
 }

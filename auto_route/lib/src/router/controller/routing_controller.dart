@@ -3072,6 +3072,14 @@ abstract class StackRouter extends RoutingController {
         resolver._isAnswerStale = true;
       }
       unawaited(resolver.checkGuard(entry.guard, this));
+      // A page kept on the stack for its let-go guard, as a router's last
+      // page is: the round leaves its answer to that guard, as to a guard
+      // asked above.
+      final route = resolver.route;
+      if (route is ReevaluatableRouteMatch<Object?, Object?> &&
+          _pages.contains(route.currentPage)) {
+        alreadyEvaluated.putIfAbsent(route.id, () => []).add(entry.guard);
+      }
     }
 
     final matches = <ReevaluatableRouteMatch<Object?, Object?>>[];
@@ -4861,6 +4869,16 @@ abstract class StackRouter extends RoutingController {
       return onStack;
     }
 
+    // Whether a page of this router stays on the stack once the pages of the
+    // routes from the one at [index] up are taken off.
+    bool leavesPageUnder(int index) {
+      final leaving = {
+        for (final route in routes.skip(index))
+          if (route is ReevaluatableRouteMatch) route.currentPage.routeData,
+      };
+      return _pages.any((page) => !leaving.contains(page.routeData));
+    }
+
     // Completed with null when the guard of a page this reevaluation asks
     // returns without an answer: from then on the reevaluation goes on
     // without that page and the pages above it, see [_awaitLetGoAnswer].
@@ -4993,6 +5011,15 @@ abstract class StackRouter extends RoutingController {
             if (isWaitingOnUser) return false;
             // A later guard of the same page returned without an answer too.
             if (letGo.isCompleted) return true;
+            // A let-go never takes a router's last page: it stays on the
+            // stack and on screen until the guard answers, as Flutter's
+            // Navigator refuses an empty page list and UINavigationController
+            // never takes its root view controller off. The reevaluation goes
+            // on all the same.
+            if (!leavesPageUnder(i)) {
+              letGo.complete(null);
+              return true;
+            }
             // As a guard that closes its page: the page below takes its
             // history entry, and the pages heard they were removed.
             _markLeaving(takeOffPagesFrom(i), .removed);
@@ -5235,6 +5262,9 @@ abstract class StackRouter extends RoutingController {
       if (_isDisposed) return;
       if (!result.continueNavigation) {
         _takeOffAfterLetGo(routes);
+        // As after a no in a reevaluation: a nested router its guard emptied,
+        // as one whose only page was kept for it, opens its first route again.
+        await _reopenInitialRoutesIfEmptied();
         return;
       }
       if (match is! ReevaluatableRouteMatch<Object?, Object?>) return;
