@@ -13,7 +13,10 @@ typedef OnNavigation = FutureOr<void> Function(
 /// the router above has let the route that holds it through. When that
 /// router is built, as for an open page or a tab opened before, the tab
 /// doesn't change and the dialogs over the page stay until it answers; the
-/// pages pushed over that page close first, though. When that
+/// pages pushed over that page close first, though. A guard that puts a page
+/// of its own in that tab while it decides, such as a sign-in page, shows the
+/// tab with it, and the tab stays on the page under it if the guard then
+/// rejects. When that
 /// router isn't built yet, as for a page that isn't open or a tab never
 /// opened, it asks its guards only once its page or tab is in, a frame later:
 /// a rejection then leaves that page or tab open, on its first page. A link
