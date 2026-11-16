@@ -732,4 +732,53 @@ void main() {
       );
     });
   });
+
+  // Finding D of the second review. Steps: Account's guard awaits a request
+  // before it answers from the session, and returns without an answer when
+  // the user is signed out. The user signs out, and a second change comes
+  // while the guard awaits; then the requests complete.
+  // Was: the second change's reevaluateGuards() never completed. It waited
+  // for the guard's check, then called the guard again and waited for an
+  // answer that never came once it let go, though the round in progress
+  // already asks it again (_askAgainAfterReevaluation).
+  // Should: both calls complete, and Account stays off.
+  // Native behavior this holds to: Flutter's Router drops the work of an
+  // older route transaction once newer route information has arrived
+  // (_currentRouterTransaction, router.dart), so a later change is never
+  // blocked by one that hangs.
+  group("A change while a page's guard awaits", () {
+    testWidgets('completes when the guard then lets go', (tester) async {
+      final (router, answers) = await onAccount(tester);
+      final requests = <Completer<void>>[];
+      accountBehavior = (resolver, _) async {
+        accountAsks.add(resolver);
+        final request = Completer<void>();
+        requests.add(request);
+        await request.future;
+        if (session.isSignedIn) resolver.next();
+      };
+      final calls = <bool>[];
+      session.isSignedIn = false;
+      unawaited(router.reevaluateGuards().then((_) => calls.add(true)));
+      await tester.pumpAndSettle();
+      session.isPremium = false;
+      unawaited(router.reevaluateGuards().then((_) => calls.add(true)));
+      await tester.pumpAndSettle();
+
+      for (var times = 0; times < 4; times++) {
+        for (final request in List.of(requests)) {
+          if (!request.isCompleted) request.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+
+      expect(tester.takeException(), isNull);
+      expect(calls, [true, true]);
+      expect(
+        state(router, answers),
+        'HomeRoute | shown: HomeRoute | / | caller: []',
+      );
+      expect(router.activeGuardObserver.guardInProgress, isFalse);
+    });
+  });
 }

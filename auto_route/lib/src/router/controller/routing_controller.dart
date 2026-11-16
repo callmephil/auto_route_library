@@ -3090,6 +3090,14 @@ abstract class StackRouter extends RoutingController {
         // answers from what happens there: called again, it would show them
         // twice. The round waits for that answer, as the README says.
         result = await resolver.future;
+      } else if (resolver.route is ReevaluatableRouteMatch &&
+          resolver._waitingCompleter != null &&
+          !resolver._isRedirecting) {
+        // A page's guard at its check: the reevaluation in progress asks it
+        // again once it ends, see [_askAgainAfterReevaluation], so waiting
+        // for this check, then calling it again, serves nothing, and holds
+        // this call open for good once the guard lets go of its page.
+        continue;
       } else if ((resolver._waitingCompleter == null ||
               resolver._isAskedAgainApart) &&
           !resolver._isRedirecting &&
