@@ -428,6 +428,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     if (buildable.isEmpty) {
       return setNewRoutePath(configuration);
     }
+    controller.root._markRestored(buildable);
     return controller.navigateAll(buildable);
   }
 

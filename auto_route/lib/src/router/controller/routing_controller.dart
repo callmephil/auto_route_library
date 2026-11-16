@@ -1837,10 +1837,15 @@ class TabsRouter extends RoutingController {
     var guardedIndex = -1;
     Future<ResolverResult>? guarding;
     // The route a navigation named for these tabs, when it is not one of
-    // them. A restore names a route for each tab it brings back, and shows
-    // the tabs that are left.
+    // them. A restore shows the tabs that are left, on the first when the
+    // one it names has gone: nobody can be told, and no page is on screen
+    // to keep.
+    final isRestored =
+        preMatchedRoute != null &&
+        root._restoredMatchIds.remove(preMatchedRoute.id);
     final notListed =
         pendingChildren.length == 1 &&
+            !isRestored &&
             preMatchedRoute != null &&
             _listedTabOf(routesToPush, preMatchedRoute) == -1
         ? preMatchedRoute

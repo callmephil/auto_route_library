@@ -45,6 +45,20 @@ abstract class RootStackRouter extends StackRouter {
   // navigation of that link takes it, see [_takeLinkStep].
   final _linkSteps = <int, VoidCallback>{};
 
+  // The match ids of the routes a restore brings back, nested ones
+  // included, until the tabs they name a tab for have read them: a restore
+  // is neither a link nor the app's own call, so a tab it names that the
+  // tabs no longer list is not turned down, see [TabsRouter.setupRoutes].
+  final _restoredMatchIds = <LocalKey>{};
+
+  // Records [matches], which a restore brings back, see [_restoredMatchIds].
+  void _markRestored(List<RouteMatch<Object?>> matches) {
+    for (final match in matches) {
+      _restoredMatchIds.add(match.id);
+      _markRestored(match.children ?? const []);
+    }
+  }
+
   // Whether the url reported right now is that of a link the delegate
   // opened, the launch url included.
   bool _isShowingLink = false;
