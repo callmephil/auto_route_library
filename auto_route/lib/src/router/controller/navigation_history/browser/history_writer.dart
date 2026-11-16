@@ -29,6 +29,29 @@ abstract interface class HistoryBrowser {
   /// returns at once; the browser lands later, or never when it has no such
   /// entry.
   void go(int delta);
+
+  /// Whether the app keeps the url of [entry] out of the address bar, so
+  /// that the browser gets no entry for it.
+  bool keepsOut(UrlState entry);
+
+  /// Whether entries can be written now: a Router shows the app, and writes
+  /// go through its route information provider.
+  bool get canWrite;
+
+  /// Whether the browser keeps the entries written to it.
+  ///
+  /// False where the app's reports reach no browser history, as in a widget
+  /// test that does not connect the engine to the browser. The writer then
+  /// tells only the url of the page on top, on each change, and never
+  /// steps.
+  bool get keepsEntries;
+
+  /// Starts calling [onLanding] each time the browser has landed on an
+  /// entry, as its popstate event tells.
+  void listen(void Function() onLanding);
+
+  /// Stops calling the listener given to [listen].
+  void close();
 }
 
 /// Brings a browser's history to the entries the app should have, one
@@ -60,15 +83,18 @@ class HistoryWriter {
   /// Creates a writer for [_browser], whose current entry is the app's first.
   new(
     this._browser, {
-    required this.onUserMove,
+    this.onUserMove,
     this.landingLimit = const Duration(seconds: 1),
-  }) : _first = _browser.index,
-       _index = _browser.index;
+  }) : first = _browser.index,
+       _index = _browser.index,
+       _firstUrl = _browser.url {
+    _browser.listen(browserLanded);
+  }
 
   final HistoryBrowser _browser;
 
   /// Called when the browser moved without the writer asking it to.
-  final void Function() onUserMove;
+  final void Function()? onUserMove;
 
   /// How long the writer waits for a step to land before it reads where the
   /// browser stands, as after a step the browser had no entry for.
@@ -79,8 +105,17 @@ class HistoryWriter {
 
   final _queue = Queue<_Work>();
 
-  int _first;
+  /// The number of the app's first entry: the entry the browser stood on
+  /// when the app started. The app sets a lower one when it follows the user
+  /// to an entry from before it started, which a reload leaves under the
+  /// entry the app starts on.
+  int first;
+
   int _index;
+
+  // The url of the entry the browser stood on when the app was first shown
+  // there: the url the browser opened the app at.
+  String? _firstUrl;
 
   // The entry a step of the writer's own is on its way to, and what ends the
   // wait for it: true when it landed there.
@@ -97,6 +132,19 @@ class HistoryWriter {
   // platform's report of that landing is taken.
   String? _ownLandingUrl;
 
+  // Whether the browser has landed on an entry that the platform has not
+  // reported to the app yet.
+  bool _isLandingUnreported = false;
+
+  // The url the Router's route information provider holds: of the entry
+  // written last, or of the route handed to the app last.
+  String? _providerUrl;
+
+  // What a browser that keeps no entries was told last, see [_tellTop]: the
+  // entry of the page on top, and how many entries the app had.
+  UrlState? _toldTop;
+  int _toldCount = 0;
+
   bool _isRunning = false;
   bool _isWriting = false;
   bool _isPaused = false;
@@ -108,23 +156,36 @@ class HistoryWriter {
 
   Completer<void>? _idle;
 
-  /// The number of the app's first entry: the entry the browser stood on
-  /// when the app started, or a lower one the user has stepped back to.
-  int get first => _first;
-
   /// The number of the entry the browser stands on, as far as the writer
   /// knows: it has not heard of a step of the user's that is still on its
   /// way.
   int get index => _index;
 
-  /// Whether the writer has nothing left to do.
-  bool get isIdle => !_isRunning && _queue.isEmpty;
+  /// Whether the writer has nothing left to do, or can do nothing for now,
+  /// see [pause].
+  bool get isIdle => !_isRunning && (_queue.isEmpty || _isPaused);
+
+  /// Whether [entry], the one at [place] in a list of the app's entries,
+  /// has a browser entry.
+  ///
+  /// Every entry has one but an entry the app keeps out of the address bar,
+  /// see [HistoryBrowser.keepsOut]. The app's first entry, though, has the
+  /// one the browser made when it opened the app at its url, kept out or
+  /// not: that page is on the way back, as it would be without the app.
+  bool hasBrowserEntry(int place, UrlState entry) {
+    if (!_browser.keepsOut(entry)) return true;
+    final firstUrl = _firstUrl;
+    return place == 0 &&
+        firstUrl != null &&
+        isSameHistoryUrl(entry.url, firstUrl);
+  }
 
   /// What the browser entry with the number [number] holds, or null when the
   /// writer never wrote it, as an entry from before a reload.
   UrlState? entryAt(int number) => _entries[number];
 
-  /// Completes once the writer has nothing left to do.
+  /// Completes once the writer has nothing left to do, or can do nothing
+  /// for now.
   Future<void> whenIdle() {
     if (isIdle) return Future.value();
     return (_idle ??= Completer<void>()).future;
@@ -135,21 +196,50 @@ class HistoryWriter {
   void pause() => _isPaused = true;
 
   /// Takes up the work again after [pause].
+  ///
+  /// A writer that has written nothing yet starts from the entry the
+  /// browser stands on now: the app may be shown long after its router was
+  /// made, and the browser may have moved meanwhile.
   void resume() {
+    if (_isPaused && _entries.isEmpty) {
+      _index = _browser.index;
+      first = _index;
+      _firstUrl = _browser.url;
+    }
     _isPaused = false;
     _run();
+  }
+
+  /// Forgets what the browser holds and what was still to do, and holds
+  /// the work back until [resume]: another writer writes the browser now.
+  /// The writer then starts from the entry the browser stands on, and
+  /// writes it first.
+  void restart() {
+    _userMoves++;
+    _queue.clear();
+    _endStep(didLand: false);
+    _entries.clear();
+    _toldTop = null;
+    _toldCount = 0;
+    _ownLandingUrl = null;
+    _isLandingUnreported = false;
+    _isPaused = true;
+    if (isIdle) _completeIdle();
   }
 
   /// Stops the writer for good.
   void dispose() {
     _isDisposed = true;
+    _browser.close();
     _queue.clear();
     _endStep(didLand: false);
     _completeIdle();
   }
 
   /// Queues [entries], the app's first entry first, as what the browser
-  /// should hold up to the entry it stands on.
+  /// should hold up to the entry it stands on. An entry the app keeps out of
+  /// the address bar, see [HistoryBrowser.keepsOut], is left out when its
+  /// turn comes.
   void bringTo(List<UrlState> entries) {
     if (entries.isEmpty || _isDisposed) return;
     _queue.add(_Entries(List.unmodifiable(entries)));
@@ -172,29 +262,54 @@ class HistoryWriter {
     final landedAt = _browser.index;
     // Known already: the platform's report of this landing came first.
     if (landedAt == _index) return;
+    _isLandingUnreported = true;
     if (_didOwnStepLand(landedAt)) _ownLandingUrl = _browser.url;
   }
 
-  /// Whether [reported], a route the platform just reported, only tells of
-  /// a step the writer made itself, so the app has nothing to follow.
+  /// Whether [reported], a route the Router just handed to the app, gives
+  /// the app nothing to follow.
   ///
-  /// The report and [browserLanded] come in either order, and the Router
-  /// drops a report when a newer one comes while it is parsed, so each is
-  /// taken on its own: the step counts as landed by whichever comes first.
-  bool isOwnStep(UrlState reported) {
-    if (_isDisposed) return false;
+  /// That is so when it only tells of a step the writer made itself, and
+  /// when, with no landing since the last report and the writer still at
+  /// work, [reported] is the url the Router's provider held already: the
+  /// Router then parsed again what its provider holds, as it does when a
+  /// dependency of its own changes, and that is what the writer wrote
+  /// before, which the app has left behind. Any other route with no
+  /// landing is a link, as the platform or a test hands one over.
+  ///
+  /// The report of a landing and [browserLanded] come in either order, and
+  /// the Router drops a report when a newer one comes while it is parsed, so
+  /// each is taken on its own: a step counts as landed by whichever comes
+  /// first.
+  bool hasNothingToFollow(UrlState reported) {
+    final heldByProvider = _providerUrl;
+    _providerUrl = reported.url;
+    // A writer that can't write has written nothing the Router could hand
+    // over again.
+    if (_isDisposed || _isPaused) return false;
     final landedAt = _browser.index;
+    // While the writer writes, the browser's number is behind the writer's
+    // own account, and only the browser's event tells of a move.
+    if (!_isWriting && landedAt != _index) {
+      // The report came before the browser's event.
+      _isLandingUnreported = false;
+      _ownLandingUrl = null;
+      return _didOwnStepLand(landedAt);
+    }
+    if (!_isLandingUnreported) {
+      // No landing. The url the provider held already, while the writer
+      // has work to do, is the one it wrote before, which the app has left
+      // behind. Once the writer has none, that url is the one the app
+      // shows; and another url is a link.
+      return (_isRunning || _queue.isNotEmpty) &&
+          heldByProvider != null &&
+          isSameHistoryUrl(heldByProvider, reported.url);
+    }
+    _isLandingUnreported = false;
     final ownLandingUrl = _ownLandingUrl;
     _ownLandingUrl = null;
-    if (ownLandingUrl != null &&
-        isSameHistoryUrl(ownLandingUrl, reported.url)) {
-      return true;
-    }
-    // The report came before the browser's event. While the writer writes,
-    // the browser's number is behind the writer's own account, and only the
-    // event tells of a move.
-    if (_isWriting || landedAt == _index) return false;
-    return _didOwnStepLand(landedAt);
+    return ownLandingUrl != null &&
+        isSameHistoryUrl(ownLandingUrl, reported.url);
   }
 
   // The browser landed on the entry [landedAt], which it did not stand on
@@ -231,14 +346,13 @@ class HistoryWriter {
     _ownLandingUrl = null;
     _queue.clear();
     _index = _browser.index;
-    if (_index < _first) _first = _index;
     final held = _entries[_index];
     if (held != null && !isSameHistoryUrl(held.url, _browser.url)) {
       // The browser made a new entry here, as for a url typed into the
       // address bar, which dropped the ones after it.
       _entries.removeWhere((number, _) => number >= _index);
     }
-    onUserMove();
+    onUserMove?.call();
   }
 
   void _run() {
@@ -254,14 +368,23 @@ class HistoryWriter {
       while (_queue.isNotEmpty && !_isPaused && !_isDisposed) {
         switch (_nextWork()) {
           case _Entries(:final entries):
-            await _reach(entries);
+            final wanted = [
+              for (final (place, entry) in entries.indexed)
+                if (hasBrowserEntry(place, entry)) entry,
+            ];
+            if (_browser.keepsEntries) {
+              await _reach(wanted);
+            } else {
+              _tellTop(wanted);
+            }
           case _Step(:final delta):
-            await _stepFor(app: true, delta);
+            // With no entries kept there is none to step to.
+            if (_browser.keepsEntries) await _stepFor(app: true, delta);
         }
       }
     } finally {
       _isRunning = false;
-      if (_queue.isEmpty) _completeIdle();
+      if (isIdle) _completeIdle();
     }
   }
 
@@ -304,8 +427,31 @@ class HistoryWriter {
     return true;
   }
 
+  // Tells the url of the page on top of [entries] to a browser that keeps
+  // no entries: as a new entry when pages were added since the last one
+  // told, and over the last one otherwise, a pop included. That is what a
+  // Router reports for each change, and what a test that listens to the
+  // navigation channel hears.
+  void _tellTop(List<UrlState> entries) {
+    final top = entries.lastOrNull;
+    if (top == null) return;
+    final told = _toldTop;
+    final isNew = told != null && entries.length > _toldCount;
+    _toldCount = entries.length;
+    if (!isNew &&
+        told != null &&
+        isSameHistoryUrl(told.url, top.url) &&
+        told.pathState == top.pathState) {
+      return;
+    }
+    _toldTop = top;
+    _providerUrl = top.url;
+    _browser.write(top, replaces: !isNew);
+  }
+
   // Brings the browser to [entries]; stops when the user moves it meanwhile.
   Future<void> _reach(List<UrlState> entries) async {
+    if (entries.isEmpty) return;
     // A move of the user's that no event told of.
     if (_browser.index != _index) {
       _followUser();
@@ -314,12 +460,12 @@ class HistoryWriter {
     final userMoves = _userMoves;
     final unheld = _firstUnheld(entries);
     if (unheld == null) {
-      final top = _first + entries.length - 1;
+      final top = first + entries.length - 1;
       if (_index != top) await _stepFor(top - _index);
       if (userMoves == _userMoves) _adoptAll(entries, entries.length);
       return;
     }
-    final at = _first + unheld;
+    final at = first + unheld;
     // Written over where it is the entry the browser stands on, or the
     // app's first, which has nothing before it to step back to.
     final replaces = at == _index || (at < _index && unheld == 0);
@@ -336,27 +482,42 @@ class HistoryWriter {
     } finally {
       _isWriting = false;
     }
+    // The writes are done and the browser is not where they lead, with no
+    // landing told of: they never reached it, as with a route information
+    // provider of the app's own that writes no browser entry. The writer
+    // then knows only the entry the browser stands on, and never steps
+    // from one it only believes to be there.
+    if (userMoves == _userMoves &&
+        !_isLandingUnreported &&
+        _browser.index != _index) {
+      _index = _browser.index;
+      _entries.removeWhere((number, _) => number > _index);
+    }
   }
 
   // The place in [entries] of the first one the browser holds otherwise, or
   // not at all; null when it holds them all.
   int? _firstUnheld(List<UrlState> entries) {
     for (final (offset, entry) in entries.indexed) {
-      if (!_holds(_first + offset, entry)) return offset;
+      if (!_holds(first + offset, entry)) return offset;
     }
     return null;
   }
 
   // Whether the browser entry [number] holds the url and path state of
-  // [entry]. An entry the writer never wrote, as the one the app starts on,
-  // can be read only while the browser stands on it.
+  // [entry]. An entry the writer never wrote, as one from before a reload,
+  // can be read only while the browser stands on it. The entry the app
+  // starts on is always written once, over what the browser holds there, as
+  // Flutter's Router reports its first route: the url is then as the app
+  // writes it.
   bool _holds(int number, UrlState entry) {
     final held = _entries[number];
     if (held != null) {
       return isSameHistoryUrl(held.url, entry.url) &&
           held.pathState == entry.pathState;
     }
-    return number == _index &&
+    return _entries.isNotEmpty &&
+        number == _index &&
         isSameHistoryUrl(_browser.url, entry.url) &&
         _browser.state == entry.pathState;
   }
@@ -365,7 +526,7 @@ class HistoryWriter {
   // urls, for pages that may have been opened anew.
   void _adoptAll(List<UrlState> entries, int count) {
     for (final (offset, entry) in entries.take(count).indexed) {
-      _entries[_first + offset] = entry;
+      _entries[first + offset] = entry;
     }
   }
 
@@ -379,6 +540,7 @@ class HistoryWriter {
       _entries.removeWhere((number, _) => number >= _index);
     }
     _entries[_index] = entry;
+    _providerUrl = entry.url;
     _browser.write(entry, replaces: replaces);
   }
 

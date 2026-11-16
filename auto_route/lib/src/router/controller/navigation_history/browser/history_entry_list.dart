@@ -29,6 +29,8 @@ bool isSameHistoryUrl(String a, String b) {
 /// * An entry whose page has left every stack is dropped, however the page
 ///   left, popped, replaced or removed, and wherever the entry is, on top or
 ///   under the entries of other pages. So back never leads to a closed page.
+///   Only a page popped from under the page on top keeps its entry until
+///   the call that pops them is over, see [show].
 /// * A state the page on top already has an entry for, with the same url,
 ///   is that entry.
 /// * A state reported as a replace takes the place of the entry before it,
@@ -54,12 +56,19 @@ class HistoryEntryList {
   /// The returned entry is [state], or the entry the page on top already had
   /// for this url, with the path state that entry holds: the app takes it
   /// over, as it does when the browser's back button returns to that entry.
-  UrlState show(UrlState state) {
+  ///
+  /// With [keepsClosedUnder] an entry whose page has left keeps its place
+  /// while the entry of an open page is over it, until [didDropClosed].
+  UrlState show(UrlState state, {bool keepsClosedUnder = false}) {
     final topBefore = _entries.lastOrNull;
     // The place on top is free when the entry that held it leaves with its
     // page.
     final didDrop = topBefore != null && !_isPageOpen(topBefore);
-    _entries.removeWhere((entry) => !_isPageOpen(entry));
+    if (keepsClosedUnder) {
+      _dropClosedOnTop();
+    } else {
+      _entries.removeWhere((entry) => !_isPageOpen(entry));
+    }
     final last = didDrop ? _entries.lastOrNull : topBefore;
     final entry = _withoutReplaceMark(state);
 
@@ -79,6 +88,14 @@ class HistoryEntryList {
     return entry;
   }
 
+  /// Drops every entry whose page has left a stack, and returns whether
+  /// there was one.
+  bool didDropClosed() {
+    final lengthBefore = _entries.length;
+    _entries.removeWhere((entry) => !_isPageOpen(entry));
+    return _entries.length < lengthBefore;
+  }
+
   /// Adds [state] as a new entry whatever the entry before it holds, as
   /// history.pushState does.
   void add(UrlState state) {
@@ -91,6 +108,16 @@ class HistoryEntryList {
     _entries
       ..clear()
       ..addAll(browserEntries);
+  }
+
+  void _dropClosedOnTop() {
+    for (
+      var last = _entries.lastOrNull;
+      last != null && !_isPageOpen(last);
+      last = _entries.lastOrNull
+    ) {
+      _entries.removeLast();
+    }
   }
 
   void _replaceTop(UrlState entry) {

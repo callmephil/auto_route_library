@@ -4,6 +4,8 @@ import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/history_writer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'history_test_browser.dart';
+
 // HistoryWriter brings a browser's history to the entries the app should
 // have. These tests give it a browser whose landings the test releases, so
 // every order of the app's changes and the browser's landings can be run:
@@ -16,90 +18,6 @@ import 'package:flutter_test/flutter_test.dart';
 // before the landing goes to the entry being left. The canaries in
 // test/web/flutter_canary_router_browser_writes_web_test.dart pin the last
 // two on the real browser.
-
-// A browser history that lands a step only when the test says so.
-class _Browser implements HistoryBrowser {
-  // Every entry the browser holds, as its url and state.
-  final entries = <(String, Object?)>[('/', null)];
-
-  // What was asked of the browser, in order.
-  final asked = <String>[];
-
-  // The entries the steps on their way are going to.
-  final _steps = Queue<int>();
-
-  late HistoryWriter writer;
-
-  @override
-  int index = 0;
-
-  // Whether a step is lost, as when the browser has no such entry.
-  bool losesSteps = false;
-
-  bool get isStepping => _steps.isNotEmpty;
-
-  @override
-  String get url => entries.elementAtOrNull(index)?.$1 ?? '';
-
-  @override
-  Object? get state => entries.elementAtOrNull(index)?.$2;
-
-  @override
-  void write(UrlState entry, {required bool replaces}) {
-    // A write goes to the entry the browser stands on. The writer must know
-    // which that is: before a step of its own has landed it is still the
-    // entry being left.
-    expect(
-      index,
-      writer.index - (replaces ? 0 : 1),
-      reason: 'written on an entry the writer did not know it stood on',
-    );
-    asked.add('${replaces ? 'replace' : 'push'} ${entry.url}');
-    if (replaces) {
-      entries.removeAt(index);
-    } else {
-      index++;
-      entries.removeRange(index, entries.length);
-    }
-    entries.insert(index, (entry.url, entry.pathState));
-  }
-
-  @override
-  Future<void> whenWritten() => .value();
-
-  @override
-  void go(int delta) {
-    asked.add('go $delta');
-    _didStartStep(delta);
-  }
-
-  // The user presses the back button; false when no entry is under the one
-  // the browser stands on, or is going to.
-  bool didPressBack() => _didStartStep(-1);
-
-  bool _didStartStep(int delta) {
-    final to = (_steps.lastOrNull ?? index) + delta;
-    if (losesSteps || to < 0 || to >= entries.length) return false;
-    _steps.add(to);
-    return true;
-  }
-
-  // The browser lands the oldest step on its way and tells the writer.
-  void land() {
-    landUntold();
-    writer.browserLanded();
-  }
-
-  // The browser lands the oldest step on its way; its event is still to
-  // come.
-  void landUntold() => index = _steps.removeFirst();
-
-  // The urls of every entry, with the one the browser stands on marked.
-  String get held => [
-    for (final (number, (entryUrl, saved)) in entries.indexed)
-      '${number == index ? '>' : ''}$entryUrl${saved == null ? '' : '#$saved'}',
-  ].join(' ');
-}
 
 UrlState _entry(String url) {
   final [path, ...state] = url.split('#');
@@ -127,11 +45,11 @@ class _Web {
         writer.bringTo(shown);
       },
     );
-    browser.writer = writer;
+    browser.writerIndex = () => writer.index;
   }
 
   final Duration landingLimit;
-  final browser = _Browser();
+  final browser = TestHistoryBrowser();
   late final HistoryWriter writer;
 
   // What the app shows, as the entries it last asked for.
@@ -141,7 +59,13 @@ class _Web {
   void show(String urls) => writer.bringTo(shown = _entries(urls));
 
   // Lets the writer work until it waits for a landing or has nothing to do.
-  Future<void> settle() => .delayed(.zero);
+  // In microtasks, which is all the writer waits for besides a landing: a
+  // timer for each step of a test that runs thousands is slow in a browser.
+  Future<void> settle() async {
+    for (var turn = 0; turn < 40; turn++) {
+      await Future<void>.value();
+    }
+  }
 
   // Lands every step until the writer has nothing left to do; a step the
   // browser lost ends after the limit.
@@ -366,16 +290,44 @@ void main() {
     expect(web.browser.held, '>/c /a');
   });
 
-  // Steps: start on '/', show '/', then show '/x' in a second run.
-  test('The entry the app starts on is written only when the app shows '
-      'another url than it holds', () async {
+  // Steps: start on '/' and show '/', twice; in a second run show '/x'.
+  // Native behavior this holds to: Flutter's Router, which reports its
+  // first route to the engine as a replace of the entry the app starts on.
+  test('The entry the app starts on is written once, over what the browser '
+      'holds there', () async {
     final same = _Web()..show('/');
     await same.finish();
-    expect(same.browser.asked, isEmpty);
+    same.show('/');
+    await same.finish();
+    expect(same.browser.asked, ['replace /']);
 
     final other = _Web()..show('/x');
     await other.finish();
     expect(other.browser.asked, ['replace /x']);
+  });
+
+  // Steps: the browser goes from its first entry to a third one while the
+  // writer is paused, as before a Router shows the app; then resume and
+  // show '/c'.
+  // Was: the writer took the entry the browser stood on when it was made
+  // for the app's first, and stepped back under the entry the app started
+  // on.
+  test('A paused writer starts from the entry the browser stands on when '
+      'it resumes, and is idle meanwhile', () async {
+    final web = _Web()
+      ..writer.pause()
+      ..show('/c');
+    await web.settle();
+    expect(web.writer.isIdle, isTrue);
+    expect(web.browser.asked, isEmpty);
+    web.browser
+      ..entries.addAll([('/a', null), ('/b', null)])
+      ..index = 2;
+    web.writer.resume();
+    await web.finish();
+    expect(web.writer.first, 2);
+    expect(web.browser.asked, ['replace /c']);
+    expect(web.browser.held, '/ /a >/c');
   });
 
   // Steps: show the same url with a state of its own, as pushPathState.
@@ -433,6 +385,8 @@ void main() {
 
   // Steps: on B over A over Home, show Home; the platform's report of the
   // landing comes before the browser's event, then the other way round.
+  // While the second step is on its way, and once the writer is done, the
+  // platform hands over a route with no landing behind it.
   test("The platform's report of a step of the writer's own is the "
       "writer's, whether it comes before the browser's event or after "
       'it', () async {
@@ -442,20 +396,36 @@ void main() {
     web.show('/ /a');
     await web.settle();
     web.browser.landUntold();
-    expect(web.writer.isOwnStep(_entry('/a')), isTrue);
+    expect(web.writer.hasNothingToFollow(_entry('/a')), isTrue);
     web.writer.browserLanded();
     await web.settle();
     expect(web.writer.isIdle, isTrue);
 
     web.show('/');
     await web.settle();
+    // The step is on its way, and the Router parses again what its
+    // provider holds, the url handed over last: nothing to follow. Then
+    // the report of the landing.
+    final whileStepping = web.writer.hasNothingToFollow(_entry('/a'));
     web.browser.land();
-    expect(web.writer.isOwnStep(_entry('/')), isTrue);
-    // A second report of the same url is a link, not the landing.
-    expect(web.writer.isOwnStep(_entry('/')), isFalse);
+    expect(
+      (whileStepping, web.writer.hasNothingToFollow(_entry('/'))),
+      (true, true),
+    );
     await web.settle();
+    // With nothing left to do and no landing, a route is a link.
+    expect(web.writer.hasNothingToFollow(_entry('/a')), isFalse);
+
+    // And so is another url than the provider held, also while a step is
+    // on its way.
+    web.show('/ /c');
+    await web.finish();
+    web.show('/');
+    await web.settle();
+    expect(web.writer.hasNothingToFollow(_entry('/x')), isFalse);
+    await web.finish();
     expect(web.userMoves, 0);
-    expect(web.browser.held, '>/ /a /b');
+    expect(web.browser.held, '>/ /c');
   });
 
   // Steps: the browser loses a step the writer asks for, as it does when it
@@ -487,21 +457,139 @@ void main() {
       ..index = 2;
     // The writer was made on the first entry; a new one starts where the
     // browser stands.
-    final writer = web.browser.writer = HistoryWriter(
+    final writer = HistoryWriter(
       web.browser,
       onUserMove: () => web.userMoves++,
     );
-    expect(writer.first, 2);
+    web.browser.writerIndex = () => writer.index;
     writer.bringTo(_entries('/ /a'));
     await web.settle();
     expect(web.browser.held, '/x /y / >/a');
 
-    web.browser
-      ..index = 1
-      ..writer.browserLanded();
+    web.browser.index = 1;
+    writer.browserLanded();
     expect(web.userMoves, 1);
-    expect(writer.first, 1);
+    expect(writer.index, 1);
     expect(writer.entryAt(1), isNull);
+    // The app's first entry moves there once the app follows.
+    expect(writer.first, 2);
+    writer
+      ..first = 1
+      ..bringTo(_entries('/y /b'));
+    await web.settle();
+    expect(web.browser.held, '/x /y >/b');
+  });
+
+  // Steps: the browser opened the app at a url the app keeps out of the
+  // address bar; show that page, then B over it, then the page alone again.
+  // Native behavior this holds to: the HTML History API; the browser made
+  // the entry for the url it opened, and the back button goes to it.
+  test("The app's first entry, which the browser made for a url kept out of "
+      'the address bar, stays the entry of that page', () async {
+    final browser = TestHistoryBrowser()..entries[0] = ('/kept', null);
+    final writer = HistoryWriter(browser);
+    browser.writerIndex = () => writer.index;
+    Future<void> settle() async {
+      for (var turn = 0; turn < 40; turn++) {
+        await Future<void>.value();
+      }
+      while (browser.isStepping) {
+        browser.land();
+        for (var turn = 0; turn < 40; turn++) {
+          await Future<void>.value();
+        }
+      }
+    }
+
+    writer.bringTo(_entries('/kept'));
+    await settle();
+    writer.bringTo(_entries('/kept /b'));
+    await settle();
+    expect(browser.held, '/kept >/b');
+    writer.bringTo(_entries('/kept'));
+    await settle();
+    expect(browser.held, '>/kept /b');
+    writer.dispose();
+  });
+
+  // Steps: show a page whose url the app keeps out of the address bar over
+  // A, then B over it.
+  test(
+    'An entry the app keeps out of the address bar is not written',
+    () async {
+      final web = _Web()..show('/ /a /kept');
+      await web.finish();
+      expect(web.browser.held, '/ >/a');
+      web.show('/ /a /kept /b');
+      await web.finish();
+      expect(web.browser.held, '/ /a >/b');
+    },
+  );
+
+  // Steps: with a browser that takes no write, show A, B over Home, then
+  // Home alone, then A, B, C.
+  // Native behavior this holds to: the HTML History API, where history.go
+  // moves through entries whoever wrote them. An app that writes none must
+  // not move the tab through the entries of other pages.
+  test('A browser that takes no write is never stepped', () async {
+    final web = _Web();
+    web.browser.losesWrites = true;
+    for (final urls in ['/ /a /b', '/', '/ /a /b /c', '/ /a']) {
+      web.show(urls);
+      await web.finish();
+    }
+    expect(web.browser.asked.where((ask) => ask.startsWith('go')), isEmpty);
+    expect(web.browser.held, '>/');
+    expect(web.userMoves, 0);
+  });
+
+  // Steps: show A, B over Home; another writer then writes the browser, as
+  // the history of a router the app swapped in; restart, show '/login' and
+  // resume.
+  test('A writer that is restarted starts from the entry the browser '
+      'stands on, and writes it first', () async {
+    final web = _Web()..show('/ /a /b');
+    await web.finish();
+    web.browser
+      ..entries.add(('/other', null))
+      ..index = 3;
+    web.writer.restart();
+    web.show('/login');
+    await web.settle();
+    expect(web.writer.isIdle, isTrue);
+    web.browser.asked.clear();
+    web.writer.resume();
+    await web.finish();
+    expect(web.browser.asked, ['replace /login']);
+    expect(web.browser.held, '/ /a /b >/login');
+    expect(web.userMoves, 0);
+  });
+
+  // Steps: with a browser that keeps no entries, as in a widget test in
+  // Chrome, show Home, push A and B, pop, show the same again, replace A
+  // with C, and ask for a step back.
+  // Native behavior this holds to: Flutter's Router, which reports the url
+  // of each change to the platform, a new one for a push and over the last
+  // one for a replace or a pop.
+  test('A browser that keeps no entries is told the url of the page on top '
+      'on each change, and is never stepped', () async {
+    final web = _Web();
+    web.browser
+      ..keepsEntries = false
+      ..losesWrites = true;
+    for (final urls in ['/', '/ /a', '/ /a /b', '/ /a', '/ /a', '/ /c']) {
+      web.show(urls);
+      await web.finish();
+    }
+    web.writer.step(-1);
+    await web.finish();
+    expect(web.browser.asked, [
+      'replace /',
+      'push /a',
+      'push /b',
+      'replace /a',
+      'replace /c',
+    ]);
   });
 
   // Steps: pause the writer, show two lists, resume.

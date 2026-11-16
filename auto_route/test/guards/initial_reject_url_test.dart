@@ -1,4 +1,5 @@
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../named_page.dart';
@@ -8,7 +9,8 @@ import '../router_test_utils.dart';
 // url the Router reports for the app is '/', not the rejected link. A browser
 // can't cancel a load the app has received, so it must show what the app
 // shows; Flutter's Router reports whatever currentConfiguration returns, and
-// nothing while it is null.
+// nothing while it is null. On the web it is always null: the web history
+// writes the browser itself, from the router's urlState.
 // Web counterpart: example.old/integration_test/rejected_initial_link_url_test.dart
 void main() {
   testWidgets('The url does not keep a link a guard rejected', (tester) async {
@@ -33,6 +35,9 @@ void main() {
     final config = router.config(includePrefixMatches: false);
     await pumpRouterConfigApp(tester, config);
     expect(router.stack, isEmpty);
-    expect(config.routerDelegate.currentConfiguration?.uri.path, '/');
+    final reported = kIsWeb
+        ? router.urlState
+        : config.routerDelegate.currentConfiguration;
+    expect(reported?.uri.path, '/');
   });
 }

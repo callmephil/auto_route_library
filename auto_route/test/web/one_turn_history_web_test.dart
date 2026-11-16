@@ -237,7 +237,11 @@ void main() {
   // From A, replaceAll with C and a push of B in the same turn, then the
   // browser's back button. Was: C got no entry, since the router wrote only
   // B, over A's entry, so back from B went to Home's entry and put Home on
-  // top of C and B.
+  // top of C and B. Then, until the web history became the browser's one
+  // writer, C took A's entry and Home's stayed under it, so a second press
+  // of the back button showed Home, which replaceAll had closed. Now C has
+  // the app's first entry, as after Navigator.pushAndRemoveUntil with no
+  // route kept, where back from the new route leaves the app.
   testWidgets('On web, a replaceAll and a push in one turn get an entry '
       'each', (tester) async {
     await _expectAfter(
@@ -246,7 +250,7 @@ void main() {
         unawaited(router.replaceAll(const [NamedRoute('CRoute')]));
         unawaited(router.push(const NamedRoute('BRoute')));
       },
-      [(2, '/b', 'CRoute BRoute'), (1, '/c', 'CRoute')],
+      [(1, '/b', 'CRoute BRoute'), (0, '/c', 'CRoute')],
       opens: _onA,
     );
   });

@@ -19,9 +19,9 @@ void main() {
     // Steps: logged in, push Screen3, whose guard redirects to SignInRoute when
     // logged out, with reevaluateListenable set to the login state. Log out,
     // then go back: the browser's back button on web, system back elsewhere.
-    // On web, press the browser's back button once more.
-    // Should: the first back shows HomeRoute, not SignInRoute again; on web the
-    // browser is one entry back, and the next press steps back once more.
+    // Should: the back shows HomeRoute, not SignInRoute again; on web the
+    // browser is on Home's own entry, the one the app started on, since the
+    // two pages over it are closed.
     testWidgets(
       'Going back after a logout redirect shows the page before (flutter/flutter#135359)',
       (tester) async {
@@ -75,7 +75,7 @@ void main() {
 
         if (kIsWeb) {
           pressBrowserBack();
-          await expectBrowserEntry(start + 1);
+          await expectBrowserEntry(start);
           await tester.pumpAndSettle();
         } else {
           await systemBack(tester);
@@ -83,13 +83,7 @@ void main() {
         expect(router.stack.map((e) => e.routeData.name), ['HomeRoute']);
         expect(find.text('HomeRoute'), findsOneWidget);
         await expectBrowserUrl('/');
-
-        if (kIsWeb) {
-          pressBrowserBack();
-          await expectBrowserEntry(start);
-          await tester.pumpAndSettle();
-          expect(router.stack.map((e) => e.routeData.name), ['HomeRoute']);
-        }
+        await expectBrowserEntry(start);
         expect(tester.takeException(), isNull);
       },
     );

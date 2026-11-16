@@ -17,9 +17,13 @@ import 'browser_history.dart';
 // Steps: the app opens Home and pushes Login. The user signs in, which makes
 // Login's guard reject, then presses the browser's back and forward buttons.
 // Native behavior this holds to: a browser can't cancel a traversal the app
-// receives, so the app puts back the url of what it shows, over the same
-// entry: as with a canceled navigation, the address bar names what is on
-// screen and the entries stay as they were.
+// receives, so the app steps it back to the entry of the page it shows: as
+// with a traversal canceled through the Navigation API
+// (NavigateEvent.preventDefault), the browser stands where it stood, the
+// address bar names what is on screen and the entries stay as they were.
+// Until the web history became the browser's one writer, the url of the
+// page shown was written over the rejected page's entry, which gave that
+// page two entries.
 void main() {
   useRealBrowserHistory();
   setUp(rewindBrowserHistory);
@@ -63,7 +67,6 @@ void main() {
 
     expect(find.text('HomeRoute'), findsOneWidget);
     expect(router.currentUrl, '/');
-    expect(browserPath, '/');
-    expect(browserSerialCount, loginEntry);
+    expect((browserSerialCount, browserPath), (loginEntry - 1, '/'));
   });
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -55,7 +56,12 @@ void main() {
       'DetailsRoute',
     ]);
     expect(router.currentUrl, '/details');
-    expect(config.routerDelegate.currentConfiguration?.uri.path, '/details');
+    // On the web the web history writes the browser from urlState, and the
+    // delegate reports nothing to the Router.
+    final reported = kIsWeb
+        ? router.urlState
+        : config.routerDelegate.currentConfiguration;
+    expect(reported?.uri.path, '/details');
     expect(router.isPathActive('/guarded'), isFalse);
   });
 }

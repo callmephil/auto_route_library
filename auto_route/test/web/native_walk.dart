@@ -37,8 +37,9 @@ enum WalkGap {
   time,
 }
 
-/// A router with a Home page at '/' and pages A to D at '/a' to '/d'.
-RootStackRouter fivePageRouter() => .build(
+/// A router with a Home page at '/', pages A to D at '/a' to '/d', and an
+/// Item page whose url is '/item' whatever its args are.
+RootStackRouter walkRouter() => .build(
   routes: [
     for (final (name, path) in [
       ('HomeRoute', '/'),
@@ -46,8 +47,13 @@ RootStackRouter fivePageRouter() => .build(
       ('BRoute', '/b'),
       ('CRoute', '/c'),
       ('DRoute', '/d'),
+      ('ItemRoute', '/item'),
     ])
-      NamedRouteDef(name: name, path: path, builder: (_, _) => Text(name)),
+      NamedRouteDef(
+        name: name,
+        path: path,
+        builder: (_, data) => Text('$name ${data.args ?? ''}'),
+      ),
   ],
 );
 
@@ -61,19 +67,21 @@ RootStackRouter fivePageRouter() => .build(
 /// The calls of the browser's walk are [gap] apart. With [isFrameFirst] a
 /// frame runs after them before the browser can move, which needs
 /// `useLiveFrames`; otherwise the browser's moves land first. The calls of
-/// the popRoute walk are always a frame apart.
+/// the popRoute walk are always a frame apart; a test that runs the same
+/// calls several ways passes the walk [systemBackWalk] gave it as
+/// [systemBack].
 Future<void> expectNativeWalk(
   WidgetTester tester, {
   required List<WalkCall> calls,
   List<String> opens = const [],
-  RootStackRouter Function() router = fivePageRouter,
+  RootStackRouter Function() router = walkRouter,
   WalkGap gap = .frame,
   bool isFrameFirst = false,
+  List<String>? systemBack,
 }) async {
-  final native = await _systemBackWalk(tester, router(), opens, calls);
-  await tester.pumpWidget(const SizedBox());
-  await settleBrowser(tester);
-  await rewindBrowserHistory();
+  final native =
+      systemBack ??
+      await systemBackWalk(tester, calls: calls, opens: opens, router: router);
 
   final walked = router();
   await pumpRouterConfigApp(tester, walked.config());
@@ -135,30 +143,36 @@ Future<void> expectNativeWalk(
   );
 }
 
-// The page on top and its url after [calls], then after each system back
-// until it closes nothing more.
-Future<List<String>> _systemBackWalk(
-  WidgetTester tester,
-  RootStackRouter router,
-  List<String> opens,
-  List<WalkCall> calls,
-) async {
-  final config = router.config();
+/// The page on top and its url after [calls], made a frame apart on a
+/// router made by [router] with the pages named in [opens] over its first
+/// page, then after each system back until it closes nothing more. Leaves
+/// the browser on its first entry, with no app shown.
+Future<List<String>> systemBackWalk(
+  WidgetTester tester, {
+  required List<WalkCall> calls,
+  List<String> opens = const [],
+  RootStackRouter Function() router = walkRouter,
+}) async {
+  final walked = router();
+  final config = walked.config();
   await pumpRouterConfigApp(tester, config);
   await settleBrowser(tester);
   for (final name in opens) {
-    unawaited(router.push(NamedRoute(name)));
+    unawaited(walked.push(NamedRoute(name)));
     await settleBrowser(tester);
   }
   for (final call in calls) {
-    call(router);
+    call(walked);
     await settleBrowser(tester);
   }
-  final shown = [_shown(router, router.urlState.url)];
+  final shown = [_shown(walked, walked.urlState.url)];
   while (await config.routerDelegate.popRoute()) {
     await settleBrowser(tester);
-    shown.add(_shown(router, router.urlState.url));
+    shown.add(_shown(walked, walked.urlState.url));
   }
+  await tester.pumpWidget(const SizedBox());
+  await settleBrowser(tester);
+  await rewindBrowserHistory();
   return shown;
 }
 

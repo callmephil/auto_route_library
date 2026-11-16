@@ -46,7 +46,11 @@ void main() {
   // auto_route's navigate() does. replaceAll() takes the current entry.
   // Steps: open FirstRoute, push SecondRoute, replaceAll with
   // FirstRoute, then press the browser back button.
-  // Should: back stays on FirstRoute at '/'; SecondRoute doesn't come back.
+  // Should: FirstRoute has the app's first entry, so the back button leaves
+  // the app, as system back does after Navigator.pushAndRemoveUntil with no
+  // route kept; SecondRoute doesn't come back. Until the web history became
+  // the browser's one writer, the first FirstRoute's entry stayed under the
+  // new one's, and the back button went to it.
   testWidgets(
     'On web, the browser back button after replaceAll home skips the page left (flutter/flutter#149585)',
     (tester) async {
@@ -57,12 +61,8 @@ void main() {
       await settleBrowser(tester);
       unawaited(router.replaceAll([const FirstRoute()]));
       await settleBrowser(tester);
-      expectCurrentPage(router, FirstRoute.name);
-
-      await pressBrowserBack(tester);
-      expectCurrentPage(router, FirstRoute.name);
       expect(router.stack.map((page) => page.name), [FirstRoute.name]);
-      expect(browserPath, '/');
+      expect((browserSerialCount, browserPath), (0, '/'));
     },
   );
 }

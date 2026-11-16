@@ -20,11 +20,12 @@ void main() {
   // redirectUntil(LoginRoute(next: resolver.next)), and LoginRoute calls next()
   // after its first frame.
   // The back button must not reopen LoginRoute with a resolver that was already
-  // used. The phone history kept LoginRoute's entry; the browser history never
-  // goes back past the app's first entry, so on web this only guards that.
+  // used. The phone history kept LoginRoute's entry. On the web the guarded
+  // page takes the login page's entry, the app's first, so the back button
+  // has no entry of the app to go to.
   testWidgets(
-    'The browser back button after a resolved redirect on web stays on the '
-    'guarded page (#2331)',
+    'A resolved redirect on web leaves the guarded page on the first entry, '
+    'with none for the login page (#2331)',
     (tester) async {
       final router = RootStackRouter.build(
         routes: [
@@ -56,15 +57,8 @@ void main() {
       await pumpRouterConfigApp(tester, router.config());
       await settleBrowser(tester);
       expect(router.stack.map((e) => e.routeData.name), ['HomeRoute']);
-      expect(browserPath, '/');
-      final entry = browserSerialCount;
-
-      await pressBrowserBack(tester);
-      expect(browserSerialCount, entry);
-      expect(browserPath, '/', reason: 'after pressBrowserBack(tester)');
-      expect(router.stack.map((e) => e.routeData.name), [
-        'HomeRoute',
-      ], reason: 'after pressBrowserBack(tester)');
+      // The app's first entry: the login page left none under it.
+      expect((browserSerialCount, browserPath), (0, '/'));
     },
   );
 
@@ -73,11 +67,10 @@ void main() {
   // Logged in, push Screen3, whose guard redirects to SignInRoute when logged
   // out, with reevaluateListenable set to the login state. Log out: the guard
   // redirects to SignInRoute. Press the browser's back button: HomeRoute shows,
-  // and each later press steps back through the history, never staying on the
-  // entry it was on.
-  testWidgets('The browser back button after a logout redirect steps back', (
-    tester,
-  ) async {
+  // on its own entry, the app's first: the entries of the two pages closed
+  // are no longer on the way back.
+  testWidgets("The browser back button after a logout redirect goes to Home's "
+      'entry', (tester) async {
     final loggedIn = ValueNotifier(true);
     addTearDown(loggedIn.dispose);
     final router = RootStackRouter.build(
@@ -130,19 +123,14 @@ void main() {
     await pressBrowserBack(tester);
     expect(router.stack.map((e) => e.routeData.name), ['HomeRoute']);
     expect(browserPath, '/');
-    expect(browserSerialCount, start + 1);
-
-    for (var i = 0; i < 3 && browserSerialCount > start; i++) {
-      await _pressBackAndExpectFewerEntries(tester);
-    }
+    expect(browserSerialCount, start);
     expect(tester.takeException(), isNull);
   });
 
-  // The same with the sign-in page closed by the app's own back button, then
-  // the browser's back button pressed.
+  // The same with the sign-in page closed by the app's own back button.
   testWidgets(
-    'The browser back button after closing a logout redirect in the app steps '
-    'back',
+    "Closing a logout redirect in the app leaves the browser on Home's "
+    'entry',
     (tester) async {
       final loggedIn = ValueNotifier(true);
       addTearDown(loggedIn.dispose);
@@ -195,18 +183,8 @@ void main() {
       await settleBrowser(tester);
       expect(router.stack.map((e) => e.routeData.name), ['HomeRoute']);
       expect(browserPath, '/');
-      expect(browserSerialCount, start + 1);
-
-      for (var i = 0; i < 3 && browserSerialCount > start; i++) {
-        await _pressBackAndExpectFewerEntries(tester);
-      }
+      expect(browserSerialCount, start);
       expect(tester.takeException(), isNull);
     },
   );
-}
-
-Future<void> _pressBackAndExpectFewerEntries(WidgetTester tester) async {
-  final before = browserSerialCount;
-  await pressBrowserBack(tester);
-  expect(browserSerialCount, lessThan(before));
 }

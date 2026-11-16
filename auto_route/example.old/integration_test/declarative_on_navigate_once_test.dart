@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -20,7 +21,14 @@ void main() {
     // which reaches the declarative router through its parent, as a browser's
     // back does.
     // Should: onNavigate runs once for that navigation.
-    testWidgets('a navigation through the parent reports once', (tester) async {
+    // Not on the web: there a route reaches the app only with a move of the
+    // browser, and one handed over with none, for the url the browser stands
+    // on, is the Router parsing its own url again, which changes nothing.
+    // auto_route/test/web/declarative_router_url_web_test.dart presses the
+    // browser's back button instead.
+    testWidgets('a navigation through the parent reports once', skip: kIsWeb, (
+      tester,
+    ) async {
       final calls = ValueNotifier(0);
       addTearDown(calls.dispose);
       final router = RootStackRouter.build(

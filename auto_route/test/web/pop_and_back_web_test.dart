@@ -160,8 +160,19 @@ void main() {
     expect(browserSerialCount, start + 1);
   });
 
+  // Steps: open tab 2, push a page in it, go back to tab 1, then pop the
+  // page of tab 2, which is not on screen; then press the browser's back
+  // button.
+  // The url stays, and the popped page's entry leaves the way back: the
+  // back button shows tab 2 on the page that is left in it. Until the web
+  // history became the browser's one writer the history was left alone, and
+  // the back button opened the popped page again.
+  // Native behavior this holds to: Flutter's Navigator, where a route that
+  // was removed, as with Navigator.removeRoute, never comes back on the
+  // system back.
   testWidgets(
-    'Popping a page outside the visible url on web leaves the history alone',
+    'Popping a page outside the visible url on web keeps the url and takes '
+    "the page's entry off the way back",
     (tester) async {
       final tabsRouter = NestedTabsRouter();
       await pumpRouterConfigApp(tester, tabsRouter.config());
@@ -184,8 +195,11 @@ void main() {
       await settleBrowser(tester);
       expect(tab2Router.current.name, Tab2Nested1Route.name);
       expect(tabsRouter.urlState.url, '/');
-      expect(browserPath, '/', reason: 'after settleBrowser(tester)');
-      expect(browserSerialCount, serialCount);
+      expect((browserSerialCount, browserPath), (serialCount - 1, '/'));
+
+      await pressBrowserBack(tester);
+      expect(tabsRouter.topRoute.name, Tab2Nested1Route.name);
+      expect((browserSerialCount, browserPath), (serialCount - 2, '/tab2'));
     },
   );
 

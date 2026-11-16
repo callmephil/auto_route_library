@@ -67,8 +67,10 @@ abstract class NavigationHistory with ChangeNotifier {
   void rebuildUrlAfterClosingUnbuilt(Iterable<LocalKey> closedPageIds) =>
       rebuildUrl();
 
-  /// Whether [configuration], a route the platform just reported, only
-  /// confirms a move through the browser history that this history made itself.
+  /// Whether [configuration], a route the Router just handed over, only
+  /// confirms a move through the browser history that this history made
+  /// itself, or is a url the Router parsed again from its provider while
+  /// this history still had entries to write.
   ///
   /// The web history sometimes moves the browser on its own, for example to
   /// step back over a page that was popped in the app. The browser then reports
@@ -77,10 +79,9 @@ abstract class NavigationHistory with ChangeNotifier {
   /// a report instead of handling it as a deep link, which would close dialogs,
   /// rerun the deep link builder and rebuild the stack.
   ///
-  /// Each call consumes the expected move, matched or not: only the first
-  /// report after the move can match, and a report for a different url returns
-  /// false and is handled as usual. Always false on native platforms, where the
-  /// history never moves on its own.
+  /// Only the first report after the move can match, and a report for a
+  /// different url returns false and is handled as usual. Always false on
+  /// native platforms, where the history never moves on its own.
   @internal
   bool consumeOwnBrowserMove(UrlState configuration) => false;
 
@@ -145,6 +146,25 @@ abstract class NavigationHistory with ChangeNotifier {
     // Native platforms have no browser to move.
   }
 
+  /// Makes this history's account of the app's entries start from the entry
+  /// the browser now stands on, before [AutoRouterDelegate.setNewRoutePath]
+  /// follows the browser there: the entries after it are the browser's, as
+  /// the ones its forward button goes to. Does nothing when the browser
+  /// stands on the entry of the app's page on top, as when the platform
+  /// hands over a link, and on native platforms.
+  @internal
+  // ignore: no-empty-block
+  void followBrowser() {
+    // Native platforms have no browser to follow.
+  }
+
+  /// Whether this history writes the app's urls to a browser itself, entry
+  /// by entry, so that the Router must write none: its
+  /// [AutoRouterDelegate.currentConfiguration] is then null. False on native
+  /// platforms, where the Router reports the url to the platform.
+  @internal
+  bool get writesBrowser => false;
+
   /// Pushes a new browser entry with given state
   ///
   /// Like history.pushState, it adds an entry also right after a navigation
@@ -159,19 +179,23 @@ abstract class NavigationHistory with ChangeNotifier {
   /// only works for web
   Object? get pathState;
 
-  /// Whether a Router writes this history's urls to the platform, which it
-  /// does once it has built the router's [AutoRouterDelegate].
+  /// Whether a Router shows this history's router, which it does once it
+  /// has built the router's [AutoRouterDelegate]: the urls can then be
+  /// written to the platform.
   ///
   /// Until then the app may navigate, as before runApp, with no Router and no
-  /// binding yet; the web history keeps no account of the frames in which the
-  /// Router writes.
+  /// binding yet; the web history keeps what it has to write until then.
   @internal
   bool get isShownByRouter => _isShownByRouter;
   bool _isShownByRouter = false;
 
-  /// Marks that a Router writes this history's urls; see [isShownByRouter].
+  /// Marks that a Router shows this history's router; see
+  /// [isShownByRouter]. [routerContext] is the context that Router builds
+  /// the router's [AutoRouterDelegate] with, which finds the Router also
+  /// while the app shows no page.
   @internal
-  void markShownByRouter() => _isShownByRouter = true;
+  void markShownByRouter([BuildContext? routerContext]) =>
+      _isShownByRouter = true;
 
   bool _isUrlStateMarkedForReplace = false;
 
@@ -254,15 +278,6 @@ abstract class NavigationHistory with ChangeNotifier {
       holder.removeUntil((data) => data.route.id == pageId);
     }
   }
-
-  /// Whether the change being reported now opens a new browser entry although
-  /// its url equals the current one, as when the same route is pushed twice.
-  ///
-  /// The router reports a url equal to the current one as a replace of the
-  /// browser's entry; [AutoRouterDelegate] reports this change as a navigation
-  /// instead. Always false on native platforms, which have no browser.
-  @internal
-  bool get addsEntryWithSameUrl => false;
 
   /// Helper to access current [_urlState]
   UrlState get urlState => _urlState;

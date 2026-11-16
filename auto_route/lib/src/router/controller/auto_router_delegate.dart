@@ -33,8 +33,8 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       // through currentConfiguration.
       controller.addListener(notifyListeners);
     } else {
-      // A deep link's url is set before its page is in, while
-      // currentConfiguration is still null; the Router hears of it here.
+      // A deep link's url is set before its page is in; the Router, which
+      // builds the pages, hears of the first one here.
       controller.addListener(_reportFirstPage);
     }
   }
@@ -127,20 +127,25 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   /// Helper to access current urlState
   UrlState get urlState => controller.navigationHistory.urlState;
 
-  /// The current [urlState]; off the web it also holds the pages of every
-  /// router, and the route the platform started the app at, which the
-  /// [Router] saves for state restoration.
+  /// The current [urlState] with the pages of every router and the route the
+  /// platform started the app at, which the [Router] reports to the platform
+  /// and saves for state restoration.
   ///
-  /// Null until the first navigation has put a page in the root router: the
-  /// [Router] reports nothing for null, while the empty [urlState] would
-  /// reach the browser as '/' before the deep link the app opens.
+  /// Null on the web, where [urlState] is the way to read the url: the
+  /// navigation history writes the browser's entries itself, whenever the
+  /// app navigates, and the [Router], which writes once a frame, must write
+  /// none. A Router reports nothing for a null configuration. The web has
+  /// no state restoration to save a route for.
+  ///
+  /// Off the web, null until the first navigation has put a page in the root
+  /// router, so that the Router reports no empty url before the deep link
+  /// the app opens.
   @override
   UrlState? get currentConfiguration {
     // Only before the first page: later the stack can be empty for a moment,
     // as in pushAndPopUntil, and the url must still be reported.
     _hadPage = _hadPage || controller.hasEntries;
-    if (!_hadPage) return null;
-    if (kIsWeb) return urlState;
+    if (!_hadPage || controller.navigationHistory.writesBrowser) return null;
     return urlState.copyWith(
       savedRoutes: {
         _routesKey: controller._savedRoutes(),
@@ -207,9 +212,9 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       _isDisposed || (_lastOpenedLink > handover && controller.hasEntries);
 
   // The app opened at a link that put no page in, as when a guard rejected it.
-  // currentConfiguration stays null until a page is in, so the Router would
-  // leave the link in the address bar and a reload would open it again; now
-  // the empty url takes its place. A page that comes later is reported as usual.
+  // No url is reported until a page is in, so the link would stay in the
+  // address bar and a reload would open it again; now the empty url takes
+  // its place. A page that comes later is reported as usual.
   void _reportRejectedLaunch() {
     if (_hadPage || controller.hasEntries) return;
     _hadPage = true;
@@ -268,7 +273,9 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       controller.navigationHistory.onNewUrlState(shown, notify: false);
     }
     final context = controller.navigatorKey.currentContext;
-    if (context == null) return notifyListeners();
+    if (context == null || controller.navigationHistory.writesBrowser) {
+      return notifyListeners();
+    }
     Router.neglect(context, notifyListeners);
   }
 
@@ -463,6 +470,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       history.returnBrowserToApp();
       return;
     }
+    history.followBrowser();
     final pageless = _pagelessRoutesOnTop();
 
     final pageToPush = history.pageToPushForBrowserEntry(configuration);
@@ -570,7 +578,8 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     // path; a path the router writes differently, after a redirect, a
     // transformer or a nested segment written again, takes that entry. Off
     // the web the link has no entry of its own: its pages get a new one.
-    if (kIsWeb && pathInBrowser != matchedUrlState.path) {
+    if (controller.navigationHistory.writesBrowser &&
+        pathInBrowser != matchedUrlState.path) {
       matchedUrlState = matchedUrlState.copyWith(shouldReplace: true);
     }
     controller.navigationHistory.onNewUrlState(matchedUrlState);
@@ -578,8 +587,9 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
 
   @override
   Widget build(BuildContext context) {
-    // A Router builds this delegate: it writes the history's urls from now on.
-    controller.navigationHistory.markShownByRouter();
+    // A Router builds this delegate: the history's urls can be written from
+    // now on, by the Router or, on the web, through its provider.
+    controller.navigationHistory.markShownByRouter(context);
     return _AutoRootRouter(
       router: controller,
       navigatorObservers: _navigatorObservers,
@@ -596,16 +606,14 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
 
   void _handleRebuild() {
     final context = controller.navigatorKey.currentContext;
-    if (urlState.shouldReplace && context != null) {
+    // On the web the history writes the url itself, and the Router none.
+    if (urlState.shouldReplace &&
+        context != null &&
+        !controller.navigationHistory.writesBrowser) {
       // Flutter's default route information provider ignores
-      // AutoRouteInformation.replace; it replaces the browser entry only when
-      // the router reports the change as neglected.
+      // AutoRouteInformation.replace; it replaces the entry only when the
+      // router reports the change as neglected.
       Router.neglect(context, notifyListeners);
-    } else if (controller.navigationHistory.addsEntryWithSameUrl &&
-        context != null) {
-      // The router reports a url equal to the browser's as a replace of its
-      // entry unless told the change is a navigation.
-      Router.navigate(context, notifyListeners);
     } else {
       notifyListeners();
     }
@@ -630,20 +638,6 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
 
   /// Force this delegate to rebuild
   void notifyUrlChanged() => _handleRebuild();
-
-  // Reports the current url over the browser entry the Router wrote last,
-  // without rebuilding the pages, as a notification would.
-  void _reportUrlInPlace() {
-    final context = controller.navigatorKey.currentContext;
-    final router = context == null ? null : Router.maybeOf(context);
-    final routeInformation = router?.routeInformationParser
-        ?.restoreRouteInformation(currentConfiguration);
-    if (routeInformation == null) return;
-    router!.routeInformationProvider?.routerReportsNewRouteInformation(
-      routeInformation,
-      type: .neglect,
-    );
-  }
 }
 
 class _AutoRootRouter extends StatefulWidget {

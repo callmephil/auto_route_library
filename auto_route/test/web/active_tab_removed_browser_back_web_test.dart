@@ -17,14 +17,17 @@ import 'browser_history.dart';
 // [A, B]. Tab A shows again, on A2. Press the browser's back button.
 // Was: the url of A2 went into a new browser entry over the one of C, so the
 // back button put '/c' in the address bar while A2 stayed on screen, since
-// tab C was gone.
-// Should: the url of A2 replaces C's entry. The back button then goes to the
-// entry of A2 the user opened, and the address bar names the page on screen
-// at every step. System back pops A2 and puts the browser on the entry of A1.
-// Native behavior this holds to: on the web a url change the user did not
-// navigate to replaces the current entry, as a redirect does, so the page
-// that left is not in the session history (MDN, Location.replace). A browser
-// can't take an entry out, so the user's own entry of A2 stays.
+// tab C was gone. Then, until the web history became the browser's one
+// writer, the url of A2 was written over C's entry, which gave A2 two
+// entries: the first press of the back button changed nothing on screen.
+// Should: the browser steps back to the entry of A2 the user opened, as it
+// does for any page that closes, and the address bar names the page on
+// screen at every step. One press of the back button then shows A1, as
+// system back does.
+// Native behavior this holds to: Flutter's Navigator, where a route removed
+// from the top shows the one under it and the system back then closes that
+// one. A browser can't take an entry out, so C's stays ahead of the one the
+// browser stands on, where only the forward button reaches it.
 // Headless test off the web:
 // test/nested_tabs_router/active_tab_removed_test.dart
 void main() {
@@ -41,21 +44,15 @@ void main() {
     routes.value = const [NamedRoute('TabA'), NamedRoute('TabB')];
     await settleBrowser(tester);
 
+    // The entry of A2 the user opened.
     expect(find.text('A2'), findsOneWidget);
-    expect(browserPath, '/a/2');
-    expect(browserSerialCount, entryOfC);
-
-    await pressBrowserBack(tester);
-
-    // The entry of A2 the user opened: A2 stays, and so does its url.
-    expect(browserSerialCount, entryOfC - 1);
-    expect((browserPath, router.urlState.url), ('/a/2', '/a/2'));
-    expect(find.text('C1'), findsNothing);
+    expect((browserSerialCount, browserPath), (entryOfC - 1, '/a/2'));
+    expect(router.urlState.url, '/a/2');
 
     await pressBrowserBack(tester);
 
     expect(find.text('A1'), findsOneWidget);
-    expect(browserPath, '/a');
+    expect((browserSerialCount, browserPath), (entryOfC - 2, '/a'));
   });
 
   testWidgets('System back after the active tab is removed pops the page on '

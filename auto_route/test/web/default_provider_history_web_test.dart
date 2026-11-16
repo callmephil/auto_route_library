@@ -91,7 +91,8 @@ void main() {
       'replaceAll and a push',
       true,
       [_replaceAllWithC, _push('BRoute')],
-      [(2, '/b', 'CRoute BRoute'), (1, '/c', 'CRoute')],
+      // C has the app's first entry: replaceAll closed Home.
+      [(1, '/b', 'CRoute BRoute'), (0, '/c', 'CRoute')],
     ),
     (
       'a replace and a pop',

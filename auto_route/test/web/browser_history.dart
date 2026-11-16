@@ -1,8 +1,10 @@
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
+import 'package:auto_route/auto_route.dart';
+import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart' show Widget;
+import 'package:flutter/widgets.dart' show Router, Widget;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart' show WindowEventGetters, window;
 
@@ -57,15 +59,38 @@ int get browserSerialCount {
 /// The app path the current browser history entry holds, such as '/second-route'.
 String get browserPath => ui_web.urlStrategy!.getPath();
 
-/// Pumps until the router settles and every route it reported is in the
-/// browser history, repeating while that schedules another frame.
+/// Pumps until the router settles and the browser holds what the app shows,
+/// repeating while that schedules another frame.
+///
+/// The web history brings the browser to the app's pages by itself, entry by
+/// entry, and waits for the browser to land after each step back; this waits
+/// until it has nothing left to do, and fails after two seconds.
 Future<void> settleBrowser(WidgetTester tester) async {
   do {
     await tester.pumpAndSettle();
+    for (final history in _shownHistories(tester)) {
+      await history.whenBrowserSettled().timeout(const Duration(seconds: 2));
+    }
     // The engine handles navigation messages one after another, so its reply
-    // to this one comes once every route reported before it is written.
+    // to this one comes once every route reported before it is handled, the
+    // report of a landing included.
     await SystemNavigator.selectMultiEntryHistory();
-  } while (tester.binding.hasScheduledFrame);
+    await tester.pumpAndSettle();
+  } while (tester.binding.hasScheduledFrame ||
+      _shownHistories(tester).any((history) => !history.isBrowserSettled));
+}
+
+// The web histories of the routers the app shows.
+Iterable<BrowserNavigationHistory> _shownHistories(WidgetTester tester) sync* {
+  // MaterialApp builds a Router<Object>, whatever its delegate is.
+  for (final router in tester.widgetList<Router<Object?>>(
+    find.byWidgetPredicate((widget) => widget is Router<Object?>),
+  )) {
+    final delegate = router.routerDelegate;
+    if (delegate is! AutoRouterDelegate) continue;
+    final history = delegate.controller.navigationHistory;
+    if (history is BrowserNavigationHistory) yield history;
+  }
 }
 
 /// Runs [move], which moves the browser through its history, waits for the
@@ -73,16 +98,29 @@ Future<void> settleBrowser(WidgetTester tester) async {
 ///
 /// [move] is a back step from the app, such as `router.back`, or the browser's
 /// own, such as `() => window.history.back()`, the call the back button makes.
+///
+/// Fails after five seconds when the browser has not landed: it had no entry
+/// to move to.
 Future<void> browserMove(WidgetTester tester, VoidCallback move) async {
   final popped = window.onPopState.first;
   move();
-  await popped;
+  await popped.timeout(const Duration(seconds: 5));
   await settleBrowser(tester);
 }
 
 /// Presses the browser's back button and settles.
-Future<void> pressBrowserBack(WidgetTester tester) =>
-    browserMove(tester, () => window.history.back());
+///
+/// Fails on the app's first entry, which every test starts on: the back
+/// button would leave the app there, and the test's page with it.
+Future<void> pressBrowserBack(WidgetTester tester) {
+  if (browserSerialCount <= 0) {
+    fail(
+      "The browser stands on the app's first entry: its back button would "
+      'leave the app.',
+    );
+  }
+  return browserMove(tester, () => window.history.back());
+}
 
 /// Makes the browser's current entry hold [path], as when the app is opened at
 /// a deep link, and makes [path] the app's initial route.

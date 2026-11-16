@@ -20,9 +20,12 @@ void main() {
     // browser's back button.
     // Was: C got no entry; back from B went to Home's entry and put Home on
     // top of C and B.
-    // Should: back from B goes to C's entry and shows C.
-    // Native behavior: the HTML History API; replaceState then pushState
-    // leave the entry replaced and one new entry, one call after another.
+    // Should: C has Home's entry, the app's first, since replaceAll closed
+    // Home and A, and B the one over it; back from B goes to C's entry and
+    // shows C.
+    // Native behavior: Flutter's Navigator, where back from the one route
+    // left by pushAndRemoveUntil leaves the app, and each route pushed after
+    // it is closed by a back of its own.
     // Web only: off the web the router's history records each change as it
     // comes.
     testWidgets(
@@ -72,11 +75,11 @@ void main() {
 
         await tester.tap(find.text('Open C and B'));
         await tester.pumpAndSettle();
-        await expectBrowserEntry(home + 2);
+        await expectBrowserEntry(home + 1);
         await expectBrowserUrl('/b');
 
         pressBrowserBack();
-        await expectBrowserEntry(home + 1);
+        await expectBrowserEntry(home);
         await tester.pumpAndSettle();
         await expectBrowserUrl('/c');
         expect(find.text('CRoute'), findsOneWidget);
