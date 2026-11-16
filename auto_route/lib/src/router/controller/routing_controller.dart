@@ -2570,6 +2570,7 @@ abstract class StackRouter extends RoutingController {
   @override
   void notifyListeners() {
     _reportLeaves();
+    _noteListenersTold();
     super.notifyListeners();
   }
 
@@ -3039,14 +3040,64 @@ abstract class StackRouter extends RoutingController {
     return true;
   }
 
-  // Takes from the navigator the routes of pages that have left the stack and
-  // still lie over its top page, with the pageless routes over them. The
-  // page a replace, removeLast or navigate took off keeps its route until
-  // the navigator is rebuilt, and Navigator.pop and maybePop act on the
-  // navigator's top route: a pop in the same turn would close that route, a
-  // page already gone, and leave the stack's top page open. Flutter's own
-  // Navigator no longer counts a route as present from the call that
-  // replaced or removed it, so its next pop takes the route below.
+  // The pages the app took off the stack for good, as replace, removeLast,
+  // removeWhere and pushAndPopUntil do, until the navigator is rebuilt
+  // without them. Each with the pageless routes that lay over its route
+  // then, and with [_notifications] as it was then.
+  final _leftSinceBuild =
+      <
+        AutoRoutePage<Object?>,
+        ({List<Route<Object?>> coveredBy, int notifications})
+      >{};
+
+  // How many times this router told its listeners of a change. Each has the
+  // navigator rebuilt with the frame that follows.
+  var _notifications = 0;
+
+  // Whether [_leftSinceBuild] is to be emptied after the next frame.
+  var _isForgettingLeftAfterFrame = false;
+
+  void _noteLeft(AutoRoutePage<Object?> page) {
+    final route = pagelessRoutesObserver.routeOf(page);
+    // A page not built yet has no route to tell from the one under it.
+    if (route == null) return;
+    _leftSinceBuild[page] = (
+      coveredBy: pagelessRoutesObserver.pagelessRoutesOver(route),
+      notifications: _notifications,
+    );
+  }
+
+  // Called as this router tells its listeners of a change.
+  void _noteListenersTold() {
+    _notifications++;
+    if (_leftSinceBuild.isEmpty || _isForgettingLeftAfterFrame) return;
+    _isForgettingLeftAfterFrame = true;
+    // The frame that follows rebuilds the navigator without them.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _isForgettingLeftAfterFrame = false;
+      _leftSinceBuild.clear();
+    });
+  }
+
+  // Takes from the navigator the routes of pages the app took off the stack
+  // for good and that still lie over its top page, with the pageless routes
+  // that lay over them. The page a replace or removeLast took off keeps its
+  // route until the navigator is rebuilt, with the next frame, and
+  // Navigator.pop and maybePop act on the navigator's top route: a pop
+  // before that frame would close that route, a page already gone, and
+  // leave the stack's top page open. Flutter's own Navigator no longer
+  // counts a route as present from the call that replaced or removed it, so
+  // its next pop takes the route below.
+  //
+  // The navigator stays as it is when what lies over the top page is not
+  // gone, or is what the user sees and a pop is meant for:
+  // - a page that is off the stack only until a guard answers, which a
+  //   reevaluation holds back or a replaceAll or a batch set aside. It is
+  //   still on screen and may come back.
+  // - a page taken off without the listeners being told, as with
+  //   `notify: false`. No rebuild is on its way, so it stays on screen, and
+  //   a pop closes its route.
+  // - a dialog or other pageless route opened after the page under it left.
   void _removeLeftRoutesOverTop() {
     final navigator = _navigatorKey.currentState;
     final top = _pages.lastOrNull;
@@ -3055,17 +3106,29 @@ abstract class StackRouter extends RoutingController {
     final topIndex = shown.indexOf(top);
     // A top page not built yet has no route for a pop to reach.
     if (topIndex == -1) return;
+    final gone = <Route<Object?>>[];
     for (final page in shown.skip(topIndex + 1).toList().reversed) {
       final route = pagelessRoutesObserver.routeOf(page);
       // A route already popped is leaving by itself.
       if (route == null || route.navigator != navigator || !route.isActive) {
         continue;
       }
-      pagelessRoutesObserver
-          .pagelessRoutesOver(route)
-          .forEach(navigator.removeRoute);
-      navigator.removeRoute(route);
+      final left = _leftSinceBuild[page];
+      final mayComeBack =
+          _setAsideByReplaceAll.contains(page) ||
+          _takenOffByOpenBatches.contains(page) ||
+          page is AutoRoutePage &&
+              _heldBackByReevaluation.contains(page.routeData);
+      final isRebuildOnItsWay =
+          left != null && left.notifications < _notifications;
+      if (!isRebuildOnItsWay || mayComeBack) return;
+      final overItNow = pagelessRoutesObserver.pagelessRoutesOver(route);
+      if (!overItNow.every(left.coveredBy.contains)) return;
+      gone
+        ..addAll(overItNow)
+        ..add(route);
     }
+    gone.forEach(navigator.removeRoute);
   }
 
   /// Removes the very last entry from [_pages]
@@ -3118,6 +3181,7 @@ abstract class StackRouter extends RoutingController {
     );
     if (pageIndex != -1) {
       final page = _pages.removeAt(pageIndex);
+      _noteLeft(page);
       // Removed pages may be disposed without a pop callback from Navigator.
       // A page taken off for a new page waits until that page is on.
       if (_isTakingOffForNewPage) {

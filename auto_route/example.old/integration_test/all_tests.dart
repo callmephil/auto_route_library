@@ -188,6 +188,7 @@ import 'pop_until_hides_middle_test.dart' as pop_until_hides_middle;
 import 'pop_until_missing_route_test.dart' as pop_until_missing_route;
 import 'pop_until_then_push_in_one_turn_test.dart'
     as pop_until_then_push_in_one_turn;
+import 'pop_while_held_back_test.dart' as pop_while_held_back;
 import 'pop_while_reevaluating_test.dart' as pop_while_reevaluating;
 import 'popped_args_released_test.dart' as popped_args_released;
 import 'predictive_back_nested_under_root_test.dart'
@@ -549,6 +550,7 @@ void main() {
   pop_until_hides_middle.main();
   pop_until_missing_route.main();
   pop_until_then_push_in_one_turn.main();
+  pop_while_held_back.main();
   pop_while_reevaluating.main();
   popped_args_released.main();
   predictive_back_nested_under_root.main();
