@@ -1,5 +1,7 @@
-# Proves every fix in this fork on each platform, on every push and pull
-# request: that the committed routers regenerate unchanged, the headless
+# Off since 2026-11-16, by Phil's decision (see CLAUDE.md): it runs only when
+# started by hand, from the Actions tab or `gh workflow run tests.yml`. Then
+# it checks every fix in this fork on each platform: that the committed
+# routers regenerate unchanged, the headless
 # tests on the Dart VM and in Chrome, the code generator's tests, then the
 # example app's integration tests (auto_route/example.old/integration_test) on an
 # Android emulator, an iOS simulator, web through `flutter drive`, and macOS
@@ -13,8 +15,7 @@
 name: tests
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

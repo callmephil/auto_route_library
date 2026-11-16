@@ -1,6 +1,6 @@
 # auto_route fork: rules and how a fix is proven
 
-This repository is its own product: a maintained fork of the auto_route package. It sends no pull requests and opens no issues upstream. A fix is merged only once tests prove it here, on every platform; CI runs them again on every push.
+This repository is its own product: a maintained fork of the auto_route package. It sends no pull requests and opens no issues upstream. A fix is merged only once tests prove it here, on every platform.
 
 ## Rules
 1. One issue is one commit. Its tests and its fix land together in a single commit named after the issue, `fix: <what users see> (#N)`, with the cause in the body. An integration test added later for an issue already fixed is its own commit: `test: integration test for <what> (#N)`.
@@ -20,7 +20,7 @@ The old example app lives in `auto_route/example.old/` until the new one in `aut
 - `dev` is where work happens. Branch every piece of work from `dev`; finished work lands on `dev`.
 - `master` holds stable releases. Only the maintainer moves it, when `dev` reaches a new stable.
 - `release/<version>`, named as the changelog names the release (such as `release/12.6.0`), pins apps that use the fork as a git dependency to that release, so work on `dev` doesn't reach them. The maintainer cuts it from `master` at the release commit and pushes it with the release. It never moves: a fix ships in a new release with a branch of its own.
-- CI runs on every push to any branch. So the maintainer lands each finished piece on the local `dev` and pushes `dev` once, when the last piece of a batch has landed, not after each fix: CI then runs once per batch.
+- The maintainer lands each finished piece on the local `dev` and pushes `dev` once, when the last piece of a batch has landed and the batch's run on all four platforms has passed, not after each fix.
 
 ## Every lint rule stays on
 Every analyzer and DCM rule stays on. A finding is fixed in code, never switched off, excluded or ignored.
@@ -72,7 +72,9 @@ Exceptions, Phil's. Since 2026-11-06, `prefer-boolean-prefixes` and `prefer-corr
    pkill -f "chromedriver --port=4444"
    ```
 
-4. Who runs what. A chat working on a change runs the headless tests (both commands above), the generator's tests when it touched the generator, analyze and DCM, the fix's tests on its parent (they must fail), and the integration tests on the platform its change touches, or on macOS when it touches every platform. The maintainer runs every step-3 run, on all four platforms, once per batch, on all the batch's changes together, before pushing `dev`. Phil's S25 and iPhone join that run only before a release (a commit that sets a new version) or when the batch changes platform code: the example's `android/`, `ios/`, `macos/` or `web/` folders, or library code that runs only on some platforms, such as a `kIsWeb` or `defaultTargetPlatform` branch. A failure in any of these runs is traced to its commit and sent back to that change's chat. Every device run waits for its device and has a time limit. CI (`.github/workflows/tests.yml`) runs the same checks on every push, as the backstop: analyze, a check that every committed router regenerates unchanged from `auto_route/`, `auto_route/example.old/` and the root, the headless tests on the VM and in Chrome, the generator's tests, and the integration tests on Android, iOS, web and macOS. A CI failure on `dev` or `master` is fixed as its own issue.
+4. Who runs what. A chat working on a change runs the headless tests (both commands above), the generator's tests when it touched the generator, analyze and DCM, the fix's tests on its parent (they must fail), and the integration tests on the platform its change touches, or on macOS when it touches every platform. The maintainer runs every step-3 run, on all four platforms, once per batch, on all the batch's changes together, before pushing `dev`. Phil's S25 and iPhone join that run only before a release (a commit that sets a new version) or when the batch changes platform code: the example's `android/`, `ios/`, `macos/` or `web/` folders, or library code that runs only on some platforms, such as a `kIsWeb` or `defaultTargetPlatform` branch. A failure in any of these runs is traced to its commit and sent back to that change's chat. Every device run waits for its device and has a time limit. The maintainer's run also checks analyze, the lint rules and that every committed router regenerates unchanged from `auto_route/`, `auto_route/example.old/` and the root.
+
+   GitHub's CI (`.github/workflows/tests.yml`) is not part of the proof, by Phil's decision of 2026-11-16, since its hosted runners fail too often on their own. It is switched off: it runs only when started by hand, and no chat starts it, waits for it, reads it or works on it.
 
 If a test fails on one platform because of a real bug, skip it on that platform only, with a comment naming the issue and the platform, and give that bug its own chat (rule 4).
 
