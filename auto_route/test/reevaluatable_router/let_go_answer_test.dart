@@ -148,6 +148,47 @@ void main() {
       );
     });
 
+    // Finding I of the second review: the guard asked once more after its
+    // stale yes is a let-go guard too, and counts no more than one: nothing
+    // on screen waits for it.
+    // Was: guardInProgress read true while that ask ran its call.
+    testWidgets('asks the guard again without counting it in progress', (
+      tester,
+    ) async {
+      final (router, _) = await onAccount(tester);
+      session.set(signedIn: false);
+      await tester.pumpAndSettle();
+      final requests = <Completer<void>>[];
+      accountBehavior = (resolver, _) async {
+        accountAsks.add(resolver);
+        final wasSignedIn = session.isSignedIn;
+        final request = Completer<void>();
+        requests.add(request);
+        await request.future;
+        if (wasSignedIn) resolver.next();
+      };
+
+      session.set(signedIn: true);
+      await tester.pump();
+      session.set(signedIn: false);
+      await tester.pump();
+      final asksBeforeStaleYes = accountAsks.length;
+      requests.firstOrNull?.complete();
+      await tester.pumpAndSettle();
+      final whileAskedAgain = (
+        accountAsks.length - asksBeforeStaleYes,
+        router.activeGuardObserver.guardInProgress,
+      );
+      for (final request in requests) {
+        if (!request.isCompleted) request.complete();
+      }
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(whileAskedAgain, (1, false));
+      expect(router.activeGuardObserver.guardInProgress, isFalse);
+    });
+
     // Passes before the fix too: no change after the guard was asked.
     testWidgets('brings the page back when no change came after it', (
       tester,

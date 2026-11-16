@@ -2698,12 +2698,23 @@ abstract class StackRouter extends RoutingController {
   // Moves the entries of [resolver], whose guard let go of its page, from
   // [activeGuardObserver] to [_guardsLettingGo] until it answers.
   void _letGoOfGuard(NavigationResolver resolver) {
+    resolver._hasLetGo = true;
     final entries = activeGuardObserver.value
         .where((entry) => identical(entry._resolver, resolver))
         .toList();
     if (entries.isEmpty) return;
     entries.forEach(activeGuardObserver._remove);
+    _holdLettingGo(entries);
+  }
+
+  // Keeps [entries] in [_guardsLettingGo] until their guard answers.
+  void _holdLettingGo(List<GuardEntry> entries) {
+    for (final entry in entries) {
+      entry._resolver._hasLetGo = true;
+    }
     _guardsLettingGo.addAll(entries);
+    final resolver = entries.firstOrNull?._resolver;
+    if (resolver == null) return;
     unawaited(
       resolver.future.then(
         (_) => _guardsLettingGo.removeWhere(entries.contains),
@@ -5752,9 +5763,14 @@ abstract class StackRouter extends RoutingController {
     // and [timesLeft] times at most: a guard whose check changes that state
     // through code of the app, as one that refreshes a session the app
     // listens to, would be asked without end.
+    //
+    // With [wasLetGo], the guard is asked once more after a stale yes of an
+    // ask that had let go of its page: this ask counts as letting go too,
+    // see [_letGoOfGuard], since nothing on screen waits for it.
     FutureOr<ResolverResult?> ask(
       AutoRouteGuard guard, {
       int timesLeft = _kMaxAsksAgainInARow,
+      bool wasLetGo = false,
     }) {
       final resolver = NavigationResolver(
         this,
@@ -5764,7 +5780,11 @@ abstract class StackRouter extends RoutingController {
         isReevaluating: isReevaluating,
       );
       final guardEntry = GuardEntry(guard, resolver);
-      activeGuardObserver._add(guardEntry);
+      if (wasLetGo) {
+        _holdLettingGo([guardEntry]);
+      } else {
+        activeGuardObserver._add(guardEntry);
+      }
       final checking = resolver._checkGuard(
         guard,
         this,
@@ -5786,7 +5806,11 @@ abstract class StackRouter extends RoutingController {
                   timesLeft > 0 &&
                   !_isDisposed;
               return isAskedAgain
-                  ? ask(guard, timesLeft: timesLeft - 1)
+                  ? ask(
+                      guard,
+                      timesLeft: timesLeft - 1,
+                      wasLetGo: resolver._hasLetGo,
+                    )
                   : rejectionOf(result, guard);
             });
       }

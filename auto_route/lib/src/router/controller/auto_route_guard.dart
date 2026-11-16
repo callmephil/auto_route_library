@@ -541,6 +541,10 @@ class NavigationResolver {
   // from before the change, see [StackRouter._canNavigate].
   bool _isAnswerStale = false;
 
+  // Whether the guard let go of the page it was asked about, see
+  // [StackRouter._letGoOfGuard].
+  bool _hasLetGo = false;
+
   // Whether a reevaluation asked this navigation's guard again without
   // waiting for its answer, since its call had returned without one: no
   // later reevaluation waits for that ask either, see
