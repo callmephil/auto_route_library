@@ -111,7 +111,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     if (_entries.lastOrNull?.pageId == topId) return;
     final entry = _entryOf(top);
     _entries.add(entry);
-    _wasOpen.add(entry);
+    _markIfHeld(entry);
   }
 
   // Adds the entry of the page on top of [newState], unless it has one.
@@ -147,7 +147,11 @@ class NavigationHistoryImpl extends NavigationHistory {
     final under = pagesUnderTop(router);
     final wayBack = [...under, top];
     _sharing.removeWhere((pageId, _) => controllerOfPage(pageId) == null);
-    _linkPages.removeWhere((pageId) => controllerOfPage(pageId) == null);
+    // A link's page not in yet, as one whose guard waits, keeps its mark
+    // while its entry stays.
+    _linkPages.removeWhere(
+      (pageId) => controllerOfPage(pageId) == null && !_hasEntry(pageId),
+    );
     if (_isNavigatingBack) return;
     final isLink = router.root.isShowingLink;
     final topId = top.topMatch?.id;
@@ -179,7 +183,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       final at = _entries.lastIndexWhere((entry) => entry.pageId == overId);
       final entry = _entryOf(page);
       _entries.insert(at, entry);
-      _wasOpen.add(entry);
+      _markIfHeld(entry);
     }
     // The oldest entries go first, as when entries are added one by one.
     if (_entries.length > _maxEntries) {
@@ -209,7 +213,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       if (heir == null || heirId == null) continue;
       final heirEntry = _entryOf(heir);
       _entries[place] = heirEntry;
-      _wasOpen.add(heirEntry);
+      _markIfHeld(heirEntry);
       _sharing
         ..remove(heirId)
         ..updateAll(
@@ -240,7 +244,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     final last = _entries.lastOrNull;
     _entries.removeWhere((entry) {
       if (_isOpen(entry)) {
-        _wasOpen.add(entry);
+        _markIfHeld(entry);
         return false;
       }
       return _wasOpen.contains(entry);
@@ -256,19 +260,31 @@ class NavigationHistoryImpl extends NavigationHistory {
   // page before it holds. A router keeps a closed page's nested router among
   // its children until that page's widget is gone, so the way is followed
   // from the root. A page under one whose router isn't built yet, as the
-  // first page of a nested router built a frame after its page, is open.
-  bool _isOpen(_HistoryEntry entry) {
+  // first page of a nested router built a frame after its page, is open,
+  // unless [isHeldOnly]: then only a page a stack holds is.
+  bool _isOpen(_HistoryEntry entry, {bool isHeldOnly = false}) {
     RoutingController? controller = router;
     for (final match in entry.route.flattened) {
-      if (controller == null || !controller.hasEntries) return true;
+      if (controller == null || !controller.hasEntries) return !isHeldOnly;
       if (!controller.stackData.any((data) => data.route.id == match.id)) {
         return false;
       }
+      // The way ends at the entry's own page: the route of a page whose
+      // nested router was emptied still names the children it had.
+      if (match.id == entry.pageId) return true;
       controller = controller.childControllers.lastWhereOrNull(
         (child) => child.matchId == match.id,
       );
     }
     return true;
+  }
+
+  // Counts [entry] as once open when a stack holds its page. Not while the
+  // way to it crosses a router not built yet: that router may be built
+  // without the page, as when a guard there holds it out, and the entry
+  // would then look like that of a page that closed.
+  void _markIfHeld(_HistoryEntry entry) {
+    if (_isOpen(entry, isHeldOnly: true)) _wasOpen.add(entry);
   }
 
   @override
@@ -355,7 +371,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       if (_entries.lastOrNull?.url == urlState.url) return;
     }
     _entries.add(newEntry);
-    if (_isOpen(newEntry)) _wasOpen.add(newEntry);
+    _markIfHeld(newEntry);
   }
 
   @override

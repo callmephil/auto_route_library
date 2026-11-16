@@ -33,6 +33,8 @@ import 'back_same_url_test.dart' as back_same_url;
 import 'back_skips_removed_page_test.dart' as back_skips_removed_page;
 import 'back_twice_in_one_turn_test.dart' as back_twice_in_one_turn;
 import 'back_twice_test.dart' as back_twice;
+import 'back_while_nested_guard_waits_test.dart'
+    as back_while_nested_guard_waits;
 import 'batch_rejected_keeps_caller_test.dart' as batch_rejected_keeps_caller;
 import 'batch_rejected_keeps_stack_test.dart' as batch_rejected_keeps_stack;
 import 'batch_slow_guard_test.dart' as batch_slow_guard;
@@ -460,6 +462,7 @@ void main() {
   back_skips_removed_page.main();
   back_twice_in_one_turn.main();
   back_twice.main();
+  back_while_nested_guard_waits.main();
   batch_rejected_keeps_caller.main();
   batch_rejected_keeps_stack.main();
   batch_slow_guard.main();
