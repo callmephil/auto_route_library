@@ -531,6 +531,12 @@ class NavigationResolver {
   // from before the change, see [StackRouter._canNavigate].
   bool _isAnswerStale = false;
 
+  // Whether a reevaluation asked this navigation's guard again without
+  // waiting for its answer, since its call had returned without one: no
+  // later reevaluation waits for that ask either, see
+  // [StackRouter._composeMatchesForReevaluate].
+  bool _isAskedAgainApart = false;
+
   // Whether the guard has put a page of its own on a stack since it was
   // asked, as one that awaits its own push of a login page does, or a
   // pageless route, as one that asks the user in a dialog does. From then on

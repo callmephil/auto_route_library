@@ -3050,7 +3050,27 @@ abstract class StackRouter extends RoutingController {
       }
       resolver._isReevaluating = true;
 
-      final result = await resolver.checkGuard(entry.guard, this);
+      final ResolverResult result;
+      if (resolver._isWaitingOnUser && !resolver._isRedirecting) {
+        // The guard waits on the user in a page or a dialog it showed, and
+        // answers from what happens there: called again, it would show them
+        // twice. The round waits for that answer, as the README says.
+        result = await resolver.future;
+      } else if ((resolver._waitingCompleter == null ||
+              resolver._isAskedAgainApart) &&
+          !resolver._isRedirecting &&
+          resolver.route is! ReevaluatableRouteMatch) {
+        // A navigation's guard whose call returned without an answer, and
+        // which shows nothing, waits for something outside its call, as one
+        // that answers from a callback does: it is asked again, but no round
+        // waits for it, or it would ask no page until then. Nor for that
+        // ask, which another round may have started in this turn.
+        resolver._isAskedAgainApart = true;
+        unawaited(resolver.checkGuard(entry.guard, this));
+        continue;
+      } else {
+        result = await resolver.checkGuard(entry.guard, this);
+      }
       if (result.continueNavigation) {
         alreadyEvaluated
             .putIfAbsent(result.route.id, () => [])
