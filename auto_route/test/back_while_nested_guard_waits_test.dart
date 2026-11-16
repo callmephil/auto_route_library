@@ -33,7 +33,8 @@ import 'utils/held_guard.dart';
 //
 // Steps: on H, A, the platform hands the app a link into the shell or a
 // tab's router whose page's guard waits; meanwhile the root may notify, or
-// back() runs; then the guard answers. Or the app pushes the shell with its
+// back() runs; then the guard answers. A refused link changes nothing, and
+// back() or reject(goBack: true) leaves the link for the page before it. Or the app pushes the shell with its
 // pages, and back() runs while the guard waits.
 
 final _guard = HeldGuard();
@@ -142,9 +143,17 @@ void main() {
     'a root notification': (root) => root.notifyListeners(),
   };
 
-  for (final (host, link, opened) in [
-    ('shell', '/shell/gx', '/shell'),
-    ("tab's router", '/tabs/one/gx', '/tabs/one'),
+  // Each host's link; the pages left when the link is refused or left while
+  // its guard waits, and the walk after a no. Since 8336ee1a ("a navigation
+  // that closes pages on its way into a page whose nested guard says no
+  // leaves them open"), the link into the shell holds A open under the
+  // shell until the guard answers, and a refused link changes nothing, so
+  // the user is on A again; these cases expected H when the link closed A
+  // at once. The link into the tab's router still closes A at once and
+  // leaves Tabs on its first tab after a no.
+  for (final (host, link, refusedLeaves, walkAfterNo) in [
+    ('shell', '/shell/gx', ['H', 'A'], ['/a', '/']),
+    ("tab's router", '/tabs/one/gx', ['H'], ['/tabs/one', '/']),
   ]) {
     group('A link to $link on H, A whose guard waits in the $host,', () {
       for (final MapEntry(key: meanwhile, value: wait) in waits.entries) {
@@ -156,19 +165,18 @@ void main() {
           expect(await _walkBack(tester, root), [link, '/']);
         });
 
-        testWidgets('$meanwhile, then reject(goBack: true): back to H', (
-          tester,
-        ) async {
+        testWidgets('$meanwhile, then reject(goBack: true): back to the '
+            'page before the link', (tester) async {
           final root = await _openAtLink(tester, link);
           wait?.call(root);
           await _guard.last.reject(goBack: true);
           await tester.pumpAndSettle();
-          expect(root.stack.map((page) => page.name), ['H']);
-          expect(root.navigationHistory.length, 1);
+          expect(root.stack.map((page) => page.name), refusedLeaves);
+          expect(root.navigationHistory.length, refusedLeaves.length);
         });
 
-        testWidgets('$meanwhile, then back() while it waits goes to H, and '
-            'a no then changes nothing', (tester) async {
+        testWidgets('$meanwhile, then back() while it waits leaves the '
+            'link, and a no then changes nothing', (tester) async {
           final root = await _openAtLink(tester, link);
           wait?.call(root);
           root.back();
@@ -176,9 +184,9 @@ void main() {
           final whileWaiting = root.stack.map((page) => page.name).join(' ');
           await _guard.last.reject();
           await tester.pumpAndSettle();
-          expect(whileWaiting, 'H');
-          expect(root.stack.map((page) => page.name), ['H']);
-          expect(root.navigationHistory.length, 1);
+          expect(whileWaiting, refusedLeaves.join(' '));
+          expect(root.stack.map((page) => page.name), refusedLeaves);
+          expect(root.navigationHistory.length, refusedLeaves.length);
         });
       }
 
@@ -188,7 +196,7 @@ void main() {
         final root = await _openAtLink(tester, link);
         await _guard.last.reject();
         await tester.pumpAndSettle();
-        expect(await _walkBack(tester, root), [opened, '/']);
+        expect(await _walkBack(tester, root), walkAfterNo);
       });
     });
   }
