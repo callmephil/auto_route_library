@@ -25,8 +25,7 @@ void main() {
     // and Notes only.
     // Should: Notes shows at once, with its url; Account comes back on top
     // once its guard says yes, and back from it shows Notes.
-    testWidgets('The page leaves the screen while its guard decides, and '
-        'comes back on its yes', (tester) async {
+    testWidgets('The page leaves while its guard decides', (tester) async {
       final isSignedIn = ValueNotifier(true);
       addTearDown(isSignedIn.dispose);
       final asking = <NavigationResolver>[];

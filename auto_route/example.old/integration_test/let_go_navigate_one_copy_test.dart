@@ -25,8 +25,9 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   group('let-go navigate one copy', () {
-    // Steps: on Account, the user signs out. The app navigates to Account,
-    // whose guard waits too. The user signs in, then goes back.
+    // Steps: the user signs out on Account. Then the app navigates to
+    // Account, and its guard waits too. After that the user signs in and goes
+    // back.
     // Was: two Account pages, and back showed Account again.
     // Should: one Account, and back shows Home.
     testWidgets('One copy of the page, and back shows the page under it', (

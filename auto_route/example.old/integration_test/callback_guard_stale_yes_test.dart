@@ -27,9 +27,7 @@ void main() {
     // later from a callback. The user signs out, then the callback says yes.
     // Was: Pushed opened for the signed-out user.
     // Should: Pushed stays closed, and Home shows.
-    testWidgets('A yes from before the sign-out opens nothing', (
-      tester,
-    ) async {
+    testWidgets('A yes from before the sign-out opens nothing', (tester) async {
       final session = ValueNotifier(true);
       addTearDown(session.dispose);
       final asks = <NavigationResolver>[];

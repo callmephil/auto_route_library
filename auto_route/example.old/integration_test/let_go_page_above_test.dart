@@ -30,9 +30,7 @@ void main() {
     // premium; signs in again, still not premium; then is premium again.
     // Was: Settings never came back.
     // Should: Settings shows again over Account.
-    testWidgets("The page above comes back on its own guard's yes", (
-      tester,
-    ) async {
+    testWidgets('The page above returns on its own yes', (tester) async {
       final isSignedIn = ValueNotifier(true);
       addTearDown(isSignedIn.dispose);
       final isPremium = ValueNotifier(true);

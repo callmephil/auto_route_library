@@ -5120,15 +5120,13 @@ abstract class StackRouter extends RoutingController {
             if (isWaitingOnUser) return false;
             // A later guard of the same page returned without an answer too.
             if (letGo.isCompleted) return true;
-            // A let-go never takes a router's last page: it
-            // stays on the stack and on screen until the guard
-            // answers. That is this package's own rule;
-            // Flutter's Navigator reports an error for an empty
-            // page list in debug builds, and
-            // UINavigationController's popToRootViewController
-            // keeps the root view controller while it pops the
-            // ones above it. So the pages above it leave all the
-            // same, and the reevaluation goes on.
+            // A let-go never takes a router's last page. It stays on the
+            // stack and on screen until the guard answers. This is the
+            // package's own rule. Flutter's Navigator reports an error for
+            // an empty page list in debug builds. UINavigationController's
+            // popToRootViewController keeps the root view controller while
+            // it pops the ones above it. So the pages above it leave all
+            // the same, and the reevaluation goes on.
             final from = leavesPageUnder(i) ? i : i + 1;
             final leaving = takeOffPagesFrom(from);
             if (leaving.isNotEmpty) {

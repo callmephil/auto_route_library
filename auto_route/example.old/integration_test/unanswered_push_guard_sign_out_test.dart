@@ -31,9 +31,7 @@ void main() {
     // out before it answers.
     // Was: Account stayed on screen for the signed-out user.
     // Should: Account closes and Home shows.
-    testWidgets('A sign-out closes the page while a push waits', (
-      tester,
-    ) async {
+    testWidgets('A sign-out closes a page while a push waits', (tester) async {
       final session = ValueNotifier(true);
       addTearDown(session.dispose);
       // Settings' guard answers later, from what the test does.

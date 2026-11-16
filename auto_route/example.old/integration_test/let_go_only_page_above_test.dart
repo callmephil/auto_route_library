@@ -27,9 +27,7 @@ void main() {
     // user away. The user signs out, then signs in again.
     // Was: Orders stayed on screen for the signed-out user.
     // Should: Overview shows at once, and Orders comes back on the sign-in.
-    testWidgets('The page above leaves, and comes back on the yes', (
-      tester,
-    ) async {
+    testWidgets('The page above leaves and returns on the yes', (tester) async {
       final session = ValueNotifier(true);
       addTearDown(session.dispose);
       final router = RootStackRouter.build(

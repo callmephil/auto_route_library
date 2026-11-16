@@ -30,9 +30,7 @@ void main() {
     // back from the sign-in page.
     // Was: Account showed again, at /account.
     // Should: Home shows, at /.
-    testWidgets('Closing the sign-in page leaves the page off', (
-      tester,
-    ) async {
+    testWidgets('Closing the sign-in page leaves the page off', (tester) async {
       final session = ValueNotifier(true);
       addTearDown(session.dispose);
       final later = Completer<void>();
