@@ -16,9 +16,11 @@ import '../router_test_utils.dart';
 // returns, answering later. The session is the reevaluateListenable.
 class _Session extends ChangeNotifier {
   bool isSignedIn = true;
+  bool isPremium = true;
 
-  void set({required bool signedIn}) {
-    isSignedIn = signedIn;
+  void set({bool? signedIn, bool? premium}) {
+    isSignedIn = signedIn ?? isSignedIn;
+    isPremium = premium ?? isPremium;
     notifyListeners();
   }
 }
@@ -47,6 +49,10 @@ void main() {
   final accountGuard = AutoRouteGuard.simple(
     (resolver, router) => accountBehavior(resolver, router),
   );
+  // Lets a premium user through; otherwise returns, answering later.
+  final premiumGuard = AutoRouteGuard.simple((resolver, _) {
+    if (session.isPremium) resolver.next();
+  });
 
   NamedRouteDef page(String name, String path, {AutoRouteGuard? guard}) => .new(
     name: name,
@@ -55,7 +61,12 @@ void main() {
     builder: (_, _) => Scaffold(body: Text(name)),
   );
 
-  const pageNames = ['HomeRoute', 'AccountRoute', 'SignInRoute'];
+  const pageNames = [
+    'HomeRoute',
+    'AccountRoute',
+    'SettingsRoute',
+    'SignInRoute',
+  ];
 
   // The root's pages, the pages a tap reaches, the url, and what the code
   // that opened Account heard.
@@ -77,6 +88,7 @@ void main() {
       routes: [
         page('HomeRoute', '/'),
         page('AccountRoute', '/account', guard: accountGuard),
+        page('SettingsRoute', '/settings', guard: premiumGuard),
         page('SignInRoute', '/sign-in'),
       ],
     );
@@ -242,6 +254,51 @@ void main() {
         state(router, answers),
         'HomeRoute AccountRoute | shown: AccountRoute | /account | caller: []',
       );
+    });
+  });
+
+  // Finding 5. Steps: on Home, Account, Settings, Settings' guard lets a
+  // premium user through and otherwise returns. The user signs out, no
+  // longer premium: Account lets go, and Settings leaves with it. The user
+  // signs in again, still not premium: Account comes back and Settings'
+  // guard, asked then, returns. Then the user is premium again.
+  // Was: at the sign-in Settings' caller heard null while its guard still
+  // decided, and its later yes left Settings off. The wait for Account's
+  // guard, once over, released every page that had left with Account,
+  // Settings too, though a wait of Settings' own guard had started.
+  // Should: Settings' caller waits, and Settings comes back on its yes.
+  group('A page above the let-go page', () {
+    testWidgets('whose guard lets go after the yes comes back on its own yes', (
+      tester,
+    ) async {
+      final (router, answers) = await onAccount(tester);
+      final settingsAnswers = <String?>[];
+      unawaited(
+        router
+            .push<String>(const NamedRoute('SettingsRoute'))
+            .then(settingsAnswers.add),
+      );
+      await tester.pumpAndSettle();
+      session.set(signedIn: false, premium: false);
+      await tester.pumpAndSettle();
+
+      session.set(signedIn: true);
+      await tester.pumpAndSettle();
+      final afterSignIn = (state(router, answers), settingsAnswers.length);
+      session.set(premium: true);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(afterSignIn, (
+        'HomeRoute AccountRoute | shown: AccountRoute | /account | caller: []',
+        0,
+      ));
+      expect(
+        state(router, answers),
+        'HomeRoute AccountRoute SettingsRoute | shown: SettingsRoute | '
+        '/settings | caller: []',
+      );
+      expect(settingsAnswers, isEmpty);
     });
   });
 }

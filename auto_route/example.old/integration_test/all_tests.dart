@@ -128,6 +128,7 @@ import 'leading_button_nested_page_removed_test.dart'
 import 'leading_button_nested_pageless_route_test.dart'
     as leading_button_nested_pageless_route;
 import 'leading_button_pop_test.dart' as leading_button_pop;
+import 'let_go_page_above_test.dart' as let_go_page_above;
 import 'let_go_redirect_cancel_test.dart' as let_go_redirect_cancel;
 import 'let_go_stale_yes_test.dart' as let_go_stale_yes;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
@@ -543,6 +544,7 @@ void main() {
   leading_button_nested_page_removed.main();
   leading_button_nested_pageless_route.main();
   leading_button_pop.main();
+  let_go_page_above.main();
   let_go_redirect_cancel.main();
   let_go_stale_yes.main();
   link_during_initial_guard.main();

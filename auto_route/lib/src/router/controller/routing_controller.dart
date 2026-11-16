@@ -2598,7 +2598,7 @@ abstract class StackRouter extends RoutingController {
       ..._takenOffByOpenBatches,
       ..._takenOffForNewPage,
       ..._setAsideByReplaceAll,
-      ..._waitingForLetGoGuards,
+      ..._waitingForLetGoGuards.keys,
     });
   }
 
@@ -2676,8 +2676,11 @@ abstract class StackRouter extends RoutingController {
 
   // The pages of [_heldBackByReevaluation] whose guard let go of them: they
   // wait off the stack and the screen for its answer after the reevaluation
-  // that asked it has ended, see [_awaitLetGoAnswer].
-  final _waitingForLetGoGuards = <AutoRoutePage<Object?>>{};
+  // that asked it has ended, see [_awaitLetGoAnswer]. Each is held by the
+  // latest of those waits that took it on, the token here: a page above the
+  // let-go page whose own guard lets go once asked after the first guard's
+  // yes waits for its own guard.
+  final _waitingForLetGoGuards = <AutoRoutePage<Object?>, Object>{};
 
   // The guards asked again that returned without an answer and let go of
   // their page or tab, until they answer. Nothing on screen waits for them,
@@ -2855,7 +2858,7 @@ abstract class StackRouter extends RoutingController {
             !shownWaits.contains(page.routeData._popCompleter) &&
             !_takenOffByOpenBatches.contains(page) &&
             !_setAsideByReplaceAll.contains(page) &&
-            !_waitingForLetGoGuards.contains(page),
+            !_waitingForLetGoGuards.containsKey(page),
       ),
     );
   }
@@ -4862,7 +4865,6 @@ abstract class StackRouter extends RoutingController {
     // returns without an answer: from then on the reevaluation goes on
     // without that page and the pages above it, see [_awaitLetGoAnswer].
     final letGo = Completer<ResolverResult?>();
-    var letGoPages = const <AutoRoutePage<Object?>>[];
 
     // A batch over pages already on screen, such as pushAll or a link with
     // the pages below its own, goes in as one step: the stack stays as it is
@@ -4991,10 +4993,9 @@ abstract class StackRouter extends RoutingController {
             if (isWaitingOnUser) return false;
             // A later guard of the same page returned without an answer too.
             if (letGo.isCompleted) return true;
-            letGoPages = takeOffPagesFrom(i);
             // As a guard that closes its page: the page below takes its
             // history entry, and the pages heard they were removed.
-            _markLeaving(letGoPages, .removed);
+            _markLeaving(takeOffPagesFrom(i), .removed);
             markUrlStateForReplace();
             letGo.complete(null);
             return true;
@@ -5019,12 +5020,7 @@ abstract class StackRouter extends RoutingController {
             : waited;
         if (result == null) {
           unawaited(
-            _awaitLetGoAnswer(
-              answer,
-              letGoPages,
-              routes.sublist(i),
-              onFailure: onFailure,
-            ),
+            _awaitLetGoAnswer(answer, routes.sublist(i), onFailure: onFailure),
           );
           break;
         }
@@ -5142,7 +5138,7 @@ abstract class StackRouter extends RoutingController {
         // Not the pages whose guard let go of them: they wait for its answer.
         _heldBackByReevaluation.retainWhere(
           (data) =>
-              _waitingForLetGoGuards.any((page) => page.routeData == data),
+              _waitingForLetGoGuards.keys.any((page) => page.routeData == data),
         );
       }
     }
@@ -5206,9 +5202,9 @@ abstract class StackRouter extends RoutingController {
   }
 
   // Waits for [answer], the answer of the guards of the first of [routes],
-  // one of which let go of its page: [pages] are the pages a reevaluation
-  // took off the stack and the screen with it, which went on without them,
-  // see [_pushAllGuarded]. A yes puts the page back through
+  // one of which let go of its page: the pages of [routes] the reevaluation
+  // holds off the stack and the screen, taken off with it now or held for a
+  // guard asked before, went on without them, see [_pushAllGuarded]. A yes puts the page back through
   // [_pushAllGuarded], as a reevaluation puts on a page whose guards let it
   // through, there on top of the stack as it then is, and the guards of the
   // routes after it, of the pages that were above it, are asked there. A no
@@ -5218,11 +5214,21 @@ abstract class StackRouter extends RoutingController {
   // hear null; the others go on waiting.
   Future<void> _awaitLetGoAnswer(
     FutureOr<ResolverResult> answer,
-    List<AutoRoutePage<Object?>> pages,
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
   }) async {
-    _waitingForLetGoGuards.addAll(pages);
+    final pages = [
+      for (final route in routes)
+        if (route is ReevaluatableRouteMatch<Object?, Object?> &&
+            _heldBackByReevaluation.contains(route.currentPage.routeData) &&
+            !_pages.contains(route.currentPage))
+          route.currentPage,
+    ];
+    // This wait's token: it holds [pages] until a later wait takes them on.
+    final wait = Object();
+    for (final page in pages) {
+      _waitingForLetGoGuards[page] = wait;
+    }
     try {
       final result = await answer;
       final match = result.route;
@@ -5244,14 +5250,18 @@ abstract class StackRouter extends RoutingController {
         isReevaluating: true,
       );
     } finally {
-      _waitingForLetGoGuards.removeAll(pages);
+      final held = [
+        for (final page in pages)
+          if (identical(_waitingForLetGoGuards[page], wait)) page,
+      ];
+      _waitingForLetGoGuards.removeWhere((_, by) => identical(by, wait));
       _heldBackByReevaluation.removeWhere(
-        (data) => pages.any((page) => page.routeData == data),
+        (data) => held.any((page) => page.routeData == data),
       );
       if (!_isDisposed) {
         final back = {for (final page in _pages) page.routeData};
         _completeFuturesOf(
-          pages.where((page) => !back.contains(page.routeData)),
+          held.where((page) => !back.contains(page.routeData)),
         );
         notifyAll();
       }
