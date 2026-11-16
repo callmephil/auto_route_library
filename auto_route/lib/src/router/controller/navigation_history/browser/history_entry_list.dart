@@ -166,27 +166,25 @@ class HistoryEntryList {
         _sharing[pageId] = overId;
         continue;
       }
-      // After the entry of the nearest page under it that has one, else
-      // before the entry of the page over it.
-      final belowId = wayBack
-          .take(place)
-          .toList()
-          .reversed
-          .firstWhereOrNull(hasEntry)
-          ?.topMatch
-          ?.id;
-      final at = belowId == null
-          ? _entries.indexWhere((entry) => entry.topMatch?.id == overId)
-          : _entries.lastIndexWhere((entry) => entry.topMatch?.id == belowId) +
-                1;
+      // Right before the latest entries of the page over it: it went in
+      // with that page, so after any change of tabs made before, which a
+      // place after the entry of the page under it would put it before.
+      // The page over it may hold several entries in a row, as states
+      // pushed with pushPathState; they stay together.
+      var at = _entries.lastIndexWhere((entry) => entry.topMatch?.id == overId);
+      while (at > 0 &&
+          _entries.elementAtOrNull(at - 1)?.topMatch?.id == overId) {
+        at--;
+      }
       _entries.insert(at, _withoutReplaceMark(page));
     }
   }
 
   // Hands the entry of each page that has left, with another entry over it,
   // to the nearest page of [wayBack], the open pages first page first, that
-  // shared it and is not kept out of the address bar: that page takes the entry's place with its own url, and the
-  // others that shared it share it with that page. Without it they would
+  // shared it and is not kept out of the address bar: that page takes the
+  // entry's place with its own url, and the others that shared it share it
+  // with that page. Without it they would
   // have no entry once it is dropped, and the back button would skip them.
   // Returns whether one was handed over.
   //
