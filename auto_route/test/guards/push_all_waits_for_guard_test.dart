@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
 import '../router_test_utils.dart';
+import '../utils/held_guard.dart';
 
 // Found while moving the package to very_good_analysis; no upstream issue.
 // Steps: start on HomeRoute, then `await
@@ -16,8 +17,7 @@ import '../router_test_utils.dart';
 // Should: it completes once the guard has decided, with the routes on the
 // stack when it let them through and the stack as it was when it did not.
 void main() {
-  // Made in each test, so it completes on the test's fake clock.
-  late Completer<bool> decision;
+  late HeldGuard guard;
 
   Widget page(String name) => Scaffold(body: Center(child: Text(name)));
 
@@ -36,15 +36,7 @@ void main() {
       NamedRouteDef(
         name: 'CheckoutRoute',
         path: '/checkout',
-        guards: [
-          AutoRouteGuardCallback((resolver, _) async {
-            if (await decision.future) {
-              resolver.next();
-            } else {
-              resolver.reject();
-            }
-          }),
-        ],
+        guards: [guard],
         builder: (_, _) => page('CheckoutRoute'),
       ),
     ],
@@ -56,7 +48,7 @@ void main() {
   testWidgets('pushAll completes once an async guard lets the routes through', (
     tester,
   ) async {
-    decision = Completer<bool>();
+    guard = HeldGuard();
     final router = buildRouter();
     await pumpRouterConfigApp(tester, router.config());
     var isCompleted = false;
@@ -68,7 +60,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(isCompleted, isFalse);
 
-    decision.complete(true);
+    await guard.last.allow();
     await tester.pumpAndSettle();
     expect(isCompleted, isTrue);
     expect(namesOf(router), ['HomeRoute', 'ListRoute', 'CheckoutRoute']);
@@ -77,7 +69,7 @@ void main() {
   testWidgets('pushAll completes once an async guard rejects the routes', (
     tester,
   ) async {
-    decision = Completer<bool>();
+    guard = HeldGuard();
     final router = buildRouter();
     await pumpRouterConfigApp(tester, router.config());
     var isCompleted = false;
@@ -89,7 +81,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(isCompleted, isFalse);
 
-    decision.complete(false);
+    await guard.last.reject();
     await tester.pumpAndSettle();
     expect(isCompleted, isTrue);
     expect(namesOf(router), ['HomeRoute']);
@@ -99,7 +91,7 @@ void main() {
   testWidgets('popAndPushAll completes once an async guard has decided', (
     tester,
   ) async {
-    decision = Completer<bool>();
+    guard = HeldGuard();
     final router = buildRouter();
     await pumpRouterConfigApp(tester, router.config());
     unawaited(router.push(const NamedRoute('ListRoute')));
@@ -113,7 +105,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(isCompleted, isFalse);
 
-    decision.complete(true);
+    await guard.last.allow();
     await tester.pumpAndSettle();
     expect(isCompleted, isTrue);
     expect(namesOf(router), ['HomeRoute', 'CheckoutRoute']);

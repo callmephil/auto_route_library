@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'named_page.dart';
 import 'router_test_utils.dart';
+import 'utils/held_guard.dart';
 
 // router.back() called twice in one handler stepped back once. On Home, A,
 // B the two calls ended on Home, A, while the same calls a frame apart end
@@ -26,9 +27,6 @@ void main() {
   const a = NamedRoute('ARoute');
   const b = NamedRoute('BRoute');
   const c = NamedRoute('CRoute');
-
-  final isOpen = ValueNotifier(true);
-  final asked = <Completer<void>>[];
 
   List<String> stackNames(StackRouter router) =>
       router.stack.map((page) => page.routeData.name).toList();
@@ -84,11 +82,6 @@ void main() {
       router.back();
     }
   }
-
-  setUp(() {
-    isOpen.value = true;
-    asked.clear();
-  });
 
   testWidgets('On Home, A, B, two calls of back in one turn end on Home', (
     tester,
@@ -201,28 +194,22 @@ void main() {
   // does nothing, in one turn as a frame apart.
   testWidgets('While the guard of the page gone back to decides, a second '
       'back does nothing', (tester) async {
-    final router = await openWithClosedPageBehind(
-      tester,
-      AutoRouteGuard.simple((resolver, _) async {
-        if (isOpen.value) return resolver.next();
-        final answer = Completer<void>();
-        asked.add(answer);
-        await answer.future;
-        resolver.next();
-      }),
-    );
-    isOpen.value = false;
+    final guard = HeldGuard(mode: .answersYes);
+    final router = await openWithClosedPageBehind(tester, guard);
+    guard
+      ..clear()
+      ..holdCall();
 
     back(router, times: 2);
     await tester.pumpAndSettle();
     final whileAsked = stackNames(router);
-    for (final answer in asked) {
-      answer.complete();
+    for (final ask in guard.waiting) {
+      unawaited(ask.allow());
     }
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(asked, hasLength(1));
+    expect(guard.askCount, 1);
     expect(whileAsked, ['HomeRoute']);
     expect(stackNames(router), ['HomeRoute', 'ARoute']);
     expect(router.navigationHistory.length, 2);

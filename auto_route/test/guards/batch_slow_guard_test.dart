@@ -4,6 +4,8 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
+import '../utils/held_guard.dart';
+
 // A batch showed its first pages while a later guard was still deciding, and
 // they left again when that guard rejected the batch. Found by the audit of
 // auto_route/lib at dev 56b73492 (finding C12).
@@ -22,7 +24,7 @@ import 'package:material_ui/material_ui.dart';
 // rejected one (see batch_rejected_keeps_stack_test.dart).
 void main() {
   late RootStackRouter router;
-  late Completer<bool> decision;
+  late HeldGuard guard;
 
   Widget page(String name) => Scaffold(body: Center(child: Text(name)));
 
@@ -41,28 +43,16 @@ void main() {
       router.stack.map((page) => page.routeData.name).toList();
 
   // Shows the router under a widget that can rebuild the whole app. Returns
-  // the function that rebuilds it. The completer the guard waits on is made
-  // here, inside the test, under its fake clock.
+  // the function that rebuilds it. The guard is made
+  // here, inside the test.
   Future<VoidCallback> pumpRebuildableApp(WidgetTester tester) async {
-    decision = Completer<bool>();
+    guard = HeldGuard();
     router = RootStackRouter.build(
       routes: [
         plainRoute('HomeRoute', '/'),
         plainRoute('OtherRoute', '/other'),
         plainRoute('ListRoute', '/list'),
-        plainRoute(
-          'CheckoutRoute',
-          '/list/checkout',
-          guards: [
-            AutoRouteGuard.simple((resolver, _) async {
-              if (await decision.future) {
-                resolver.next();
-              } else {
-                resolver.reject();
-              }
-            }),
-          ],
-        ),
+        plainRoute('CheckoutRoute', '/list/checkout', guards: [guard]),
       ],
     );
     final config = router.config();
@@ -113,7 +103,7 @@ void main() {
     expect(router.current.name, 'HomeRoute');
     expect(find.text('ListRoute'), findsNothing);
 
-    decision.complete(false);
+    await guard.last.reject();
     await tester.pumpAndSettle();
 
     expect(router.activeGuardObserver.guardInProgress, isFalse);
@@ -134,7 +124,7 @@ void main() {
 
     expect(stackNames(), ['HomeRoute']);
 
-    decision.complete(true);
+    await guard.last.allow();
     await tester.pumpAndSettle();
 
     expect(stackNames(), ['HomeRoute', 'ListRoute', 'CheckoutRoute']);
@@ -157,7 +147,7 @@ void main() {
     expect(stackNames(), ['HomeRoute', 'OtherRoute']);
     expect(find.text('OtherRoute'), findsOneWidget);
 
-    decision.complete(true);
+    await guard.last.allow();
     await tester.pumpAndSettle();
 
     expect(stackNames(), ['HomeRoute', 'ListRoute', 'CheckoutRoute']);
