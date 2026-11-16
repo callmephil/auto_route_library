@@ -20,9 +20,10 @@ import '../router_test_utils.dart';
 // page, or /slow, whose guard awaits a request. While it waits, a second link
 // comes that a guard rejects. The user signs in, or the request answers.
 // Native behavior this holds to: a navigation that is refused changes
-// nothing. On Android an activity that ignores a link in onNewIntent keeps
-// what it was doing; on iOS an app that returns false from
-// application(_:open:options:) keeps what it presents and awaits; on the web
+// nothing. On Android an open dialog stays open when onNewIntent does nothing
+// with the link (seen in a native run on an API 37 emulator, 2026-11-16); on iOS an alert or a sheet stays presented when a
+// link arrives (seen in a native run on an iOS 27.2 simulator, 2026-11-16); an app that returns false from
+// application(_:open:options:) keeps what it presents; on the web
 // a canceled navigation leaves the current document and what it has pending.
 void main() {
   late RootStackRouter router;

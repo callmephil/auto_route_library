@@ -21,8 +21,8 @@ import '../router_test_utils.dart';
 // which the app lets in.
 // Native behavior this holds to: a navigation that is refused changes
 // nothing. On the web a canceled navigation leaves the document, the url and
-// an open <dialog> as they were; on Android an activity that ignores the
-// link in onNewIntent keeps its dialogs and its selected tab; on iOS an app
+// an open <dialog> as they were; on Android an open dialog stays open when
+// onNewIntent does nothing with the link (seen in a native run on an API 37 emulator, 2026-11-16); on iOS an app
 // that cannot open a link returns false from application(_:open:options:),
 // and what it then keeps on screen is this package's own rule.
 void main() {

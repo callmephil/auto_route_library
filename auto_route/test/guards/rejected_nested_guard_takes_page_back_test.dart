@@ -28,8 +28,8 @@ import '../router_test_utils.dart';
 // destination first and, when the check fails (a declined login), pops back
 // to the start destination. On the web a canceled navigation
 // leaves the document and the url on screen, by the HTML standard's
-// navigate event. UIKit dismisses nothing because a link arrived: the
-// presenting controller dismisses what it presented.
+// navigate event. UIKit dismisses nothing because a link arrived: an alert
+// or a sheet stays presented (seen in a native run on an iOS 27.2 simulator, 2026-11-16).
 Completer<bool>? _slow;
 
 final _guard = AutoRouteGuard.simple((resolver, _) async {
