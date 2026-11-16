@@ -5210,7 +5210,7 @@ abstract class StackRouter extends RoutingController {
   // routes after it, of the pages that were above it, are asked there. A no
   // leaves them off, also those a redirect of the guard put back meanwhile,
   // see [_takeOffAfterLetGo], and so does a yes for a page the app took off
-  // meanwhile, as replaceAll does. The callers of the pages that stay off
+  // meanwhile, as replaceAll does, or opened again, as navigate to it does. The callers of the pages that stay off
   // hear null; the others go on waiting.
   Future<void> _awaitLetGoAnswer(
     FutureOr<ResolverResult> answer,
@@ -5238,6 +5238,20 @@ abstract class StackRouter extends RoutingController {
         return;
       }
       if (match is! ReevaluatableRouteMatch<Object?, Object?>) return;
+      // The app opened the page's route again meanwhile, as navigate to it
+      // does, or is opening it while that navigation's guards decide: that
+      // page takes its place, as a page the app takes off while its guard
+      // decides stays off, and the stack holds one page of it.
+      final heldKey = match.currentPage.routeKey;
+      final isOpenedAgain =
+          _pages.any((page) => page.routeKey == heldKey) ||
+          activeGuardObserver.value.any(
+            (entry) =>
+                !entry._resolver.isResolved &&
+                entry._resolver.route is! ReevaluatableRouteMatch &&
+                entry._resolver.route.key == heldKey,
+          );
+      if (isOpenedAgain) return;
       // Its guards have answered: none is asked again for it.
       final answered = match.copyWith(
         evaluatedGuards: [...root.guards, ...match.guards],

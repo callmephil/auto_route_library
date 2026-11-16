@@ -301,4 +301,81 @@ void main() {
       expect(settingsAnswers, isEmpty);
     });
   });
+
+  // Finding 3. Steps: the user signs out on Account, so its guard lets go.
+  // The app calls navigate(AccountRoute()), whose guard, signed out, waits
+  // too. Then the user signs in, or both asks are answered yes in turn.
+  // Was: two Account pages on the stack. The let-go wait put its page back
+  // on its yes without looking for a page of its route that the app had put
+  // on meanwhile.
+  // Should: one Account, the one the app's navigation put on: a page the
+  // app opens again while its guard decides takes the let-go page's place,
+  // as a page the app takes off meanwhile stays off; the let-go page's
+  // caller hears null.
+  // Native behavior this holds to: navigate opens a route once, as
+  // Flutter's Navigator refuses two pages with one key.
+  group('A navigation to the let-go page meanwhile', () {
+    Future<(RootStackRouter, List<String?>)> navigatedTo(
+      WidgetTester tester,
+    ) async {
+      final (router, answers) = await onAccount(tester);
+      session.set(signedIn: false);
+      await tester.pumpAndSettle();
+      unawaited(router.navigate(const NamedRoute('AccountRoute')));
+      await tester.pumpAndSettle();
+      return (router, answers);
+    }
+
+    testWidgets('leaves one copy once the user signs in', (tester) async {
+      final (router, answers) = await navigatedTo(tester);
+
+      session.set(signedIn: true);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        state(router, answers),
+        'HomeRoute AccountRoute | shown: AccountRoute | /account | '
+        'caller: [null]',
+      );
+    });
+
+    testWidgets("leaves one copy when the navigation's ask, then the let-go "
+        'ask, say yes', (tester) async {
+      final (router, answers) = await navigatedTo(tester);
+      final letGoAsk = accountAsks.elementAtOrNull(1);
+
+      session.isSignedIn = true;
+      accountAsks.lastOrNull?.next();
+      await tester.pumpAndSettle();
+      letGoAsk?.next();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        state(router, answers),
+        'HomeRoute AccountRoute | shown: AccountRoute | /account | '
+        'caller: [null]',
+      );
+    });
+
+    testWidgets("leaves one copy when the let-go ask, then the navigation's "
+        'ask, say yes', (tester) async {
+      final (router, answers) = await navigatedTo(tester);
+      final letGoAsk = accountAsks.elementAtOrNull(1);
+
+      session.isSignedIn = true;
+      letGoAsk?.next();
+      await tester.pumpAndSettle();
+      accountAsks.lastOrNull?.next();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        state(router, answers),
+        'HomeRoute AccountRoute | shown: AccountRoute | /account | '
+        'caller: [null]',
+      );
+    });
+  });
 }
