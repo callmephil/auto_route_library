@@ -29,6 +29,11 @@ abstract class RootStackRouter extends StackRouter {
   // The count of the link whose navigation is starting, while it starts.
   int? _startingLink;
 
+  // Whether the link whose navigation is starting is an entry of the
+  // browser's own history, as its back and forward buttons open: the user's
+  // own step, which the browser has already taken.
+  bool _isOpeningBrowserEntry = false;
+
   // The count of the latest link the app let in. A navigation a link starts
   // stops at its next guard once a link that started after it has been let
   // in: a slow guard of the link the app started at must not open its page

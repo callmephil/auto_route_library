@@ -536,14 +536,21 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       final replacesLaunchPage = _doesLinkReplaceLaunchPage(resolvedLink);
       _endLaunch();
       var isAccepted = false;
-      final opening = _handleDeepLink(
-        resolvedLink,
-        handover: handover,
-        replacesLaunchPage: replacesLaunchPage,
-        rebuildsStack: rebuildStackOnDeepLink,
-        closing: pageless,
-        onAccepted: () => isAccepted = true,
-      );
+      final root = controller.root;
+      final Future<void> opening;
+      try {
+        root._isOpeningBrowserEntry = entryRoutes != null;
+        opening = _handleDeepLink(
+          resolvedLink,
+          handover: handover,
+          replacesLaunchPage: replacesLaunchPage,
+          rebuildsStack: rebuildStackOnDeepLink,
+          closing: pageless,
+          onAccepted: () => isAccepted = true,
+        );
+      } finally {
+        root._isOpeningBrowserEntry = false;
+      }
       // The count of this link, or of the one before for a link the app
       // ignores.
       final count = controller.root._linkCount;

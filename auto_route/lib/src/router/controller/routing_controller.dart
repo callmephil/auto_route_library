@@ -3706,7 +3706,11 @@ abstract class StackRouter extends RoutingController {
         (anchor.children?.isNotEmpty ?? false) &&
         _innerControllerOfMatch(anchorId) != null &&
         identical(leaving.firstOrNull, anchorPage) &&
-        leaving.length > 1;
+        leaving.length > 1 &&
+        // A step back or forward in the browser's history is the user's own,
+        // which the browser has taken: the pages above leave in it, and the
+        // url is that entry's, not a new one.
+        !root._isOpeningBrowserEntry;
     // Where the anchor was, once it has left for its new page.
     int? anchorIndex;
     return _pushAllGuarded(
