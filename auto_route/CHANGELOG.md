@@ -1,4 +1,87 @@
 ## Unreleased
+- **FIX**: a router's `pagelessRoutesObserver.hasPagelessTopRoute` is false once its navigator has gone, such as a
+  nested router whose pages were all removed while a dialog showed. It said a dialog was still on top.
+- **DOCS**: `AutoRouteObserver` says a subclass must call `super` in `didPush`, `didPop`, `didRemove`, `didReplace`,
+  `didInitTabRoute` and `didChangeTabRoute`.
+- **FIX**, **BEHAVIOR CHANGE**: the app's `navigate` into a page already open keeps the dialogs over it, such as an
+  unsaved draft, until the guards of that page's nested router let the navigation in, as a link already did: a
+  navigation they reject leaves the dialog open. It closed them before those guards answered. Once let in it closes only
+  the dialogs over the page it reached, not one the app opened meanwhile over another page. An app that relied on the
+  early close now sees the dialog stay while a slow nested guard decides, and after a rejection; a nested guard that
+  shows a page of its own inside the nested router, such as a login, shows it under that dialog.
+- **FIX**, **BEHAVIOR CHANGE**: the app's `navigate` or `navigatePath` to a page inside a tab's nested router keeps the
+  dialog over the tabs until the guards of that router let the navigation in, as it does for a page of a stack: a
+  navigation they reject leaves the dialog open. It closed it at once. An app that relied on the early close now sees
+  the dialog stay while such a guard decides, and after a rejection.
+- **FIX**, **BEHAVIOR CHANGE**: the app's own change to another tab, opened before, by `navigate` or `navigatePath` to a
+  page inside it, shows that tab only once the guards of the tab's nested router let the navigation in, as a link's
+  change does: one they reject leaves the tab on screen, the dialog and the url as they were. It switched the tab first.
+  A guard there that shows a page of its own in the tab while it decides, such as a sign-in page, shows the tab with it;
+  a cancel leaves that tab on screen. With a slow guard there, the tab now shows once it answers, and the tab change
+  comes after the nested page is in. A tab never opened still shows first, since its nested router asks its guards only
+  once it is in.
+- **DOCS**: the README's part on guards and the doc of `AutoRouteGuard` say when a guard of a nested router is asked:
+  once its page is open or its tab was opened before, the dialogs over the page and the tab on screen wait for it, while
+  the pages pushed over that page close first; a nested router not built yet asks its guards only after its page or tab
+  is in, so a rejection there leaves that page or tab open on its first page.
+- **FIX**: an `AutoRouteAware` tab page that a change of the tabs list opens, after the tab on screen left the list, now
+  names that tab as its previous tab in `didInitTabRoute`, as `AutoRouterObserver`s hear it.
+- **FIX**: a tab that keeps no state (`maintainState: false`) and whose nested router has no initial child shows the
+  pages its `AutoTabsRouter` lists for it when it is opened again, by `setActiveIndex` or by `navigate`. It showed no
+  page at all, and `navigate` brought back the page of a path that first opened it.
+- **FIX**: pops right after a call that takes the top page off close the pages of the stack, in one handler as a frame
+  apart: on Home, A, B, `replace(C)`, `pop()`, `pop()` ends on Home. It ended on Home, A, with A, a page the app had
+  closed, back on screen: the second pop closed the route of B, which the navigator still held until its next build. The
+  same holds for `maybePop`, `popTop`, `maybePopTop` and `popAndPush` after `replace`, `removeLast`, `removeWhere` and
+  `pushAndPopUntil`, in a nested router and in a tab's router, and a `maybePop` there asks the `PopScope` of the page
+  then on top. Two `maybePop` calls in one handler still close one page, as two calls of Flutter's `Navigator.maybePop`
+  do.
+- **FIX**, **BEHAVIOR CHANGE**: off the web, two calls of `router.back()` in one handler step back twice: on Home, A, B
+  they end on Home. They ended on Home, A, since the second call found the first step still under way, though the router
+  had already taken it. An app that calls `back()` twice in a row now goes back two pages, as two calls of
+  `history.back()` in one task take a browser back two entries. While a step back waits on a guard, a second call still
+  does nothing.
+- **FIX**: off the web, `router.back()` opens no page that was closed before it was ever built. After `push(C)` and
+  `pop()` in one handler, a later `back()` put C on screen again, and `replace(C)`, `pop()`, `back()` in one handler
+  ended with C on top though its caller had its answer; after `push(A)`, `push(B)`, `popUntilRoot()` in one handler
+  `back()` opened B. The app's own history kept the entry of such a page, since no navigator reported its pop.
+- **FIX**: a push right after `popUntilRouteWithPath`, or after `popUntil` or `popUntilRouteWithName` with `scoped:
+  false`, stays when pages were pushed earlier in the same handler: from Home, `push(A)`, `push(B)`,
+  `popUntilRouteWithPath('/a')`, `push(D)` ends on Home, A, D. D was lost, and after an unscoped pop down to the first
+  page the screen stayed empty. The pages the navigator has not built yet now leave as the pop is called, as they do for
+  `popUntilRoot`.
+- **FIX**: the root's `maybePop()` closes the top page of the nested router on top right after a call on that router in
+  the same handler: in a shell on X, Y, Z, the shell's `replace(W)` and `pop()`, then the root's `maybePop()`, ends on
+  X. It ended on X, Y, and after the shell's `push(W)` it closed Z and left W on top, since the pop went straight to the
+  nested navigator, which had not built W yet. The same in a tab's router. `maybePopTop` and the system back button were
+  right.
+- **FIX**, **BEHAVIOR CHANGE**: a sign-out that lands while a navigation's guard still waits no longer opens the guarded
+  page. With `push(AccountRoute())` behind a guard that reads the session and then awaits a request, a change of the
+  `reevaluateListenable` during the wait took the guard's answer from before the change, so the page opened for the
+  signed-out user and stayed until the next change. The guard is now asked once more before its page goes in, also for
+  `replace`, `pushAll`, `replaceAll` and `navigate` and in a nested router, so a guard can run twice for one navigation.
+  A change the guard makes itself, as one that restores a stored session does, does not ask it again, and neither does a
+  change while the guard waits behind a page or dialog it showed.
+- **FIX**: a sign-out as the third of three changes of the `reevaluateListenable` in a row closes the guarded page. A
+  change that landed while a guard, asked again, still awaited was followed by one more round of checks only once, so a
+  third change during that round took the round's answer from before it and the page stayed open. Every such change that
+  is not the guard's own is now followed by another round, three in a row at most.
+- **FIX**: a page held back for a guard that answers later comes back when the guard lets it stay, also when the app
+  rebuilt its pages meanwhile. A guard asked again by `reevaluateGuards` or the `reevaluateListenable` that returns
+  without an answer has its page held back; any navigation or url update during the wait then lost the page for good,
+  and the code that awaited its `push` got `null` though the guard let the page stay.
+- **FIX**: a page that `replaceAll` set aside for a guard's page is asked again as it comes back when the session
+  changed meanwhile. After `replaceAll([VaultRoute()])` showed the guard's pin page and the session ended, canceling the
+  pin page brought the account page back for the signed-out user until the next change.
+- **FIX**: the pages of a nested router are back with their page when a guard of `replaceAll` rejects. A page that
+  `replaceAll` had set aside for a guard's page came back on its nested router's first page, so `[ListRoute(),
+  DetailRoute()]` inside it was `[ListRoute()]` after the user canceled the guard's login page. The code that opened a
+  nested page still gets `null` as the guard's page goes on: the page that comes back is a new screen.
+- **DOCS**: the README's part on guards says that a guard may be asked again before its page goes in when the
+  `reevaluateListenable` changes while it checks, except for a change it makes itself or one while it waits behind a
+  page or dialog it showed, three times in a row at most; that a change during an extra round of a reevaluation is
+  followed by another round too, three in a row at most; and that pages `replaceAll` set aside for a guard's page are
+  asked again as they come back when the listenable notified meanwhile.
 - **FIX**: an app opened at a link that a guard rejects, such as a browser opened at a protected page, no longer keeps
   the rejected link in its url: the address bar and a reload show the page the app shows, or `/` when it shows none. The
   Router reported nothing until a first page was in, so the browser kept the link.
@@ -449,8 +532,7 @@
   and the screen stayed empty. The pages the navigator has not built yet now leave as the pop is called, not a frame
   later: an app sees the stack without them as the call returns, the callers of their pushes get null then, and the
   predicate of `popUntil` is asked about such a page through a stand-in page route that has the page as its settings.
-  Pages on screen are popped as before, and `popUntilRouteWithPath` and a pop with `scoped: false` still wait for the
-  frame.
+  Pages on screen are popped as before.
 - **FIX**: `pushAndPopUntil` with `ModalRoute.withName`, or any predicate that asks for a `ModalRoute` or a `PageRoute`,
   keeps the named page when it was pushed in the same handler: from Home, `push(A)` then
   `pushAndPopUntil(D, predicate: ModalRoute.withName('ARoute'))` ends on Home, A, D. It ended on D alone, with no page
