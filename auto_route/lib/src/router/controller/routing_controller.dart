@@ -3034,12 +3034,14 @@ abstract class StackRouter extends RoutingController {
 
   // Has the reevaluation in progress, of this router or of one above it, ask
   // its guards again once it ends; see [_isAskingAgainDue]. [isOwnChange]
-  // says the change that asks for it is the checking guard's own. Without
-  // [isOwnChangeFollowed], an own change asks nothing again, also in the
-  // round a change started, and starts no round of its own either.
+  // says the change that asks for it is the checking guard's own: only one
+  // in the round a change started asks the guards again. With
+  // [isOwnChangeLeftToRound], an own change in a later round is left to the
+  // round in progress, and starts no round of its own either, whose count of
+  // rounds would start again from 0.
   void _askAgainAfterReevaluation({
     required bool isOwnChange,
-    bool isOwnChangeFollowed = true,
+    bool isOwnChangeLeftToRound = false,
   }) {
     for (
       RoutingController? router = this;
@@ -3048,8 +3050,7 @@ abstract class StackRouter extends RoutingController {
     ) {
       if (router is! StackRouter || !router._isReevaluating) continue;
       final rounds = router._roundsAskedAgain;
-      if (isOwnChange && !isOwnChangeFollowed) {
-        // Left to the round in progress, which asks nothing for it.
+      if (isOwnChange && isOwnChangeLeftToRound && rounds > 0) {
         router._askAgainRequests += 1;
         continue;
       }
@@ -3082,11 +3083,14 @@ abstract class StackRouter extends RoutingController {
           _askAgainAfterReevaluation(isOwnChange: resolver._isOwnCodeRunning);
         } else if (_tabAsksOfReevaluation[resolver] ?? false) {
           // Of the shown tab, asked again. A change the guard makes itself,
-          // as one that signs the user out when a token is refused, asks it
-          // nothing again: it would make that change again without end.
+          // as one that signs the user out when a token is refused, asks the
+          // guards again as a page's guard's does, also those asked before
+          // it in this round, but only in the round a change started. Run
+          // apart, it would ask the guard again, which would make that
+          // change again without end.
           _askAgainAfterReevaluation(
             isOwnChange: resolver._isOwnCodeRunning,
-            isOwnChangeFollowed: false,
+            isOwnChangeLeftToRound: true,
           );
         } else if (!resolver._isOwnCodeRunning && !resolver._isWaitingOnUser) {
           // Of a navigation: it is asked again before its page goes in.

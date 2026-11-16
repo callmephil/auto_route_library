@@ -18,17 +18,25 @@ import '../router_test_utils.dart';
 // again, which signed out again. A page's guard is asked again at most once
 // after a change it makes itself (_askAgainAfterReevaluation), but a tab's
 // ask was not taken for a reevaluation's, so its own change was not known.
-// Should: asked for the change, then once by the reevaluation its sign-out
-// starts, which finds the tab shown, as any reevaluation does; the change
-// that ask makes itself asks it nothing again. A change that is not the
-// guard's own, during that ask, still asks it again once the round ends.
-// Native behavior this holds to: Flutter's Router handles each
-// notification of its route information provider once, in one transaction,
-// and starts nothing again by itself (_handleRouteInformationProviderNotification
-// and _currentRouterTransaction, router.dart); the README: a guard that
-// notifies the listenable from its own check doesn't run without end.
+// Should: asked as often as a page's guard with the same check: for the
+// change, then by the reevaluation its sign-out starts, which finds the tab
+// shown, then once more by the round its own change in that reevaluation
+// asks for, so the guards asked before it are asked again too (see
+// tab_guard_own_change_asks_others_test.dart); its own change in that later
+// round asks nothing again. A change that is not the guard's own, during
+// its ask, still asks it again once the round ends. This is the package's
+// own rule, as the README states it: a change a guard makes itself during
+// an extra round isn't followed by another, so a guard that notifies the
+// listenable from its own check doesn't run without end. A guard round has
+// no native counterpart.
 class _Session extends ChangeNotifier {
   bool isSignedIn = true;
+  bool isTokenRefused = false;
+
+  void refuseToken() {
+    isTokenRefused = true;
+    notifyListeners();
+  }
 
   void signOut() {
     isSignedIn = false;
@@ -50,6 +58,12 @@ void main() {
 
   RootStackRouter buildRouter(AutoRouteGuard guard) => .build(
     routes: [
+      NamedRouteDef(
+        name: 'AccountRoute',
+        path: '/account',
+        guards: [guard],
+        builder: (_, _) => const Text('AccountRoute'),
+      ),
       NamedRouteDef(
         name: 'HomeRoute',
         path: '/',
@@ -75,21 +89,41 @@ void main() {
     ],
   );
 
-  testWidgets("A tab guard's own sign-out asks it nothing again", (
-    tester,
-  ) async {
-    final router = buildRouter(
-      AutoRouteGuard.simple((resolver, _) async {
-        asks++;
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        // The token was refused.
-        session.signOut();
-        resolver.next();
-      }),
-    );
+  // Signs the user out on every ask once the token is refused.
+  AutoRouteGuard signsOut() => .simple((resolver, _) async {
+    asks++;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    if (session.isTokenRefused) session.signOut();
+    resolver.next();
+  });
+
+  // The count the tab's guard is held to: asked by the round the refused
+  // token starts, then by the one its own sign-out there asks for.
+  testWidgets("A page's guard that signs the user out on every ask is asked "
+      'twice', (tester) async {
+    final router = buildRouter(signsOut());
+    await pumpRouterApp(tester, router, reevaluationNotifier: session);
+    unawaited(router.push(const NamedRoute('AccountRoute')));
+    await tester.pumpAndSettle();
+    asks = 0;
+
+    session.refuseToken();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(asks, 2);
+  });
+
+  testWidgets("A tab's guard that signs the user out on every ask is asked "
+      "as often as a page's guard", (tester) async {
+    final router = buildRouter(signsOut());
     await pumpRouterApp(tester, router, reevaluationNotifier: session);
     final tabs = router.innerRouterOf<TabsRouter>('HomeRoute')!
       ..setActiveIndex(1);
+    await tester.pumpAndSettle();
+    asks = 0;
+
+    session.refuseToken();
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
