@@ -216,8 +216,15 @@ class BrowserNavigationHistory extends NavigationHistory {
     if (at < _writer.first) {
       // An entry from before the app started, as a reload leaves them under
       // the entry the app starts on: the app's entries start from it now.
+      // The pages open now have their entries ahead of it.
       _writer.first = at;
-      _list.reset([_browserEntry(at)]);
+      _list.reset(
+        [_browserEntry(at)],
+        withEntriesAhead: [
+          for (final page in [...pagesUnderTop(router), urlState])
+            ?page.topMatch?.id,
+        ],
+      );
       return;
     }
     // The entries up to the one the browser stands on. A page kept out of

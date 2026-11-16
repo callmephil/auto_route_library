@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:web/web.dart' show window;
 
 import '../router_test_utils.dart';
 import 'browser_history.dart';
@@ -60,6 +61,37 @@ Future<RootStackRouter> _reloadedOnB(WidgetTester tester) async {
 void main() {
   useRealBrowserHistory();
   setUp(rewindBrowserHistory);
+
+  // Steps: Home, A and B pushed, a reload on B, two presses of the back
+  // button and three of the forward button.
+  //
+  // Before, the pages open when the app followed the browser onto the
+  // entry of Home, from before the reload, were counted as sharing it,
+  // though their own entries are ahead. The first forward press closed
+  // Home, which handed its entry to B: the history wrote /b there and /a
+  // after it as a new entry, which dropped B's entry ahead, so no forward
+  // press reached B. What the two back presses open over B is as before and
+  // stays an open question; this pins the forward walk.
+  //
+  // Native behavior this holds to: the HTML History API, where a reload
+  // keeps the tab's entries and the forward button walks the ones ahead,
+  // and only history.pushState drops them.
+  testWidgets('On web, after a reload on B: back, back, then forward reaches '
+      'B', (tester) async {
+    final router = await _reloadedOnB(tester);
+    await settleBrowser(tester);
+    for (var i = 0; i < 2; i++) {
+      await pressBrowserBack(tester);
+    }
+    final forwardWalk = <String>[];
+    for (var i = 0; i < 3; i++) {
+      await browserMove(tester, () => window.history.forward());
+      final stack = router.stack.map((page) => page.name).join(' ');
+      forwardWalk.add('$browserPath $stack');
+    }
+    printOnFailure('the forward walk: $forwardWalk');
+    expect(forwardWalk.lastOrNull, '/b BRoute');
+  });
 
   // Steps: Home, push A, push B, reload on B, push C, then the calls.
   for (final (label, calls, expected) in [

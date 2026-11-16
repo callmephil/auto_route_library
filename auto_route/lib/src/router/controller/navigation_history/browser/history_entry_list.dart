@@ -69,6 +69,11 @@ class HistoryEntryList {
   // The pages whose entry a link made.
   final _linkPages = <LocalKey>{};
 
+  // Open pages whose own entries are ahead of the one the browser stands
+  // on, as the pages of an app reloaded on a later entry once the user goes
+  // back to an entry from before the reload: they share no entry under it.
+  final _withEntriesAhead = <LocalKey>{};
+
   /// The entries, the app's first one first.
   List<UrlState> get entries => .unmodifiable(_entries);
 
@@ -102,6 +107,9 @@ class HistoryEntryList {
     final shown = _showOnTop(state, keepsClosedUnder: keepsClosedUnder);
     final topId = shown.topMatch?.id;
     _sharing.removeWhere((pageId, _) => !isPageOpen(pageId));
+    _withEntriesAhead.removeWhere(
+      (pageId) => pageId == topId || !isPageOpen(pageId),
+    );
     // The page shown may be on its way in, not open yet, as while a guard
     // of its nested router decides: its entry is still a link's.
     _linkPages.removeWhere((pageId) => pageId != topId && !isPageOpen(pageId));
@@ -152,6 +160,7 @@ class HistoryEntryList {
       if (pageId == null ||
           place == wayBack.length - 1 ||
           _sharing.containsKey(pageId) ||
+          _withEntriesAhead.contains(pageId) ||
           hasEntry(page)) {
         continue;
       }
@@ -268,10 +277,20 @@ class HistoryEntryList {
 
   /// Replaces the entries with [browserEntries], the browser's own up to the entry
   /// it moved to, as after its back button.
-  void reset(Iterable<UrlState> browserEntries) {
+  ///
+  /// [withEntriesAhead] holds the ids of open pages whose own entries are
+  /// ahead of that entry, as the pages open when the browser moves to an
+  /// entry from before the app started. A page shown over them later does
+  /// not give them a share in its entry: they keep theirs.
+  void reset(
+    Iterable<UrlState> browserEntries, {
+    Iterable<LocalKey> withEntriesAhead = const [],
+  }) {
     _entries
       ..clear()
       ..addAll(browserEntries);
+    _sharing.removeWhere((pageId, _) => withEntriesAhead.contains(pageId));
+    _withEntriesAhead.addAll(withEntriesAhead);
   }
 
   void _dropClosedOnTop() {
