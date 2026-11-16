@@ -5013,7 +5013,7 @@ abstract class StackRouter extends RoutingController {
             _awaitLetGoAnswer(
               answer,
               letGoPages,
-              routes.sublist(i + 1),
+              routes.sublist(i),
               onFailure: onFailure,
             ),
           );
@@ -5196,18 +5196,20 @@ abstract class StackRouter extends RoutingController {
     return true;
   }
 
-  // Waits for [answer], the answer of the guard that let go of the first of
-  // [pages]: the pages a reevaluation took off the stack and the screen with
-  // it, which went on without them, see [_pushAllGuarded]. A yes puts the
-  // page back on top of the stack as it then is, as a page whose guard lets
-  // it through goes on, and then asks the guards of [above], the routes of
-  // the pages that were above it. A no leaves them off, and so does a yes
-  // for a page the app took off meanwhile, as replaceAll does. The callers of
-  // the pages that stay off hear null; the others go on waiting.
+  // Waits for [answer], the answer of the guards of the first of [routes],
+  // one of which let go of its page: [pages] are the pages a reevaluation
+  // took off the stack and the screen with it, which went on without them,
+  // see [_pushAllGuarded]. A yes puts the page back through
+  // [_pushAllGuarded], as a reevaluation puts on a page whose guards let it
+  // through, there on top of the stack as it then is, and the guards of the
+  // routes after it, of the pages that were above it, are asked there. A no
+  // leaves them off, and so does a yes for a page the app took off
+  // meanwhile, as replaceAll does. The callers of the pages that stay off
+  // hear null; the others go on waiting.
   Future<void> _awaitLetGoAnswer(
     FutureOr<ResolverResult> answer,
     List<AutoRoutePage<Object?>> pages,
-    List<RouteMatch<Object?>> above, {
+    List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
   }) async {
     _waitingForLetGoGuards.addAll(pages);
@@ -5216,20 +5218,20 @@ abstract class StackRouter extends RoutingController {
       final match = result.route;
       if (_isDisposed ||
           !result.continueNavigation ||
-          match is! ReevaluatableRouteMatch<Object?, Object?> ||
-          !_heldBackByReevaluation.contains(match.currentPage.routeData)) {
+          match is! ReevaluatableRouteMatch<Object?, Object?>) {
         return;
       }
-      _addReevaluatedPage(match, notify: false);
-      if (result.reevaluateNext && above.isNotEmpty) {
-        await _pushAllGuarded<void>(
-          above,
-          onFailure: onFailure,
-          notify: false,
-          updateAncestorsPathData: false,
-          isReevaluating: true,
-        );
-      }
+      // Its guards have answered: none is asked again for it.
+      final answered = match.copyWith(
+        evaluatedGuards: [...root.guards, ...match.guards],
+      );
+      await _pushAllGuarded<void>(
+        [answered, if (result.reevaluateNext) ...routes.skip(1)],
+        onFailure: onFailure,
+        notify: false,
+        updateAncestorsPathData: false,
+        isReevaluating: true,
+      );
     } finally {
       _waitingForLetGoGuards.removeAll(pages);
       _heldBackByReevaluation.removeWhere(
