@@ -20,11 +20,14 @@ void main() {
     // then to message 14, which its guard lets in.
     // Was: Mail showed and the dialog closed on 13.
     // Should: FirstTab and the dialog stay after 13; 14 shows Mail and
-    // closes the dialog.
+    // closes the dialog. Then from FirstTab to message 88, whose guard shows
+    // Mail's own sign-in page and waits: Mail shows with it, and the message
+    // once signed in.
     testWidgets(
       'A tab change its nested guard rejects keeps the tab and the dialog',
       (tester) async {
         Widget page(String name) => SafeArea(child: Center(child: Text(name)));
+        final signedIn = Completer<bool>();
         final router = RootStackRouter.build(
           routes: [
             NamedRouteDef(
@@ -53,15 +56,32 @@ void main() {
                       builder: (_, _) => page('InboxRoute'),
                     ),
                     NamedRouteDef(
+                      name: 'MailLoginRoute',
+                      path: 'login',
+                      builder: (_, _) => page('MailLoginRoute'),
+                    ),
+                    NamedRouteDef(
                       name: 'MessageRoute',
                       path: ':id',
                       guards: [
-                        AutoRouteGuard.simple(
-                          (resolver, _) =>
-                              resolver.route.params.getString('id') == '13'
-                              ? resolver.reject()
-                              : resolver.next(),
-                        ),
+                        AutoRouteGuard.simple((resolver, mail) async {
+                          switch (resolver.route.params.getString('id')) {
+                            case '13':
+                              return resolver.reject();
+                            case '88':
+                              unawaited(
+                                mail.push(const NamedRoute('MailLoginRoute')),
+                              );
+                              final isSignedIn = await signedIn.future;
+                              mail.removeWhere(
+                                (data) => data.name == 'MailLoginRoute',
+                              );
+                              return isSignedIn
+                                  ? resolver.next()
+                                  : resolver.reject();
+                          }
+                          resolver.next();
+                        }),
                       ],
                       builder: (_, data) =>
                           page('Mail ${data.params.getString('id')}'),
@@ -96,6 +116,17 @@ void main() {
         expect(tabs.current.name, 'MailTab');
         expect(find.text('Mail 14'), findsOneWidget);
         expect(find.text('Unsaved draft'), findsNothing);
+
+        // A guard that shows Mail's own sign-in page: the tab shows with it.
+        tabs.setActiveIndex(0);
+        await tester.pumpAndSettle();
+        unawaited(router.navigatePath('/tabs/mail/88'));
+        await tester.pumpAndSettle();
+        expect(find.text('MailLoginRoute').hitTestable(), findsOneWidget);
+
+        signedIn.complete(true);
+        await tester.pumpAndSettle();
+        expect(find.text('Mail 88'), findsOneWidget);
       },
     );
   });

@@ -968,6 +968,10 @@ abstract class RoutingController with ChangeNotifier {
   // [onLetIn] is what the router above does once this router, and the
   // nested router of the page or tab it reaches, have let the navigation in,
   // such as closing the dialogs over its page; a rejection drops it.
+  //
+  // [onGuardShowsPage] is told with the router each time a guard of this
+  // navigation puts a page of its own on a stack while it decides, such as
+  // a sign-in page, so a tab that waits for these guards can show it.
   Future<T?> _navigateAll<T extends Object?>(
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
@@ -975,6 +979,7 @@ abstract class RoutingController with ChangeNotifier {
     bool keepsUnnamedPages = false,
     int? link,
     VoidCallback? onLetIn,
+    ValueChanged<StackRouter>? onGuardShowsPage,
   });
 
   Future<void> _navigateAllRoutes(
@@ -1348,18 +1353,26 @@ class TabsRouter extends RoutingController {
     // The app's own change to a tab whose nested router is built, to pages
     // in that router, shows the tab once the guards there let it in, as a
     // link's change does: one they reject leaves the tab on screen and the
-    // open dialogs as they were. A tab whose nested router isn't built yet
-    // shows first: its router asks its guards only once the tab is in.
+    // open dialogs as they were. Or before, when one of them shows a page of
+    // its own in the tab while it decides. A tab whose nested router isn't
+    // built yet shows first: its router asks its guards only once the tab is
+    // in.
     final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
+    final tabRouter = tabMatchId == null
+        ? null
+        : _innerControllerOfMatch(tabMatchId);
     if (onLinkAccepted == null &&
         isUpdated &&
         (result.route.children ?? const []).isNotEmpty &&
-        tabMatchId != null &&
-        _innerControllerOfMatch(tabMatchId) != null) {
+        tabRouter != null) {
       final updated = _updateTabPage(
         index,
         result.route,
         keepsUnnamedPages: keepsUnnamedPages,
+      );
+      final show = _showingTabOnce(
+        change,
+        () => _showTab(index, notify: notify, remember: remember),
       );
       unawaited(
         _navigateInsideTab(
@@ -1368,10 +1381,11 @@ class TabsRouter extends RoutingController {
           keepsUnnamedPages: keepsUnnamedPages,
           link: link,
           onLetIn: () {
-            if (!_isDisposed && change == _tabChanges) {
-              _showTab(index, notify: notify, remember: remember);
-            }
+            show();
             onLetIn?.call();
+          },
+          onGuardShowsPage: (router) {
+            if (_isInside(router, tabRouter)) show();
           },
         ),
       );
@@ -1428,6 +1442,28 @@ class TabsRouter extends RoutingController {
     }
   }
 
+  // [show], once, for the change [change]: not once a later change replaced
+  // it or the tabs are disposed. The tab shows when the guards of its nested
+  // router let the navigation in, or before, when one of them puts a page of
+  // its own in the tab while it decides, such as a sign-in page the user has
+  // to see to answer it.
+  VoidCallback _showingTabOnce(int change, VoidCallback show) {
+    var isShown = false;
+    return () {
+      if (isShown || _isDisposed || change != _tabChanges) return;
+      isShown = true;
+      show();
+    };
+  }
+
+  // Whether [router] is [outer] or a router nested inside it.
+  static bool _isInside(RoutingController router, RoutingController outer) {
+    for (RoutingController? at = router; at != null; at = at._parent) {
+      if (identical(at, outer)) return true;
+    }
+    return false;
+  }
+
   // Opens the pages of the link [route] names in the nested router of the
   // tab at [index], and runs [show], [onLinkAccepted] and [then] once their
   // guards let the link in, unless the change [change] was replaced
@@ -1445,15 +1481,26 @@ class TabsRouter extends RoutingController {
     VoidCallback? then,
     OnNavigationFailure? onFailure,
   }) {
+    final showOnce = _showingTabOnce(change, show);
     void onLetIn() {
-      if (!_isDisposed && change == _tabChanges) show();
+      showOnce();
       onLinkAccepted();
       then?.call();
     }
 
     void openInside(RouteMatch<Object?> tab) {
       root._handLinkStepOn(link, onLetIn);
-      unawaited(_navigateInsideTab(tab, onFailure: onFailure, link: link));
+      final tabRouter = _innerControllerOfMatch(tab.id);
+      unawaited(
+        _navigateInsideTab(
+          tab,
+          onFailure: onFailure,
+          link: link,
+          onGuardShowsPage: (router) {
+            if (tabRouter != null && _isInside(router, tabRouter)) showOnce();
+          },
+        ),
+      );
       // A nested router whose navigation asks no guard, such as a
       // declarative one, leaves the step: the tab shows at once.
       root._takeLinkStep(link)?.call();
@@ -1971,6 +2018,7 @@ class TabsRouter extends RoutingController {
     bool keepsUnnamedPages = false,
     int? link,
     VoidCallback? onLetIn,
+    ValueChanged<StackRouter>? onGuardShowsPage,
   }) async {
     final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
@@ -2017,6 +2065,7 @@ class TabsRouter extends RoutingController {
                   keepsUnnamedPages: keepsUnnamedPages,
                   link: ofLink,
                   onLetIn: onLetIn,
+                  onGuardShowsPage: onGuardShowsPage,
                 );
           if (isReevaluating) {
             await inside;
@@ -2198,6 +2247,7 @@ class TabsRouter extends RoutingController {
     bool keepsUnnamedPages = false,
     int? link,
     VoidCallback? onLetIn,
+    ValueChanged<StackRouter>? onGuardShowsPage,
   }) {
     // By match id: a tab sharing its route with another has its own nested
     // router.
@@ -2212,6 +2262,7 @@ class TabsRouter extends RoutingController {
       keepsUnnamedPages: keepsUnnamedPages,
       link: link,
       onLetIn: isAsked ? onLetIn : null,
+      onGuardShowsPage: onGuardShowsPage,
     );
   }
 
@@ -3153,6 +3204,7 @@ abstract class StackRouter extends RoutingController {
     bool isReevaluating = false,
     _PagesReplacement? replacement,
     int? link,
+    ValueChanged<StackRouter>? onGuardShowsPage,
   }) {
     // replaceAll reaches no page again: [replacement] takes every page off
     // once every guard has let [matches] through, and their pages go on in
@@ -3167,6 +3219,7 @@ abstract class StackRouter extends RoutingController {
         onLastRouteAdded: onLastRouteAdded,
         replacement: replacement,
         link: link,
+        onGuardShowsPage: onGuardShowsPage,
       );
     }
     final (:kept, :end) = isReevaluating
@@ -3201,6 +3254,7 @@ abstract class StackRouter extends RoutingController {
       pushed: pushed,
       onLastRouteAdded: onLastRouteAdded,
       link: link,
+      onGuardShowsPage: onGuardShowsPage,
       onFirstRouteAccepted: () {
         // A page popped while the guards decided has left already. And a
         // later navigation to the same page, let in while these guards
@@ -4154,6 +4208,17 @@ abstract class StackRouter extends RoutingController {
     }
   }
 
+  // Tells both, or the one given; null when neither is.
+  static ValueChanged<StackRouter>? _bothTold(
+    ValueChanged<StackRouter>? first,
+    ValueChanged<StackRouter>? second,
+  ) => (first == null || second == null)
+      ? (first ?? second)
+      : (router) {
+          first(router);
+          second(router);
+        };
+
   @optionalTypeArgs
   Future<T?> _pushAllGuarded<T extends Object?>(
     List<RouteMatch<Object?>> routes, {
@@ -4168,6 +4233,7 @@ abstract class StackRouter extends RoutingController {
     VoidCallback? onFirstRouteAccepted,
     _PagesReplacement? replacement,
     int? link,
+    ValueChanged<StackRouter>? onGuardShowsPage,
   }) async {
     assert(!managedByWidget, _managedByWidgetMessage);
 
@@ -4314,8 +4380,11 @@ abstract class StackRouter extends RoutingController {
             if (!isRedirecting) takeOffPagesFrom(i);
           },
           // The page a guard of replaceAll shows itself takes their place
-          // also while its call still runs.
-          onShowsPage: isReevaluating ? null : replacement?.onGuardShowsPage,
+          // also while its call still runs; and a tab that waits for these
+          // guards shows, so the user sees the page.
+          onShowsPage: isReevaluating
+              ? null
+              : _bothTold(replacement?.onGuardShowsPage, onGuardShowsPage),
         );
         // No pause when every guard answers in its own call: the pages of a
         // batch the app calls are on the stack as the call returns, and a
@@ -4786,6 +4855,7 @@ abstract class StackRouter extends RoutingController {
     _PagesReplacement? replacement,
     int? link,
     VoidCallback? onLetIn,
+    ValueChanged<StackRouter>? onGuardShowsPage,
   }) async {
     // A reevaluation closes the pages its guards reject, and a guard may show
     // a page of its own meanwhile, so the pages it closes are reported once
@@ -4841,6 +4911,7 @@ abstract class StackRouter extends RoutingController {
                 keptScreens = _takeScreensKeptByReplaceAll(replacing),
           ),
           link: ofLink,
+          onGuardShowsPage: onGuardShowsPage,
         );
         // No pause when the last page went on in the call, as it does when
         // no guard makes the routes wait: the nested router or the tabs of
@@ -4918,6 +4989,7 @@ abstract class StackRouter extends RoutingController {
           keepsUnnamedPages: keepsUnnamedPages,
           link: ofLink,
           onLetIn: lettingIn,
+          onGuardShowsPage: onGuardShowsPage,
         );
       }
       lettingIn?.call();

@@ -24,7 +24,9 @@ import '../router_test_utils.dart';
 // nothing. A UITabBarController keeps its selected tab when the app doesn't
 // move to the screen asked for, and an Android activity that ignores a
 // navigation keeps its selected tab and its dialogs; on the web a canceled
-// navigation keeps the document.
+// navigation keeps the document. A guard that asks the user to sign in shows
+// its page where the user can answer it: the tab shows with the sign-in page,
+// and a cancel leaves it on screen, as a tab bar keeps the tab it shows.
 void main() {
   Completer<bool>? slowAnswer;
 
@@ -129,6 +131,73 @@ void main() {
           });
         }
       }
+
+      // A guard in the tab that shows its own sign-in page there while it
+      // waits for the user: the tab shows with it, as the user has to see it
+      // to answer it. Signing in shows the message; canceling leaves the tab
+      // on screen, on the page under the sign-in page.
+      for (final how in ['navigate', 'navigatePath', 'a link']) {
+        for (final isSignedIn in [true, false]) {
+          testWidgets(
+            "$how to a page whose guard shows the tab's own sign-in "
+            'page shows the tab with it, and '
+            '${isSignedIn ? 'the page once signed in' : 'keeps the tab when canceled'}',
+            (tester) async {
+              final router = _buildRouter(kind, () {
+                final answer = slowAnswer = Completer<bool>();
+                return answer.future;
+              });
+              await pumpRouterConfigApp(tester, router.config());
+              final tabs = router.innerRouterOf<TabsRouter>('TabsRoute')!
+                ..setActiveIndex(1);
+              await tester.pumpAndSettle();
+              tabs.setActiveIndex(0);
+              await tester.pumpAndSettle();
+
+              switch (how) {
+                case 'navigate':
+                  unawaited(
+                    router.navigate(
+                      const NamedRoute(
+                        'TabsRoute',
+                        children: [
+                          NamedRoute(
+                            'MailTab',
+                            children: [
+                              NamedRoute('MessageRoute', params: {'id': '88'}),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                case 'navigatePath':
+                  unawaited(router.navigatePath('/tabs/mail/88'));
+                default:
+                  await tester.binding.handlePushRoute('/tabs/mail/88');
+              }
+              await tester.pumpAndSettle();
+              expect(tabs.current.name, 'MailTab');
+              expect(find.text('MailLoginRoute').hitTestable(), findsOneWidget);
+
+              slowAnswer!.complete(isSignedIn);
+              await tester.pumpAndSettle();
+
+              expect(tester.takeException(), isNull);
+              // The tab stays on screen either way.
+              expect(tabs.activeIndex, 1);
+              expect(find.text('MailLoginRoute'), findsNothing);
+              if (isSignedIn) {
+                expect(find.text('Mail 88'), findsOneWidget);
+                expect(router.currentUrl, '/tabs/mail/88');
+              } else {
+                expect(find.text('InboxRoute'), findsOneWidget);
+                expect(router.currentUrl, '/tabs/mail');
+              }
+            },
+          );
+        }
+      }
     });
   }
 }
@@ -149,7 +218,8 @@ Widget _tabsOf(_TabsKind kind) {
   };
 }
 
-// [slowAnswer] gives the answer for message 77.
+// [slowAnswer] gives the answer for message 77, and for 88 once its guard
+// has shown Mail's own sign-in page.
 RootStackRouter _buildRouter(
   _TabsKind kind,
   Future<bool> Function() slowAnswer,
@@ -177,10 +247,15 @@ RootStackRouter _buildRouter(
               builder: (_, _) => const Center(child: Text('InboxRoute')),
             ),
             NamedRouteDef(
+              name: 'MailLoginRoute',
+              path: 'login',
+              builder: (_, _) => const Center(child: Text('MailLoginRoute')),
+            ),
+            NamedRouteDef(
               name: 'MessageRoute',
               path: ':id',
               guards: [
-                AutoRouteGuard.simple((resolver, _) async {
+                AutoRouteGuard.simple((resolver, router) async {
                   switch (resolver.route.params.getString('id')) {
                     case '13':
                       return resolver.reject();
@@ -188,6 +263,16 @@ RootStackRouter _buildRouter(
                       return await slowAnswer()
                           ? resolver.next()
                           : resolver.reject();
+                    case '88':
+                      // Mail's own sign-in page, on Mail's router.
+                      unawaited(
+                        router.push(const NamedRoute('MailLoginRoute')),
+                      );
+                      final isSignedIn = await slowAnswer();
+                      router.removeWhere(
+                        (data) => data.name == 'MailLoginRoute',
+                      );
+                      return isSignedIn ? resolver.next() : resolver.reject();
                   }
                   resolver.next();
                 }),
