@@ -22,9 +22,11 @@ import '../router_test_utils.dart';
 // starts, which finds the tab shown, as any reevaluation does; the change
 // that ask makes itself asks it nothing again. A change that is not the
 // guard's own, during that ask, still asks it again once the round ends.
-// Native behavior this holds to: Flutter's Router acts on a change of route
-// information once; a change an app makes in answer to a check is not a
-// new request from the user.
+// Native behavior this holds to: Flutter's Router handles each
+// notification of its route information provider once, in one transaction,
+// and starts nothing again by itself (_handleRouteInformationProviderNotification
+// and _currentRouterTransaction, router.dart); the README: a guard that
+// notifies the listenable from its own check doesn't run without end.
 class _Session extends ChangeNotifier {
   bool isSignedIn = true;
 
