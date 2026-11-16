@@ -17,7 +17,9 @@ import 'browser_history.dart';
 // removeLast or a replace: the page that takes its place holds it, and the
 // pages under it share it with that page. Removing that page later from
 // under another page then hands the entry to the nearest page that shared
-// it, as removing the link's own page does.
+// it, as removing the link's own page does. A page kept out of the address
+// bar (neglectWhen) gets no browser entry, so the entry goes to the nearest
+// sharing page that is not kept out.
 //
 // Before, the pages under it still named the page that had left as the one
 // whose entry they shared, so the later removal dropped the entry and they
@@ -50,8 +52,12 @@ RootStackRouter _router() => .build(
 String _stack(RootStackRouter router) =>
     router.stack.map((page) => page.name?.replaceAll('Route', '')).join(' ');
 
-Widget _app(RootStackRouter router) => MaterialApp.router(
+Widget _app(
+  RootStackRouter router, {
+  bool Function(String? location)? neglectWhen,
+}) => MaterialApp.router(
   routerConfig: router.config(
+    neglectWhen: neglectWhen,
     deepLinkBuilder: (link) => switch (link.path) {
       '/b' => const DeepLink([
         NamedRoute('HomeRoute'),
@@ -77,19 +83,20 @@ Future<List<String>> _walk(
   String link,
   List<void Function(RootStackRouter)> steps, {
   bool isTyped = false,
+  bool Function(String? location)? neglectWhen,
 }) async {
   final router = _router();
   addTearDown(router.dispose);
   final int first;
   if (isTyped) {
-    await tester.pumpWidget(_app(router));
+    await tester.pumpWidget(_app(router, neglectWhen: neglectWhen));
     await settleBrowser(tester);
     first = browserSerialCount;
     await browserMove(tester, () => window.location.hash = link);
   } else {
     first = browserSerialCount < 0 ? 0 : browserSerialCount;
     openBrowserAt(tester, link);
-    await pumpAsRunApp(tester, _app(router));
+    await pumpAsRunApp(tester, _app(router, neglectWhen: neglectWhen));
   }
   await settleBrowser(tester);
   for (final step in steps) {
@@ -148,5 +155,23 @@ void main() {
       (router) => _remove(router, 'BRoute'),
     ]);
     expect(readings, ['(2, /d, Home A D)', '(1, /a, Home A)', '(0, /, Home)']);
+  });
+
+  // A, which shared the link's entry, is kept out of the address bar, so
+  // Home, the next page under it, takes the entry: back from C skips A, as
+  // the README says of a page kept out.
+  testWidgets('opened at /b with /a kept out: push C, remove B', (
+    tester,
+  ) async {
+    final readings = await _walk(
+      tester,
+      '/b',
+      neglectWhen: (location) => location == '/a',
+      [
+        (router) => _push(router, 'CRoute'),
+        (router) => _remove(router, 'BRoute'),
+      ],
+    );
+    expect(readings, ['(1, /c, Home A C)', '(0, /, Home)']);
   });
 }

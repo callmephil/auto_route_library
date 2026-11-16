@@ -88,6 +88,7 @@ class BrowserNavigationHistory extends NavigationHistory {
 
   late final _list = HistoryEntryList(
     isPageOpen: (pageId) => controllerOfPage(pageId) != null,
+    keepsOut: _browser.keepsOut,
   );
 
   // The user's moves need no listener here: the platform reports each one,

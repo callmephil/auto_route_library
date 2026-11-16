@@ -43,15 +43,22 @@ bool isSameHistoryUrl(String a, String b) {
 ///   reach has an entry too, see [show]: pages the app opened together get
 ///   one each, and pages a link opened together share the link's entry.
 ///   When the page that holds a shared entry leaves from under the entry of
-///   another page, the nearest page that shared it takes it over, so the
-///   pages left still have a way back.
+///   another page, the nearest page that shared it and has a browser entry
+///   takes it over, so the pages left still have a way back.
 class HistoryEntryList {
   /// Creates an empty list that asks [isPageOpen] whether a stack still holds
-  /// the page with a given id.
-  new({required this.isPageOpen});
+  /// the page with a given id, and [keepsOut] whether the app keeps the url
+  /// of an entry out of the address bar, so that it gets no browser entry.
+  new({required this.isPageOpen, this.keepsOut = _keepsNone});
 
   /// Whether a stack of the app still holds the page with the given id.
   final bool Function(LocalKey pageId) isPageOpen;
+
+  /// Whether the app keeps the url of an entry out of the address bar, as
+  /// with neglectWhen: the browser then holds no entry for it.
+  final bool Function(UrlState entry) keepsOut;
+
+  static bool _keepsNone(UrlState _) => false;
 
   final _entries = <UrlState>[];
 
@@ -176,7 +183,7 @@ class HistoryEntryList {
 
   // Hands the entry of each page that has left, with another entry over it,
   // to the nearest page of [wayBack], the open pages first page first, that
-  // shared it: that page takes the entry's place with its own url, and the
+  // shared it and is not kept out of the address bar: that page takes the entry's place with its own url, and the
   // others that shared it share it with that page. Without it they would
   // have no entry once it is dropped, and the back button would skip them.
   // Returns whether one was handed over.
@@ -191,9 +198,13 @@ class HistoryEntryList {
     for (final (place, entry) in underTop) {
       final holderId = entry.topMatch?.id;
       if (holderId == null || _isPageOpen(entry)) continue;
-      final heir = wayBack.lastWhereOrNull(
+      // A page kept out of the address bar would take the entry nowhere.
+      final sharers = wayBack.where(
         (page) => _sharing[page.topMatch?.id] == holderId,
       );
+      final heir =
+          sharers.lastWhereOrNull((page) => !keepsOut(page)) ??
+          sharers.lastOrNull;
       final heirId = heir?.topMatch?.id;
       if (heir == null || heirId == null) continue;
       _entries[place] = _withoutReplaceMark(heir);
