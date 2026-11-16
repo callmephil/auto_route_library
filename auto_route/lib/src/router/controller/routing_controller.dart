@@ -1379,6 +1379,38 @@ class TabsRouter extends RoutingController {
       );
       return .done;
     }
+    // The app's own change to a tab whose nested router is built, to pages
+    // in that router, shows the tab once the guards there let it in, as a
+    // link's change does: one they reject leaves the tab on screen and the
+    // open dialogs as they were. A tab whose nested router isn't built yet
+    // shows first: its router asks its guards only once the tab is in.
+    final tabMatchId = _pages.elementAtOrNull(index)?.routeData.matchId;
+    if (onLinkAccepted == null &&
+        isUpdated &&
+        (result.route.children ?? const []).isNotEmpty &&
+        tabMatchId != null &&
+        _innerControllerOfMatch(tabMatchId) != null) {
+      final updated = _updateTabPage(
+        index,
+        result.route,
+        keepsUnnamedPages: keepsUnnamedPages,
+      );
+      unawaited(
+        _navigateInsideTab(
+          updated,
+          onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
+          link: link,
+          onLetIn: () {
+            if (!_isDisposed && change == _tabChanges) {
+              _showTab(index, notify: notify, remember: remember);
+            }
+            onLetIn?.call();
+          },
+        ),
+      );
+      return .done;
+    }
     onLinkAccepted?.call();
     // A guard may have overridden the route, e.g. its args.
     final updated = isUpdated

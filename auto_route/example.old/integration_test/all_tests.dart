@@ -5,6 +5,8 @@ import 'active_tab_removed_test.dart' as active_tab_removed;
 import 'ancestor_path_params_test.dart' as ancestor_path_params;
 import 'android_back_in_app_test.dart' as android_back_in_app;
 import 'app_smoke_test.dart' as app_smoke;
+import 'app_tab_change_waits_for_nested_guards_test.dart'
+    as app_tab_change_waits_for_nested_guards;
 import 'async_simple_guard_test.dart' as async_simple_guard;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
@@ -393,6 +395,7 @@ void main() {
   ancestor_path_params.main();
   android_back_in_app.main();
   app_smoke.main();
+  app_tab_change_waits_for_nested_guards.main();
   async_simple_guard.main();
   back_in_tabs.main();
   back_rejected_by_guard.main();
