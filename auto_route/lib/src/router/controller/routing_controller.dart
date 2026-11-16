@@ -3056,10 +3056,19 @@ abstract class StackRouter extends RoutingController {
     }
     // A guard that let go of its page holds no reevaluation up: it is asked
     // again, and its page comes back once it lets it through, but nothing
-    // waits for it here.
+    // waits for it here. One still at the check this change found it at, as
+    // when it awaits a request after it read the state, answers from before
+    // the change: its yes is dropped and the guard asked once more, see
+    // [_canNavigate], so the last change wins.
     for (final entry in List.of(_guardsLettingGo)) {
-      if (entry._resolver.isResolved) continue;
-      unawaited(entry._resolver.checkGuard(entry.guard, this));
+      final resolver = entry._resolver;
+      if (resolver.isResolved) continue;
+      if (resolver._waitingCompleter != null &&
+          !resolver._isOwnCodeRunning &&
+          !resolver._isWaitingOnUser) {
+        resolver._isAnswerStale = true;
+      }
+      unawaited(resolver.checkGuard(entry.guard, this));
     }
 
     final matches = <ReevaluatableRouteMatch<Object?, Object?>>[];

@@ -526,9 +526,9 @@ class NavigationResolver {
   bool get _isOwnCodeRunning => identical(Zone.current[_askedZone], this);
 
   // Whether the state the guards are asked again for changed while this
-  // guard, asked for a navigation, ran its check, and the change was not the
-  // guard's own: its answer is from before the change, see
-  // [StackRouter._canNavigate].
+  // guard, asked for a navigation or asked again for a page it let go of,
+  // ran its check, and the change was not the guard's own: its answer is
+  // from before the change, see [StackRouter._canNavigate].
   bool _isAnswerStale = false;
 
   // Whether the guard has put a page of its own on a stack since it was

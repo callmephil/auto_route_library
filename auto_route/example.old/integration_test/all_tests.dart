@@ -128,6 +128,7 @@ import 'leading_button_nested_page_removed_test.dart'
 import 'leading_button_nested_pageless_route_test.dart'
     as leading_button_nested_pageless_route;
 import 'leading_button_pop_test.dart' as leading_button_pop;
+import 'let_go_stale_yes_test.dart' as let_go_stale_yes;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
 import 'link_to_removed_tab_test.dart' as link_to_removed_tab;
 import 'list_query_param_test.dart' as list_query_param;
@@ -541,6 +542,7 @@ void main() {
   leading_button_nested_page_removed.main();
   leading_button_nested_pageless_route.main();
   leading_button_pop.main();
+  let_go_stale_yes.main();
   link_during_initial_guard.main();
   link_to_removed_tab.main();
   list_query_param.main();
