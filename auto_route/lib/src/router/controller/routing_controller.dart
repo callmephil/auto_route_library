@@ -3125,12 +3125,16 @@ abstract class StackRouter extends RoutingController {
     for (final entry in List.of(_guardsLettingGo)) {
       final resolver = entry._resolver;
       if (resolver.isResolved) continue;
-      if (resolver._waitingCompleter != null &&
-          !resolver._isOwnCodeRunning &&
-          !resolver._isWaitingOnUser) {
-        resolver._markAnswersStale();
+      // A change the guard makes itself, as one that refreshes a session the
+      // app listens to does, asks it nothing again: it would make that change
+      // again without end, as for a page's guard at its check, see
+      // [_askAgainAfterReevaluation].
+      if (!resolver._isOwnCodeRunning) {
+        if (resolver._waitingCompleter != null && !resolver._isWaitingOnUser) {
+          resolver._markAnswersStale();
+        }
+        unawaited(resolver.checkGuard(entry.guard, this));
       }
-      unawaited(resolver.checkGuard(entry.guard, this));
       // A page kept on the stack for its let-go guard, as a router's last
       // page is: the round leaves its answer to that guard, as to a guard
       // asked above.

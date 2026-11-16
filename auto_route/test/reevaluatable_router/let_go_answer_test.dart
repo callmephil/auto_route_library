@@ -693,4 +693,43 @@ void main() {
       }
     }
   });
+
+  // Finding C of the second review. Steps: Account's guard lets a signed-in
+  // user through; otherwise it notifies the listenable in its own call, as
+  // one that calls auth.refresh() that always notifies does, and returns.
+  // The user signs out.
+  // Was: the guard was asked without end, 41 times in the probe's 10 frames.
+  // A let-go guard was asked again on every change, its own too.
+  // Should: a change the guard makes itself asks it nothing again, as for a
+  // page's guard at its check (_askAgainAfterReevaluation): a few asks.
+  // Native behavior this holds to: Flutter's Router handles each
+  // notification of its route information provider once
+  // (_handleRouteInformationProviderNotification, router.dart); the README:
+  // a guard that notifies the listenable from its own check doesn't run
+  // without end.
+  group('A let-go guard that notifies the listenable itself', () {
+    testWidgets('is asked a bounded number of times', (tester) async {
+      final (router, _) = await onAccount(tester);
+      accountBehavior = (resolver, _) {
+        accountAsks.add(resolver);
+        if (accountAsks.length > 40) return;
+        if (session.isSignedIn) return resolver.next();
+        session.set();
+      };
+      final asksBefore = accountAsks.length;
+
+      session.set(signedIn: false);
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(tester.takeException(), isNull);
+      expect(accountAsks.length - asksBefore, lessThanOrEqualTo(3));
+      expect(
+        state(router, const []),
+        'HomeRoute | shown: HomeRoute | / | '
+        'caller: []',
+      );
+    });
+  });
 }
