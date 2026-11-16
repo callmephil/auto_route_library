@@ -272,7 +272,15 @@ class BrowserNavigationHistory extends NavigationHistory {
       // in place; then the entry still needs to be shown.
       if (router.topMatch.id == pageId &&
           isSameHistoryUrl(urlState.url, entry.url)) {
-        if (identical(entry, held) || !_browser.keepsOut(entry)) {
+        final isOwn = identical(entry, held) || !_browser.keepsOut(entry);
+        if (isOwn && !isSameHistoryUrl(held.url, entry.url)) {
+          // The browser stands on the number of the page's entry, but the
+          // entry still holds another page's url: a step landed there
+          // before the page's url was written, as the user's forward press
+          // with this history's own step back, or the app's forward()
+          // before a push. The page stays, and its url is written there.
+          returnBrowserToApp();
+        } else if (isOwn) {
           _takeOverEntryState(configuration.pathState);
         }
         return const [];
