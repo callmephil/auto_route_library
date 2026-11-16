@@ -480,4 +480,132 @@ void main() {
       '/feed',
     ]);
   });
+
+  // The late step is its own: it changes the history only when it lands on
+  // the page gone back to, and only while the entry back() put back is
+  // still where back() put it. As on dev in both cases below.
+  testWidgets('back() into a page of a tab whose guard waits, while the user '
+      'picks another tab, keeps the tab left on the way back', (tester) async {
+    final guard = HeldGuard(mode: .answersYes);
+    final router = RootStackRouter.build(
+      routes: [
+        NamedRouteDef(
+          name: 'TabsRoute',
+          path: '/',
+          builder: (_, _) => const Scaffold(
+            body: AutoTabsRouter(
+              routes: [
+                NamedRoute<Object?>('FeedTab'),
+                NamedRoute<Object?>('MailTab'),
+                NamedRoute<Object?>('SettingsTab'),
+              ],
+            ),
+          ),
+          children: [
+            _tab('FeedTab'),
+            NamedRouteDef(
+              name: 'MailTab',
+              path: 'mail',
+              builder: (_, _) => const AutoRouter(),
+              children: [
+                _tab('InboxRoute').copyWith(path: ''),
+                _tab('ComposeRoute', guard: guard).copyWith(path: 'compose'),
+              ],
+            ),
+            _tab('SettingsTab'),
+          ],
+        ),
+      ],
+    );
+    await pumpRouterApp(tester, router);
+    for (final path in ['/mail/compose', '/settings']) {
+      unawaited(router.navigatePath(path));
+      await tester.pumpAndSettle();
+    }
+    guard
+      ..clear()
+      ..holdCall();
+
+    router.back();
+    await tester.pumpAndSettle();
+    router.innerRouterOf<TabsRouter>('TabsRoute')!.setActiveIndex(0);
+    await tester.pumpAndSettle();
+    await guard.last.allow();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(router.currentUrl, '/feed');
+    expect(await _walk(tester, router, guard), [
+      '/feed',
+      '/settings',
+      '/mail/compose',
+      '/mail',
+      '/feed',
+    ]);
+  });
+
+  testWidgets('back() into a tab whose guard waits, while the app pushes a '
+      "page in the tab left, keeps that tab's first page on the way back", (
+    tester,
+  ) async {
+    final guard = HeldGuard(mode: .answersYes);
+    final router = RootStackRouter.build(
+      routes: [
+        NamedRouteDef(
+          name: 'TabsRoute',
+          path: '/',
+          builder: (_, _) => const Scaffold(
+            body: AutoTabsRouter(
+              routes: [
+                NamedRoute<Object?>('FeedTab'),
+                NamedRoute<Object?>('MailTab'),
+                NamedRoute<Object?>('SettingsTab'),
+              ],
+            ),
+          ),
+          children: [
+            _tab('FeedTab'),
+            _tab('MailTab', guard: guard),
+            NamedRouteDef(
+              name: 'SettingsTab',
+              path: 'settings',
+              builder: (_, _) => const AutoRouter(),
+              children: [
+                _tab('SettingsMain').copyWith(path: ''),
+                _tab('SettingsDetail').copyWith(path: 'detail'),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+    await pumpRouterApp(tester, router);
+    final tabs = router.innerRouterOf<TabsRouter>('TabsRoute')!;
+    for (final index in [1, 2]) {
+      tabs.setActiveIndex(index);
+      await tester.pumpAndSettle();
+    }
+    guard
+      ..clear()
+      ..holdCall();
+
+    router.back();
+    await tester.pumpAndSettle();
+    unawaited(
+      tabs.stackRouterOfIndex(2)!.push(const NamedRoute('SettingsDetail')),
+    );
+    await tester.pumpAndSettle();
+    await guard.last.allow();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(router.currentUrl, '/mail');
+    expect(await _walk(tester, router, guard), [
+      '/mail',
+      '/settings/detail',
+      '/settings',
+      '/mail',
+      '/feed',
+    ]);
+  });
 }

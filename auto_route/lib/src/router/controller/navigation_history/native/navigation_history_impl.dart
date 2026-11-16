@@ -9,6 +9,7 @@ import 'package:auto_route/src/router/controller/navigation_history/browser/hist
 import 'package:auto_route/src/router/controller/navigation_history/navigation_history.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' hide mergeSort;
+import 'package:flutter/scheduler.dart';
 
 /// An implementation of [NavigationHistory]
 /// That's used for native platforms
@@ -472,7 +473,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       removePagesAbove(last.pageId);
       final navigation = router.navigateAllBack([
         last.route,
-      ], onLetIn: () => _takeStepBackLate(backCount, left));
+      ], onLetIn: () => _takeStepBackLate(backCount, left, last));
       // The router shows the entry as the navigation returns, as it does when
       // no guard makes it wait, so this step back is done: a back() called
       // right after it takes the next step, as two calls of history.back() in
@@ -503,19 +504,59 @@ class NavigationHistoryImpl extends NavigationHistory {
     _backTargetUrl = null;
   }
 
-  // The step back numbered [backCount], which left the page of [left], is
-  // let in after back() has ended, as a step into a tab whose guard decides
-  // later is: the tabs answer once their change has started, so back() took
-  // the step for refused and put [left] back, and the page gone back to has
-  // reported its url again since. The step is taken after all: [left]
-  // leaves, and the page gone back to keeps one entry, so the next back()
-  // goes one step further, as when the guard answers at once. Nothing
-  // changes when [left] is no longer an entry, as when the step was taken in
-  // time, or when a later back() has started.
-  void _takeStepBackLate(int backCount, _HistoryEntry left) {
+  // The step back numbered [backCount], from the page of [left] to that of
+  // [target], is let in after back() has ended, as a step into a tab whose
+  // guard decides later is: the tabs answer once their change has started,
+  // so back() took the step for refused and put [left] back. The step is
+  // taken after all, so the next back() goes one step further, as when the
+  // guard answers at once: [left] leaves, and the page of [target] keeps one
+  // entry. Only when it is that step that lands, on the page of [target],
+  // and [left] is still where back() put it, on top or under the entries
+  // the page of [target] has reported since. Nothing changes when the user
+  // picked another tab meanwhile, whose change called the step off, or a
+  // page went on over [left]: the way back goes through it, as Flutter's
+  // Route.didPopNext makes a page current again once the page over it is
+  // popped. Nor when a later back() has started, or when [left] is no
+  // longer an entry, as when the step was taken in time.
+  //
+  // Decided once the frame ends: a page the guard showed while it decided,
+  // as the sign-in page of redirectUntil, leaves as the guard lets the step
+  // in.
+  void _takeStepBackLate(
+    int backCount,
+    _HistoryEntry left,
+    _HistoryEntry target,
+  ) {
+    // A step let in before back() ended put nothing back: nothing to do.
+    if (backCount != _backCount ||
+        !_entries.any((entry) => identical(entry, left))) {
+      return;
+    }
+    SchedulerBinding.instance
+      ..addPostFrameCallback(
+        (_) => _settleStepBackLate(backCount, left, target),
+      )
+      ..ensureVisualUpdate();
+  }
+
+  void _settleStepBackLate(
+    int backCount,
+    _HistoryEntry left,
+    _HistoryEntry target,
+  ) {
     if (backCount != _backCount) return;
-    final at = _entries.indexWhere((entry) => identical(entry, left));
+    final shown = UrlState.fromSegments(router.currentSegments);
+    if (shown.url != target.url || shown.topMatch?.id != target.pageId) {
+      return;
+    }
+    final at = _entries.lastIndexWhere((entry) => identical(entry, left));
     if (at == -1) return;
+    final isLeftWhereBackPutIt = _entries
+        .skip(at + 1)
+        .every(
+          (entry) => entry.url == target.url && entry.pageId == target.pageId,
+        );
+    if (!isLeftWhereBackPutIt) return;
     _entries.removeAt(at);
     _mergeRepeatedEntries();
   }
