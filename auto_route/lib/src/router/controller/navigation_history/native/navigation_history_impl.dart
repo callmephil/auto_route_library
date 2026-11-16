@@ -175,6 +175,15 @@ class NavigationHistoryImpl extends NavigationHistory {
           _hasEntry(pageId)) {
         continue;
       }
+      // A page in the router that the page of a link goes in while a guard
+      // there decides, as the first page of that router, went in with the
+      // link: it shares the link's entry, also once a page the app pushes
+      // meanwhile covers it.
+      final linkPageId = _waitingLinkPageOver(page);
+      if (linkPageId != null) {
+        _sharing[pageId] = linkPageId;
+        continue;
+      }
       // The page on top has its entry, unless it shows no page.
       final overId = wayBack
           .skip(place + 1)
@@ -197,6 +206,23 @@ class NavigationHistoryImpl extends NavigationHistory {
     if (_entries.length > _maxEntries) {
       _entries.removeRange(0, _entries.length - _maxEntries);
     }
+  }
+
+  // The id of the page of a link that no stack has held yet, as one whose
+  // guard decides, when that page goes in the router whose stack holds the
+  // page on top of [page], or in a router nested in it.
+  LocalKey? _waitingLinkPageOver(UrlState page) {
+    final routerPageId = page.segments.reversed.elementAtOrNull(1)?.id;
+    if (routerPageId == null) return null;
+    return _entries
+        .lastWhereOrNull(
+          (entry) =>
+              _linkPages.contains(entry.pageId) &&
+              entry.pageId != routerPageId &&
+              !_wasOpen.contains(entry) &&
+              entry.route.flattened.any((match) => match.id == routerPageId),
+        )
+        ?.pageId;
   }
 
   // Puts the entries of the pages on [wayBack] in its order, in the places
@@ -470,7 +496,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       // still the latest.
       final backCount = ++_backCount;
       _backTargetUrl = last.url;
-      removePagesAbove(last.pageId);
+      _removePagesAboveWayTo(last);
       final navigation = router.navigateAllBack([
         last.route,
       ], onLetIn: () => _takeStepBackLate(backCount, left, last));
@@ -497,6 +523,23 @@ class NavigationHistoryImpl extends NavigationHistory {
         }),
       );
     }
+  }
+
+  // Takes off the pages above the page of [target], and when that page is
+  // open, the pages above each page of the way to it too, as a page the app
+  // pushed over the page that holds the router of [target]'s page: one
+  // back() closes the page on top and shows the open page under it. Left to
+  // the navigation that follows, they would wait for the guard it asks again
+  // in that router, as the pages over an open page wait for a guard there,
+  // and a guard that takes its time would keep them on screen.
+  void _removePagesAboveWayTo(_HistoryEntry target) {
+    if (_isOpen(target, isHeldOnly: true)) {
+      for (final match in target.route.flattened) {
+        removePagesAbove(match.id);
+        if (match.id == target.pageId) return;
+      }
+    }
+    removePagesAbove(target.pageId);
   }
 
   void _stopNavigatingBack() {

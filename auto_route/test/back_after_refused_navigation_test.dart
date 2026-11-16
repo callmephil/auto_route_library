@@ -169,12 +169,12 @@ void main() {
         // back() to Message, which is open, navigates to it, and its guard
         // is asked again; it lets it through.
         _guard.answerYes();
-        // Inbox went in under Settings, so it has an entry of its own, also
-        // after a link, as the web's entry list gives it one there.
+        // Inbox went in with the link, so it shares the link's entry; after
+        // the app's own navigatePath it has an entry of its own.
         expect(await _walkBack(tester, router), [
           '/settings',
           '/mail/77',
-          '/mail',
+          if (!isLink) '/mail',
           '/',
         ]);
       });
