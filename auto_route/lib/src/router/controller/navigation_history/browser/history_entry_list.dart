@@ -100,8 +100,37 @@ class HistoryEntryList {
       _sharing.remove(topId);
       if (isLink) _linkPages.add(topId);
     }
+    _repointSharers([...under, shown]);
     _giveEntries([...under, shown], isLink: isLink);
     return shown;
+  }
+
+  // Points each page of [wayBack] that shared the entry of a page that has
+  // left, its entry with it, to the nearest page over it that has an entry:
+  // the page that took the entry's place, as the page that comes on top
+  // after a pop or the one that replaced it. That page now holds the link's
+  // entry, so a later hand-over finds the pages that share it.
+  void _repointSharers(List<UrlState> wayBack) {
+    bool hasEntry(LocalKey? pageId) =>
+        _entries.any((entry) => entry.topMatch?.id == pageId);
+    for (final (place, page) in wayBack.indexed) {
+      final pageId = page.topMatch?.id;
+      final holderId = _sharing[pageId];
+      if (pageId == null ||
+          holderId == null ||
+          isPageOpen(holderId) ||
+          hasEntry(holderId)) {
+        continue;
+      }
+      final heirId = wayBack
+          .skip(place + 1)
+          .firstWhereOrNull((over) => hasEntry(over.topMatch?.id))
+          ?.topMatch
+          ?.id;
+      if (heirId == null) continue;
+      _sharing[pageId] = heirId;
+      _linkPages.add(heirId);
+    }
   }
 
   // Gives each page of [wayBack] but the last, which has its entry, an
