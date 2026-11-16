@@ -3893,12 +3893,32 @@ abstract class StackRouter extends RoutingController {
         includeAncestors: true,
       );
 
-      return await _addNewPage(
+      final hasChildren = result.route.children?.isNotEmpty ?? false;
+      final pagesBefore = hasChildren ? List.of(_pages) : null;
+      final popped = _addNewPage<T>(
         result.route,
         notify: notify,
         index: insertAt,
         onFailure: onFailure,
       );
+      // A new page with pages named for its nested router, which asks its
+      // guards once built: a "no" there takes the page back, as for the
+      // other ways a page goes on, see [_waitForNewNestedRouter]. Not after
+      // replace, whose page took the place of one that can't come back.
+      final newPage = _pages
+          .lastWhereOrNull((page) => page.routeData.matchId == result.route.id)
+          ?.routeData;
+      if (pagesBefore != null && newPage != null) {
+        _waitForNewNestedRouter(
+          pagesBefore: pagesBefore,
+          link: null,
+          linkStep: null,
+          canTakeBack: onAccepted == null && pagesBefore.every(_pages.contains),
+          onFailure: onFailure,
+          newPage: newPage,
+        );
+      }
+      return await popped;
     }
     return null;
   }
@@ -5114,14 +5134,17 @@ abstract class StackRouter extends RoutingController {
   // pages this step put on back, when [canTakeBack] and a page this router
   // had before stays under them: the root is never left empty, and a router
   // the navigation opened with this page alone keeps it, on its first page.
+  // [newPage] is that page's data when it is not the one on top, as for a
+  // page insert puts under the top.
   void _waitForNewNestedRouter({
     required List<AutoRoutePage<Object?>> pagesBefore,
     required int? link,
     required VoidCallback? linkStep,
     required bool canTakeBack,
     OnNavigationFailure? onFailure,
+    RouteData<Object?>? newPage,
   }) {
-    final data = _pages.lastOrNull?.routeData;
+    final data = newPage ?? _pages.lastOrNull?.routeData;
     if (data == null ||
         !data.hasPendingChildren ||
         _innerControllerOfMatch(data.matchId) != null) {
