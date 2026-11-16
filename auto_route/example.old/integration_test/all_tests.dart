@@ -189,6 +189,8 @@ import 'pop_until_before_build_test.dart' as pop_until_before_build;
 import 'pop_until_browser_back_test.dart' as pop_until_browser_back;
 import 'pop_until_hides_middle_test.dart' as pop_until_hides_middle;
 import 'pop_until_missing_route_test.dart' as pop_until_missing_route;
+import 'pop_until_path_then_push_in_one_turn_test.dart'
+    as pop_until_path_then_push_in_one_turn;
 import 'pop_until_then_push_in_one_turn_test.dart'
     as pop_until_then_push_in_one_turn;
 import 'pop_while_held_back_test.dart' as pop_while_held_back;
@@ -554,6 +556,7 @@ void main() {
   pop_until_browser_back.main();
   pop_until_hides_middle.main();
   pop_until_missing_route.main();
+  pop_until_path_then_push_in_one_turn.main();
   pop_until_then_push_in_one_turn.main();
   pop_while_held_back.main();
   pop_while_reevaluating.main();

@@ -3049,6 +3049,44 @@ abstract class StackRouter extends RoutingController {
     return true;
   }
 
+  // Runs a popUntil from the top down: first over the pages on top that the
+  // navigator has not built yet, which leave in the call (see
+  // [_didPopUnbuiltPagesUntil]), then over the built ones, through [popBuilt].
+  // A pop that is not scoped walks the routers from the one on top down to
+  // the root, as they are at the call: [popBuilt] gets them when it runs in
+  // the call, since a page that left may have uncovered a nested router that
+  // the same pop a frame later would not walk. Where the pop has to wait for
+  // the navigators, [popBuilt] gets null and walks the routers of that time,
+  // as before.
+  void _popUntilFromUnbuiltDown(
+    RoutePredicate predicate, {
+    required bool isScoped,
+    required bool keepsFirstPage,
+    required void Function(List<StackRouter>? walked) popBuilt,
+  }) {
+    final routers = isScoped
+        ? [this]
+        : _topMostRouter()
+              ._buildRoutersHierarchy()
+              .whereType<StackRouter>()
+              .toList();
+    final top = routers.firstOrNull;
+    if (top == null) return;
+    final count = top._pages.length;
+    final isReached = top._didPopUnbuiltPagesUntil(
+      predicate,
+      // Only the last router walked keeps its first page.
+      keepsFirstPage: keepsFirstPage && top == routers.lastOrNull,
+    );
+    if (isReached) return;
+    if (top._pages.length < count) {
+      // The pages left to ask are all built.
+      popBuilt(routers);
+      return;
+    }
+    _whenPagesBuilt(isScoped: isScoped, () => popBuilt(null));
+  }
+
   // Tells the listeners, as [notifyAll] does, that [closed] were taken off
   // the stack before the navigator built them, and rebuilds the url. No
   // navigator reports the pop of such a page, so the app's own history is
@@ -4132,29 +4170,37 @@ abstract class StackRouter extends RoutingController {
   ///
   /// Right after a push, or as a restored app starts, before its first
   /// frame, the navigator has no route yet for the pages it would close.
-  /// With [scoped], pages pushed earlier in the same turn leave as this is
-  /// called, from the top down to the first one [predicate] accepts, so a
-  /// page pushed right after it stays. [predicate] then gets a stand-in page
-  /// route that has the page as its settings, so [ModalRoute.withName] finds
-  /// the page. Otherwise it waits for the navigator to build the pages, then
-  /// pops.
+  /// Pages pushed earlier in the same turn leave as this is called, from the
+  /// top down to the first one [predicate] accepts, so a page pushed right
+  /// after it stays. [predicate] then gets a stand-in page route that has the
+  /// page as its settings, so [ModalRoute.withName] finds the page. As a
+  /// restored app starts, or while an earlier push waits for its turn, it
+  /// waits for the navigator to build the pages, then pops.
   void popUntil(RoutePredicate predicate, {bool scoped = true}) {
-    if (scoped && _didPopUnbuiltPagesUntil(predicate)) return;
-    _whenPagesBuilt(
+    _popUntilFromUnbuiltDown(
+      predicate,
       isScoped: scoped,
-      () => _popUntilNow(predicate, isScoped: scoped),
+      keepsFirstPage: false,
+      popBuilt: (walked) =>
+          _popUntilNow(predicate, isScoped: scoped, walked: walked),
     );
   }
 
   // [popUntil] on the routes the navigators have now, for a caller that
   // pushes right after it, which a later pop would also close.
-  void _popUntilNow(RoutePredicate predicate, {required bool isScoped}) {
+  void _popUntilNow(
+    RoutePredicate predicate, {
+    required bool isScoped,
+    List<StackRouter>? walked,
+  }) {
     if (isScoped) {
       _didPopUntilShowingNoneBetween(predicate);
       return;
     }
-    final routers = _topMostRouter()._buildRoutersHierarchy();
-    for (final router in routers.whereType<StackRouter>()) {
+    final routers =
+        walked ??
+        _topMostRouter()._buildRoutersHierarchy().whereType<StackRouter>();
+    for (final router in routers) {
       final navState = router._navigatorKey.currentState;
       if (navState == null) break;
       if (router._didPopUntilShowingNoneBetween(predicate)) break;
@@ -4168,16 +4214,19 @@ abstract class StackRouter extends RoutingController {
   void _popUntilKeepingFirstPage(
     RoutePredicate predicate, {
     required bool scoped,
+    List<StackRouter>? walked,
   }) {
     if (scoped) {
       return _navigatorKey.currentState?.popUntil(
         (route) => predicate(route) || route.isFirst,
       );
     }
-    final routers = _topMostRouter()
-        ._buildRoutersHierarchy()
-        .whereType<StackRouter>()
-        .toList();
+    final routers =
+        walked ??
+        _topMostRouter()
+            ._buildRoutersHierarchy()
+            .whereType<StackRouter>()
+            .toList();
     var wasPredicateSatisfied = false;
     for (final router in routers) {
       final navState = router._navigatorKey.currentState;
@@ -5398,12 +5447,12 @@ abstract class StackRouter extends RoutingController {
   /// instead of leaving no page.
   void popUntilRouteWithName(String name, {bool scoped = true}) {
     final hasName = ModalRoute.withName(name);
-    final isReached =
-        scoped && _didPopUnbuiltPagesUntil(hasName, keepsFirstPage: true);
-    if (isReached) return;
-    _whenPagesBuilt(
+    _popUntilFromUnbuiltDown(
+      hasName,
       isScoped: scoped,
-      () => _popUntilKeepingFirstPage(hasName, scoped: scoped),
+      keepsFirstPage: true,
+      popBuilt: (walked) =>
+          _popUntilKeepingFirstPage(hasName, scoped: scoped, walked: walked),
     );
   }
 
@@ -5413,17 +5462,22 @@ abstract class StackRouter extends RoutingController {
   /// When no route has [path], it pops down to the first page and keeps it,
   /// instead of leaving no page.
   void popUntilRouteWithPath(String path, {bool scoped = true}) {
-    _whenPagesBuilt(
+    bool hasPath(Route<Object?> route) {
+      if (route.settings is AutoRoutePage) {
+        return (route.settings as AutoRoutePage).routeData.match == path;
+      }
+      // Assuming pageless routes are either dialogs or bottomSheetModals
+      // and the user set a path as in RouteSettings(name: path) when
+      // showing them
+      return route.settings.name == path;
+    }
+
+    _popUntilFromUnbuiltDown(
+      hasPath,
       isScoped: scoped,
-      () => _popUntilKeepingFirstPage(scoped: scoped, (route) {
-        if (route.settings is AutoRoutePage) {
-          return (route.settings as AutoRoutePage).routeData.match == path;
-        }
-        // Assuming pageless routes are either dialogs or bottomSheetModals
-        // and the user set a path as in RouteSettings(name: path) when
-        // showing them
-        return route.settings.name == path;
-      }),
+      keepsFirstPage: true,
+      popBuilt: (walked) =>
+          _popUntilKeepingFirstPage(hasPath, scoped: scoped, walked: walked),
     );
   }
 }
