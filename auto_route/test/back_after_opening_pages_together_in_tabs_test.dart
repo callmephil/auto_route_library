@@ -21,10 +21,12 @@ import 'router_test_utils.dart';
 //
 // Native behavior this holds to: within the tab's stack, Navigator.pop
 // takes the top-most route only (packages/flutter/lib/src/widgets/
-// navigator.dart 5617 and 5652, Flutter 3.47.9), so Y1 then X1. No iOS or
-// Android source says where a tab change sits on the way back, so the place
-// of a tab change is this package's own rule: the order the user went
-// through, the latest first. Pages opened together are opened as the page
+// navigator.dart 5617 and 5652, Flutter 3.47.9), so Y1 then X1. On iOS a
+// tab bar's back never changes tabs; on Android back from another top-level
+// tab returns to the start destination (developer.android.com/guide/
+// navigation/principles), which is a tab change. Where the platforms differ,
+// back not changing tabs here is this package's own rule: the order the user
+// went through, the latest first. Pages opened together are opened as the page
 // on top is, so their entries go right before its entry.
 //
 // Steps: in tab One of Tabs over H, change tabs, then open pages together
