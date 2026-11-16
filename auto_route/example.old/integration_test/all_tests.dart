@@ -12,6 +12,7 @@ import 'back_after_closing_unbuilt_page_test.dart'
     as back_after_closing_unbuilt_page;
 import 'back_after_navigations_in_one_turn_test.dart'
     as back_after_navigations_in_one_turn;
+import 'back_after_push_all_test.dart' as back_after_push_all;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
@@ -423,6 +424,7 @@ void main() {
   async_simple_guard.main();
   back_after_closing_unbuilt_page.main();
   back_after_navigations_in_one_turn.main();
+  back_after_push_all.main();
   back_in_tabs.main();
   back_rejected_by_guard.main();
   back_same_route_params.main();
