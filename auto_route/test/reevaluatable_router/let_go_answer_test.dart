@@ -316,8 +316,14 @@ void main() {
   // app opens again while its guard decides takes the let-go page's place,
   // as a page the app takes off meanwhile stays off; the let-go page's
   // caller hears null.
-  // Native behavior this holds to: navigate opens a route once, as
-  // Flutter's Navigator refuses two pages with one key.
+  // A push of the same route with other arguments (finding H of the second
+  // review) opens another page: both come back.
+  // Native behavior this holds to: navigate reaches a page already open
+  // rather than open a second one, as Android's Navigation does with
+  // launchSingleTop and popUpTo (developer.android.com/guide/navigation/
+  // backstack) and UIKit's popToViewController(_:animated:); a push opens a
+  // new screen on iOS (pushViewController(_:animated:)) and Android, so two
+  // items are two pages.
   group('A navigation to the let-go page meanwhile', () {
     Future<(RootStackRouter, List<String?>)> navigatedTo(
       WidgetTester tester,
@@ -380,6 +386,52 @@ void main() {
         'HomeRoute AccountRoute | shown: AccountRoute | /account | '
         'caller: [null]',
       );
+    });
+
+    testWidgets('of the same route with other arguments brings both back', (
+      tester,
+    ) async {
+      final itemGuard = AutoRouteGuard.simple((resolver, _) {
+        if (session.isSignedIn) resolver.next();
+      });
+      final router = RootStackRouter.build(
+        routes: [
+          page('HomeRoute', '/'),
+          NamedRouteDef(
+            name: 'ItemRoute',
+            path: '/item/:id',
+            guards: [itemGuard],
+            builder: (_, data) =>
+                Scaffold(body: Text('Item ${data.params.getInt('id')}')),
+          ),
+        ],
+      );
+      await pumpRouterApp(tester, router, reevaluationNotifier: session);
+      final answers = <String>[];
+      unawaited(
+        router
+            .pushPath<String>('/item/1')
+            .then((result) => answers.add('1: ${result ?? 'no result'}')),
+      );
+      await tester.pumpAndSettle();
+      session.set(signedIn: false);
+      await tester.pumpAndSettle();
+      unawaited(
+        router
+            .pushPath<String>('/item/2')
+            .then((result) => answers.add('2: ${result ?? 'no result'}')),
+      );
+      await tester.pumpAndSettle();
+
+      session.set(signedIn: true);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        router.stack.map((page) => page.routeData.params.optInt('id')),
+        unorderedEquals([null, 1, 2]),
+      );
+      expect(answers, isEmpty);
     });
   });
 

@@ -135,6 +135,7 @@ import 'let_go_navigate_one_copy_test.dart' as let_go_navigate_one_copy;
 import 'let_go_only_page_above_test.dart' as let_go_only_page_above;
 import 'let_go_only_page_test.dart' as let_go_only_page;
 import 'let_go_page_above_test.dart' as let_go_page_above;
+import 'let_go_push_other_args_test.dart' as let_go_push_other_args;
 import 'let_go_redirect_cancel_test.dart' as let_go_redirect_cancel;
 import 'let_go_stale_yes_test.dart' as let_go_stale_yes;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
@@ -562,6 +563,7 @@ void main() {
   let_go_only_page_above.main();
   let_go_only_page.main();
   let_go_page_above.main();
+  let_go_push_other_args.main();
   let_go_redirect_cancel.main();
   let_go_stale_yes.main();
   link_during_initial_guard.main();

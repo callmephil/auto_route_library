@@ -5374,23 +5374,28 @@ abstract class StackRouter extends RoutingController {
         return;
       }
       if (match is! ReevaluatableRouteMatch<Object?, Object?>) return;
-      // The app opened the page's route again meanwhile, as navigate to it
+      // The app opened the same page again meanwhile, as navigate to it
       // does, or is opening it while that navigation's guards decide: that
       // page takes its place, as a page the app takes off while its guard
-      // decides stays off, and the stack holds one page of it.
+      // decides stays off, and the stack holds one of it. The same page is
+      // one of the same route with the same path parameters and arguments.
+      // A push of the route with others opens another page.
       final held = match.currentPage.routeData;
-      final heldKey = held.key;
+      bool isSame(RouteMatch<Object?> route) =>
+          route.key == held.key &&
+          route.params == held.params &&
+          route.args == held.args;
       final isOpenedAgain =
           _pages.any(
             // Not the page itself, kept on the stack as a router's only
             // page is.
-            (page) => page.routeKey == heldKey && page.routeData != held,
+            (page) => page.routeData != held && isSame(page.routeData._route),
           ) ||
           activeGuardObserver.value.any(
             (entry) =>
                 !entry._resolver.isResolved &&
                 entry._resolver.route is! ReevaluatableRouteMatch &&
-                entry._resolver.route.key == heldKey,
+                isSame(entry._resolver.route),
           );
       if (isOpenedAgain) return;
       // Its guards have answered: none is asked again for it.
