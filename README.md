@@ -1508,7 +1508,7 @@ debugPrint(appRouter.routeCollection.toTreeString());
 
 ### Keeping a url out of the address bar
 
-On the web the router reports each new url to the browser, which shows it in the address bar and adds a history entry. `neglectWhen` in `router.config` decides per url: it gets the location, such as `/checkout/confirm` (with its query, if any), and when it returns `true` that url isn't reported. The page still opens, while the address bar keeps the url before it and no history entry is added, so the browser's back button skips that page.
+On the web the router reports each new url to the browser, which shows it in the address bar and adds a history entry. `neglectWhen` in `router.config` decides per url: it gets the location, such as `/checkout/confirm` (with its query, if any), and when it returns `true` that url isn't reported. The page still opens, while the address bar keeps the url before it and no history entry is added, so the browser's back button skips that page. An app the browser opened at such a url keeps the entry the browser made for it: the back button from a page pushed over that one shows it again.
 
 ```dart
 MaterialApp.router(
