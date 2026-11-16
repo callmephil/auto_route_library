@@ -73,9 +73,11 @@ void main() {
   }, skip: kIsWeb);
 
   // https://github.com/Milad-Akarie/auto_route_library/issues/1839
-  // pushAll records only the last page, so after popping it the page now on top
-  // has no history entry yet; it must take the popped page's entry, not follow
-  // it.
+  // After a pop of the last page pushAll opened, back() goes to the page
+  // under the one now on top, not to the popped page. pushAll used to record
+  // only the last page, so the page now on top had to take the popped page's
+  // entry; it now has an entry of its own, as Flutter's Navigator closes
+  // each route pushed with a pop of its own.
   testWidgets(
     'Popping a page pushed with pushAll then going back should not return to '
     'it',
@@ -84,7 +86,7 @@ void main() {
       unawaited(router.pushAll([const SecondRoute(), const ThirdRoute()]));
       await tester.pumpAndSettle();
       expectCurrentPage(router, ThirdRoute.name);
-      expect(router.navigationHistory.length, 2);
+      expect(router.navigationHistory.length, 3);
 
       router.pop();
       await tester.pumpAndSettle();

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart'
     show RouteMatch, RoutingController, StackRouter, UrlState;
+import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart'
+    show pagesUnderTop;
 import 'package:auto_route/src/router/controller/navigation_history/navigation_history.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
@@ -27,6 +29,18 @@ class NavigationHistoryImpl extends NavigationHistory {
   // a page that is not open yet.
   final _wasOpen = Set<_HistoryEntry>.identity();
 
+  // The pages that share the entry of a page over them, as the pages a link
+  // opened under its page, each with the id of the page whose entry it
+  // shares.
+  final _sharing = <LocalKey, LocalKey>{};
+
+  // The pages whose entry a link made.
+  final _linkPages = <LocalKey>{};
+
+  // The ids of the pages on the way back at the last change: only a page
+  // new on it gets an entry under the page on top.
+  var _wayBackIds = <LocalKey>{};
+
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
     super.onNewUrlState(newState, notify: notify);
@@ -39,24 +53,122 @@ class NavigationHistoryImpl extends NavigationHistory {
       });
     }
     final didDropTop = _dropClosed();
-    if (_isLastEntry(newState)) return;
+    _addTopEntry(newState, isTopFree: didDropTop);
+    _giveEntriesUnderTop();
+  }
 
+  // Adds the entry of the page on top of [newState], unless it has one.
+  // [isTopFree] tells that the last entry just left with its page.
+  void _addTopEntry(UrlState newState, {required bool isTopFree}) {
     // Don't add entries during back navigation to prevent duplicates
-    if (_isNavigatingBack) return;
-
+    if (_isNavigatingBack || _isLastEntry(newState)) return;
     if (_isRebuildingAfterPop) {
       // The last entry belongs to the popped page; drop it so back() can't
       // return to it, unless it left with its page. If the page now on top is
       // the entry before, _addEntry skips it as the same page.
-      if (!didDropTop && _entries.isNotEmpty) _entries.removeLast();
+      if (!isTopFree && _entries.isNotEmpty) _entries.removeLast();
       _addEntry(newState.copyWith(shouldReplace: false));
       return;
     }
-
     // A replace takes the place of the entry before, unless that entry just
     // left with its page: the place is then free.
-    _addEntry(didDropTop ? newState.copyWith(shouldReplace: false) : newState);
+    _addEntry(isTopFree ? newState.copyWith(shouldReplace: false) : newState);
   }
+
+  // Gives each page new on the way back under the page on top an entry of
+  // its own, in its place among the others, as pages that pushAll or a
+  // replaceAll of several pages open together: Flutter's Navigator closes
+  // them one per pop. Pages a link opened together, the launch url included,
+  // share the link's entry instead, as a page that turns up later under an
+  // entry a link made, such as the first page of a nested router built a
+  // frame after its page: the user made one navigation, and back() leaves it
+  // as one. The same rules as the web's entry list.
+  void _giveEntriesUnderTop() {
+    final under = pagesUnderTop(router);
+    final wayBack = [...under, urlState];
+    final known = _wayBackIds;
+    _wayBackIds = {for (final page in wayBack) ?page.topMatch?.id};
+    _sharing.removeWhere((pageId, _) => controllerOfPage(pageId) == null);
+    _linkPages.removeWhere((pageId) => controllerOfPage(pageId) == null);
+    if (_isNavigatingBack) return;
+    final isLink = router.root.isShowingLink;
+    final topId = urlState.topMatch?.id;
+    if (topId != null) {
+      _sharing.remove(topId);
+      if (isLink) _linkPages.add(topId);
+    }
+    for (final (place, page) in under.indexed) {
+      final pageId = page.topMatch?.id;
+      if (pageId == null ||
+          known.contains(pageId) ||
+          _sharing.containsKey(pageId) ||
+          _hasEntry(pageId)) {
+        continue;
+      }
+      // The page on top has its entry, unless it shows no page.
+      final overId = wayBack
+          .skip(place + 1)
+          .map((over) => over.topMatch?.id)
+          .firstWhereOrNull((id) => id != null && _hasEntry(id));
+      if (overId == null) continue;
+      if (isLink || _linkPages.contains(overId)) {
+        _sharing[pageId] = overId;
+        continue;
+      }
+      // After the entry of the nearest page under it that has one, else
+      // before the entry of the page over it.
+      final belowId = under
+          .take(place)
+          .toList()
+          .reversed
+          .map((below) => below.topMatch?.id)
+          .firstWhereOrNull((id) => id != null && _hasEntry(id));
+      final at = belowId == null
+          ? _entries.indexWhere((entry) => entry.pageId == overId)
+          : _entries.lastIndexWhere((entry) => entry.pageId == belowId) + 1;
+      final entry = _entryOf(page);
+      _entries.insert(at, entry);
+      _wasOpen.add(entry);
+    }
+  }
+
+  // Hands the entry of each page that has left from under the entry of
+  // another page, and that pages of the way back shared, to the nearest of
+  // them: it takes the entry's place with its own url, and the others that
+  // shared it share it with that page. Otherwise those pages, as the pages a
+  // link opened together, would lose their way back with the page that held
+  // their entry. The same rule as the web's entry list.
+  void _handOverSharedEntries() {
+    if (_sharing.isEmpty) return;
+    final wayBack = [...pagesUnderTop(router), urlState];
+    for (final (place, entry) in _entries.indexed.toList()) {
+      if (place == _entries.length - 1 ||
+          !_wasOpen.contains(entry) ||
+          _isOpen(entry)) {
+        continue;
+      }
+      final heir = wayBack.lastWhereOrNull(
+        (page) => _sharing[page.topMatch?.id] == entry.pageId,
+      );
+      final heirId = heir?.topMatch?.id;
+      if (heir == null || heirId == null) continue;
+      final heirEntry = _entryOf(heir);
+      _entries[place] = heirEntry;
+      _wasOpen.add(heirEntry);
+      _sharing
+        ..remove(heirId)
+        ..updateAll(
+          (_, sharedId) => sharedId == entry.pageId ? heirId : sharedId,
+        );
+      _linkPages.add(heirId);
+    }
+  }
+
+  bool _hasEntry(LocalKey pageId) =>
+      _entries.any((entry) => entry.pageId == pageId);
+
+  static _HistoryEntry _entryOf(UrlState state) =>
+      .new(UrlState.toHierarchy(state.segments), state.url, state.topMatch!.id);
 
   // Drops the entries of the pages that have left their stacks, however they
   // left. A page leaves when it is popped or replaced, and also when the app
@@ -69,6 +181,7 @@ class NavigationHistoryImpl extends NavigationHistory {
   // later pop returns to it, and the web history, which drops such entries on
   // every change.
   bool _dropClosed() {
+    _handOverSharedEntries();
     final last = _entries.lastOrNull;
     _entries.removeWhere((entry) {
       if (_isOpen(entry)) {
@@ -144,8 +257,7 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   void _addEntry(UrlState urlState) {
     if (!urlState.hasSegments) return;
-    final route = UrlState.toHierarchy(urlState.segments);
-    final newEntry = _HistoryEntry(route, urlState.url, urlState.topMatch!.id);
+    final newEntry = _entryOf(urlState);
 
     if (_isLastEntry(urlState)) return;
     // A page with the same url as the last entry's is a new entry only while

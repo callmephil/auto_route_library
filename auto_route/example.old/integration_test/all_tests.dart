@@ -15,6 +15,8 @@ import 'back_after_closing_unbuilt_page_test.dart'
 import 'back_after_link_page_removed_test.dart' as back_after_link_page_removed;
 import 'back_after_navigations_in_one_turn_test.dart'
     as back_after_navigations_in_one_turn;
+import 'back_after_pages_opened_together_test.dart'
+    as back_after_pages_opened_together;
 import 'back_after_push_all_test.dart' as back_after_push_all;
 import 'back_after_sign_in_test.dart' as back_after_sign_in;
 import 'back_in_tabs_test.dart' as back_in_tabs;
@@ -434,6 +436,7 @@ void main() {
   back_after_closing_unbuilt_page.main();
   back_after_link_page_removed.main();
   back_after_navigations_in_one_turn.main();
+  back_after_pages_opened_together.main();
   back_after_push_all.main();
   back_after_sign_in.main();
   back_in_tabs.main();

@@ -60,8 +60,8 @@ void main() {
       expect(router.canNavigateBack, isFalse);
     }, skip: kIsWeb);
 
-    // Steps: pushAll SecondRoute and ThirdRoute (only the last one gets a
-    // history entry), pop ThirdRoute, then call back().
+    // Steps: pushAll SecondRoute and ThirdRoute, which get a history entry
+    // each. Pop ThirdRoute, then call back().
     // Should: back() lands on FirstRoute.
     testWidgets(
       'Popping a page pushed with pushAll then going back does not return to '
@@ -76,7 +76,7 @@ void main() {
         router.pop();
         await tester.pumpAndSettle();
         expectCurrentPage(router, SecondRoute.name);
-        expect((earlier1, router.navigationHistory.length), (2, 2));
+        expect((earlier1, router.navigationHistory.length), (3, 2));
         expect(router.urlState.url, '/second-route');
 
         router.back();
