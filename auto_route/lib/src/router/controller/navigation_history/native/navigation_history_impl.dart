@@ -24,6 +24,9 @@ class NavigationHistoryImpl extends NavigationHistory {
   @override
   final StackRouter router;
 
+  // The most entries the history keeps; the oldest go first.
+  static const _maxEntries = 21;
+
   final _entries = <_HistoryEntry>[];
   bool _isNavigatingBack = false;
   // The url back() navigates to, until the router reports it.
@@ -48,8 +51,10 @@ class NavigationHistoryImpl extends NavigationHistory {
   // The pages whose entry a link made.
   final _linkPages = <LocalKey>{};
 
-  // The ids of the pages on the way back at the last url report: only a page
-  // new on it since gets an entry under the page on top.
+  // The ids of the open pages that have been on the way back at a url report:
+  // only a page new on it since gets an entry under the page on top. A page
+  // stays here while it is open, also off the way back, as in a tab not
+  // shown, so a page the limit dropped never gets its entry again.
   var _wayBackIds = <LocalKey>{};
 
   @override
@@ -69,6 +74,7 @@ class NavigationHistoryImpl extends NavigationHistory {
     _giveLinkEntryToTop();
     _giveEntriesUnderTop(urlState);
     _wayBackIds = {
+      ..._wayBackIds.where((pageId) => controllerOfPage(pageId) != null),
       for (final page in [...pagesUnderTop(router), urlState])
         ?page.topMatch?.id,
     };
@@ -181,6 +187,10 @@ class NavigationHistoryImpl extends NavigationHistory {
       final entry = _entryOf(page);
       _entries.insert(at, entry);
       _wasOpen.add(entry);
+    }
+    // The oldest entries go first, as when entries are added one by one.
+    if (_entries.length > _maxEntries) {
+      _entries.removeRange(0, _entries.length - _maxEntries);
     }
   }
 
@@ -324,9 +334,9 @@ class NavigationHistoryImpl extends NavigationHistory {
       _entries.removeLast();
     }
 
-    // limit history registration to 20 entries
-    if (_entries.length > 20) {
-      _entries.removeAt(0);
+    // Keeps room for the new entry within the limit.
+    if (_entries.length >= _maxEntries) {
+      _entries.removeRange(0, _entries.length - _maxEntries + 1);
     }
     if (urlState.shouldReplace && length > 0) {
       _entries.removeLast();
