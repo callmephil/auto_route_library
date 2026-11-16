@@ -22,6 +22,11 @@ class PagelessRoutesObserver extends NavigatorObserver with ChangeNotifier {
   /// The top-most visible route inside [Navigator]
   Route<Object?>? current;
 
+  /// Called with each pageless route, such as a dialog, as it goes on the
+  /// [Navigator], in the zone of the code that pushed it.
+  @internal
+  ValueChanged<Route<Object?>>? onPagelessRouteIn;
+
   /// Whether the top-most route is a pageless route, such as a dialog.
   ///
   /// False once the [Navigator] this observer watches has gone: a navigator
@@ -68,6 +73,7 @@ class PagelessRoutesObserver extends NavigatorObserver with ChangeNotifier {
     _routes.removeWhere((_, navigator) => !(navigator?.mounted ?? false));
     _remember(route);
     _pageUnder.removeWhere((each, _) => !_routes.containsKey(each));
+    if (route.settings is! Page) onPagelessRouteIn?.call(route);
     if (route.settings is! Page && previousRoute != null) {
       final pageUnder = previousRoute.settings is Page
           ? previousRoute

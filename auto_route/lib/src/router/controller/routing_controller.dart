@@ -2814,7 +2814,7 @@ abstract class StackRouter extends RoutingController {
         if (resolver.route is ReevaluatableRouteMatch) {
           // Of a page being reevaluated.
           _askAgainAfterReevaluation(isOwnChange: resolver._isOwnCodeRunning);
-        } else if (!resolver._isOwnCodeRunning && !resolver._hasShownPage) {
+        } else if (!resolver._isOwnCodeRunning && !resolver._isWaitingOnUser) {
           // Of a navigation: it is asked again before its page goes in.
           resolver._isAnswerStale = true;
         }
@@ -2864,7 +2864,8 @@ abstract class StackRouter extends RoutingController {
   int get stateHash => super.stateHash ^ hasPagelessTopRoute.hashCode;
 
   /// The page-less route observer of this controller
-  final pagelessRoutesObserver = PagelessRoutesObserver();
+  final pagelessRoutesObserver = PagelessRoutesObserver()
+    ..onPagelessRouteIn = NavigationResolver._reportPagelessRouteGoesOn;
 
   /// The active guards observer of this controller
   final activeGuardObserver = ActiveGuardObserver();

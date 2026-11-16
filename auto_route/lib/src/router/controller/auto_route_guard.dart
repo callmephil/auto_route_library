@@ -529,11 +529,12 @@ class NavigationResolver {
   bool _isAnswerStale = false;
 
   // Whether the guard has put a page of its own on a stack since it was
-  // asked, as one that awaits its own push of a login page does. From then
-  // on it waits behind that page and answers from what happens there, as a
-  // guard behind its redirect does: a change meanwhile, such as the sign-in
-  // on that page, leaves its answer fresh.
-  bool _hasShownPage = false;
+  // asked, as one that awaits its own push of a login page does, or a
+  // pageless route, as one that asks the user in a dialog does. From then on
+  // it waits on the user and answers from what happens there, as a guard
+  // behind its redirect does: a change meanwhile, such as the sign-in on
+  // that page, leaves its answer fresh.
+  bool _isWaitingOnUser = false;
 
   // Told with the router each time code of the guard puts a page on a stack
   // while the guard has not answered, see [_checkGuard].
@@ -548,8 +549,21 @@ class NavigationResolver {
     final asked = Zone.current[_askedZone];
     if (asked is NavigationResolver && !asked.isResolved) {
       asked
-        .._hasShownPage = true
+        .._isWaitingOnUser = true
         .._onShowsPage?.call(router);
+    }
+  }
+
+  // Called by a router's [PagelessRoutesObserver] as a pageless route, such
+  // as a dialog, goes on its navigator. When the code that shows it is a
+  // guard's that has not answered, as one that asks the user in a dialog,
+  // the guard waits on the user from then on. Unlike a page, a dialog takes
+  // the place of no page, so the navigation the guard decides about is not
+  // told.
+  static void _reportPagelessRouteGoesOn(Route<Object?> _) {
+    final asked = Zone.current[_askedZone];
+    if (asked is NavigationResolver && !asked.isResolved) {
+      asked._isWaitingOnUser = true;
     }
   }
 

@@ -64,5 +64,61 @@ void main() {
       expect(failures.singleOrNull, isA<RejectedByGuardFailure>());
       await expectBrowserUrl('/');
     });
+
+    // Steps: push Draft, whose guard asks "Leave draft?" in a dialog and lets
+    // Draft in on "Yes". While the dialog is open, the user signs out and the
+    // listenable notifies. The user taps "Yes".
+    // Was: the dialog closed and opened again, and Draft opened only after a
+    // second "Yes".
+    // Should: one "Yes" opens Draft. The guard answers from the user, as an
+    // alert on iOS or Android stays up through a change and is acted on once.
+    // Headless test: auto_route/test/reevaluatable_router/dialog_guard_asked_once_test.dart
+    testWidgets('A sign-out while the dialog of a guard is open asks the user '
+        'once', (tester) async {
+      final isSignedIn = ValueNotifier(true);
+      addTearDown(isSignedIn.dispose);
+      final guard = AutoRouteGuard.simple((resolver, router) async {
+        final isConfirmed = await showDialog<bool>(
+          context: router.root.navigatorKey.currentContext!,
+          builder: (dialog) => AlertDialog(
+            title: const Text('Leave draft?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialog).pop(true),
+                child: const Text('Yes'),
+              ),
+            ],
+          ),
+        );
+        (isConfirmed ?? false) ? resolver.next() : resolver.reject();
+      });
+      final router = RootStackRouter.build(
+        routes: [
+          for (final (name, path, asked) in [
+            ('HomeRoute', '/', null),
+            ('DraftRoute', '/draft', guard),
+          ])
+            NamedRouteDef(
+              name: name,
+              path: path,
+              guards: [?asked],
+              builder: (_, _) => Scaffold(body: SafeArea(child: Text(name))),
+            ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await pumpRouterApp(tester, router, reevaluationNotifier: isSignedIn);
+
+      unawaited(router.push(const NamedRoute('DraftRoute')));
+      await tester.pumpAndSettle();
+      isSignedIn.value = false;
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Yes'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Leave draft?'), findsNothing);
+      expectTopPage(router, 'DraftRoute');
+      await expectBrowserUrl('/draft');
+    });
   });
 }
