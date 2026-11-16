@@ -48,6 +48,15 @@ class NavigationHistoryImpl extends BrowserNavigationHistory {
   }
 }
 
+// The browser's Navigation API, or null in a browser that has none, where
+// the writer steps forward as it is asked.
+@JS('navigation')
+external _Navigation? get _navigation;
+
+extension type const _Navigation._(JSObject _) implements JSObject {
+  external bool get canGoForward;
+}
+
 // The browser's history as Flutter's web engine keeps it: every entry the
 // app writes goes through the Router's route information provider to the
 // engine, which numbers it with a serial count.
@@ -124,6 +133,9 @@ class _WindowHistory implements HistoryBrowser {
 
   @override
   void go(int delta) => window.history.go(delta);
+
+  @override
+  bool get canGoForward => _navigation?.canGoForward ?? true;
 
   // The engine has a popstate listener of its own, which gives a serial
   // count to an entry the browser made, as for a url typed into the address

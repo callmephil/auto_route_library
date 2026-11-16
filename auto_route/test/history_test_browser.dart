@@ -79,6 +79,10 @@ class TestHistoryBrowser implements HistoryBrowser {
     _didStartStep(delta);
   }
 
+  // From the entry the browser stands on, or is going to.
+  @override
+  bool get canGoForward => (_steps.lastOrNull ?? index) < entries.length - 1;
+
   /// The user presses the back button; false when no entry is under the one
   /// the browser stands on, or is going to.
   bool didPressBack() => _didStartStep(-1);
