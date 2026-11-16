@@ -1577,6 +1577,11 @@ class TabsRouter extends RoutingController {
   // [onLetGo] is called when a guard asked again returns without an answer
   // and without a redirect: the tab leaves the screen until it answers, see
   // [_reevaluateActiveTab].
+  //
+  // A yes from before a change of the state the guards are asked again for
+  // is dropped, and the guard is asked once more, [timesLeft] times at most,
+  // as [StackRouter._canNavigate] does for a page: a sign-out that lands
+  // while a tab's guard awaits a request never shows the tab.
   FutureOr<ResolverResult> _checkTabGuards(
     RouteMatch<Object?> route, {
     required int change,
@@ -1584,6 +1589,7 @@ class TabsRouter extends RoutingController {
     bool isReevaluating = false,
     int from = 0,
     VoidCallback? onLetGo,
+    int timesLeft = _kMaxAsksAgainInARow,
   }) {
     final guards = route.guards;
     final guard = guards.elementAtOrNull(from);
@@ -1606,6 +1612,24 @@ class TabsRouter extends RoutingController {
     router.activeGuardObserver._add(entry);
     FutureOr<ResolverResult> onResult(ResolverResult result) {
       router.activeGuardObserver._remove(entry);
+      final isAskedAgain =
+          result.continueNavigation &&
+          resolver._isAnswerStale &&
+          timesLeft > 0 &&
+          !_isDisposed &&
+          change == _tabChanges;
+      if (isAskedAgain) {
+        // The stale answer is dropped whole, with the route it names.
+        return _checkTabGuards(
+          route,
+          change: change,
+          onFailure: onFailure,
+          isReevaluating: isReevaluating,
+          from: from,
+          onLetGo: onLetGo,
+          timesLeft: timesLeft - 1,
+        );
+      }
       if (!result.continueNavigation) {
         onFailure?.call(RejectedByGuardFailure(result.route, guard));
         return result;
