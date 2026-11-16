@@ -1927,26 +1927,31 @@ class TabsRouter extends RoutingController {
   // its stack has, as when the app starts at the link: it then stays, on its
   // first tab. Nothing waits when the page went on long before.
   void _turnDownPendingRoute(RouteMatch<Object?> route) {
-    final waiting = _NestedLetIn.claim(_routeData);
+    final waiting = _NestedLetIn.claimToTurnDown(_routeData);
     if (waiting == null) return;
     final page = _routeData;
     SchedulerBinding.instance
       ..addPostFrameCallback((_) {
         final onFailure = waiting.onFailure;
         // The app's own call without onFailure gets the error from its
-        // future, as it does when the tabs page is open: the future of the
-        // page it put on, which is taken back. A link has no caller to tell,
+        // future, as it does when the tabs page is open: a call that answers
+        // when the page it put on closes, as navigate, from that page's
+        // future, which is taken back; a batch that answers before, as
+        // pushAll, from [_NestedLetIn.taken]. A link has no caller to tell,
         // and a page that stays answers when it closes.
-        final caller =
+        final error =
             onFailure == null &&
                 waiting.link == null &&
-                waiting.takeBack != null &&
-                !ignorePopCompleters
-            ? page._pendingPopCompleter
+                waiting.takeBack != null
+            ? _notListedError(route)
             : null;
         onFailure?.call(RouteNotFoundFailure(route.name));
-        caller?.completeError(_notListedError(route), .current);
-        waiting.turnDown();
+        if (error != null && !ignorePopCompleters) {
+          page._pendingPopCompleter
+            ?..future.ignore()
+            ..completeError(error, .current);
+        }
+        waiting.turnDown(error: error);
       })
       ..ensureVisualUpdate();
   }
@@ -4885,14 +4890,24 @@ abstract class StackRouter extends RoutingController {
     bool notify = true,
   }) async {
     final matches = _matchAllOrReportFailure(routes, onFailure: onFailure);
-    if (matches != null) {
-      await _pushAllGuarded<void>(
-        matches,
-        onFailure: onFailure,
-        notify: notify,
-        returnLastRouteCompleter: false,
-      );
-    }
+    if (matches == null) return;
+    LocalKey? lastPage;
+    await _pushAllGuarded<void>(
+      matches,
+      onFailure: onFailure,
+      notify: notify,
+      returnLastRouteCompleter: false,
+      onLastRouteAdded: (match) => lastPage = match.id,
+    );
+    // The nested router of the last page, built with it, takes the batch up
+    // in the frame that builds it, and may turn it down then, as tabs do
+    // with a route that is not one of them: without onFailure the error
+    // reaches this call, as it reaches navigate's.
+    if (onFailure != null) return;
+    final last = _pages.lastWhereOrNull(
+      (page) => page.routeData.matchId == lastPage,
+    );
+    await _NestedLetIn.waitingOn(last?.routeData)?.taken;
   }
 
   // Tells both, or the one given; null when neither is.
@@ -6693,6 +6708,21 @@ class _NestedLetIn {
   // The caller's, which hears a guard's rejection there.
   OnNavigationFailure? onFailure;
 
+  // Completes once the nested router has taken the navigation up: claimed
+  // it, let it in, turned it down or handed it on. With the error a turn-down
+  // gives the app's own call that has no onFailure: a batch whose call
+  // answers before its pages close, as pushAll, waits on it for that error,
+  // see [StackRouter._pushAll]. Nothing else waits on it.
+  final _taken = Completer<void>()..future.ignore();
+
+  // What a batch waits on, see [_taken].
+  Future<void> get taken => _taken.future;
+
+  void _markTaken([Object? error]) {
+    if (_taken.isCompleted) return;
+    error == null ? _taken.complete() : _taken.completeError(error, .current);
+  }
+
   // The navigation waiting on the nested router of the page of [data], not
   // claimed yet.
   static _NestedLetIn? waitingOn(RouteData<Object?>? data) =>
@@ -6700,7 +6730,13 @@ class _NestedLetIn {
 
   // Takes the navigation waiting on the nested router of the page of [data],
   // for that router to let it in or turn it down.
-  static _NestedLetIn? claim(RouteData<Object?> data) {
+  static _NestedLetIn? claim(RouteData<Object?> data) =>
+      claimToTurnDown(data)?.._markTaken();
+
+  // Takes it as [claim] does, for a router that turns it down after the
+  // frame, as tabs do with a route that is not one of them: it is taken up
+  // only then, with the error the turn-down gives.
+  static _NestedLetIn? claimToTurnDown(RouteData<Object?> data) {
     final letIn = _ofPage[data];
     _ofPage[data] = null;
     return letIn;
@@ -6753,6 +6789,7 @@ class _NestedLetIn {
   // The guards let the navigation in. A link a later link was let in after
   // gives way to it.
   void letIn() {
+    _markTaken();
     final step = linkStep;
     final onLetIn = _onLetIn;
     linkStep = null;
@@ -6766,12 +6803,17 @@ class _NestedLetIn {
   // A guard turned the navigation down: nothing it waited for is done, and
   // the page is taken back, when [canTakeBack] and it can be. Answers
   // whether it was.
-  bool turnDown({bool canTakeBack = true}) {
+  //
+  // [error] is what the app's own call that has no onFailure hears, see
+  // [taken].
+  bool turnDown({bool canTakeBack = true, Object? error}) {
     final toTakeBack = canTakeBack ? takeBack : null;
     linkStep = null;
     _onLetIn = null;
     takeBack = null;
-    return toTakeBack?.call() ?? false;
+    final isTakenBack = toTakeBack?.call() ?? false;
+    _markTaken(error);
+    return isTakenBack;
   }
 
   // The navigation goes on into the nested router of a page the nested
@@ -6783,6 +6825,8 @@ class _NestedLetIn {
       ..link ??= link
       ..onFailure ??= onFailure
       ..takeBack = takeBack ?? inner.takeBack;
+    // Taken up once the router there has taken it up.
+    unawaited(inner.taken.then((_) => _markTaken(), onError: _markTaken));
     final step = linkStep;
     if (step != null) {
       final innerStep = inner.linkStep;

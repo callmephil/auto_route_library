@@ -503,6 +503,94 @@ void main() {
     });
   }
 
+  // A batch answers once its guards have decided, before its pages close:
+  // without onFailure it waits until the nested router of its last page has
+  // taken it up, a frame later at most, and gets the error from there.
+  // popAndPushAll pops the page on top first, so it runs from Detail.
+  for (final way in ['pushAll', 'navigateAll', 'popAndPushAll']) {
+    testWidgets("The app's $way without onFailure to the tabs page on the "
+        'removed tab, from another page, takes the tabs page back and '
+        'throws', (tester) async {
+      list.value = const [_feed, _settings];
+      final router = _build(.indexedStack, list, hasLanding: true);
+      await pumpRouterConfigApp(tester, router.config());
+      if (way == 'popAndPushAll') {
+        unawaited(router.push(const NamedRoute('DetailRoute')));
+        await tester.pumpAndSettle();
+      }
+      final heard = <String>[];
+      const home = NamedRoute('HomeRoute', children: [_profile]);
+
+      unawaited(
+        switch (way) {
+          'pushAll' => router.pushAll(const [home]),
+          'navigateAll' => router.navigateAll(
+            router.matcher.match('/home/profile') ?? const [],
+          ),
+          _ => router.popAndPushAll(const [home]),
+        }.then(
+          (_) => heard.add('done'),
+          onError: (Object thrown) => heard.add('${thrown.runtimeType}'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(_state(router), 'shown LandingRoute, root LandingRoute, url /');
+      expect(heard, ['FlutterError']);
+    });
+  }
+
+  testWidgets('pushAll with onFailure to the tabs page on the removed tab '
+      'completes and reports it', (tester) async {
+    list.value = const [_feed, _settings];
+    final router = _build(.indexedStack, list, hasLanding: true);
+    await pumpRouterConfigApp(tester, router.config());
+    final failures = <NavigationFailure>[];
+    final heard = <String>[];
+
+    unawaited(
+      router
+          .pushAll(const [
+            NamedRoute('HomeRoute', children: [_profile]),
+          ], onFailure: failures.add)
+          .then((_) => heard.add('done')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(heard, ['done']);
+    expect(_state(router), 'shown LandingRoute, root LandingRoute, url /');
+    expect(failures.map((failure) => failure.runtimeType), [
+      RouteNotFoundFailure,
+    ]);
+  });
+
+  testWidgets('pushAll without onFailure to the tabs page on a listed tab '
+      'completes', (tester) async {
+    list.value = const [_feed, _settings];
+    final router = _build(.indexedStack, list, hasLanding: true);
+    await pumpRouterConfigApp(tester, router.config());
+    final heard = <String>[];
+
+    unawaited(
+      router
+          .pushAll(const [
+            NamedRoute('HomeRoute', children: [_settings]),
+          ])
+          .then((_) => heard.add('done')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(heard, ['done']);
+    expect(
+      _state(router),
+      'shown SettingsTab, tab 1 SettingsTab, tabs FeedTab SettingsTab, '
+      'root LandingRoute HomeRoute, url /home/settings',
+    );
+  });
+
   testWidgets('A path to the removed tab of tabs inside a tab is turned '
       'down', (tester) async {
     final inner = ValueNotifier<List<PageRouteInfo>>(const [
