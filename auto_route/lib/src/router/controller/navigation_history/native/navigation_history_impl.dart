@@ -4,6 +4,8 @@ import 'package:auto_route/auto_route.dart'
     show RouteMatch, RoutingController, StackRouter, UrlState;
 import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart'
     show pagesUnderTop;
+import 'package:auto_route/src/router/controller/navigation_history/browser/history_entry_list.dart'
+    show isSameHistoryUrl;
 import 'package:auto_route/src/router/controller/navigation_history/navigation_history.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
@@ -11,8 +13,13 @@ import 'package:flutter/foundation.dart';
 /// An implementation of [NavigationHistory]
 /// That's used for native platforms
 class NavigationHistoryImpl extends NavigationHistory {
-  /// Default constructor;
-  new(this.router);
+  /// Creates the history of [router], the root router, and listens to it.
+  new(this.router) {
+    // The root router hears of every change to its stacks and to the stacks
+    // nested in it, also of one that reports no url, such as the pages of a
+    // link going in after the link reported its url.
+    router.addListener(_onStacksChanged);
+  }
 
   @override
   final StackRouter router;
@@ -23,6 +30,10 @@ class NavigationHistoryImpl extends NavigationHistory {
   String? _backTargetUrl;
   int _backCount = 0;
   bool _isRebuildingAfterPop = false;
+
+  // Whether the last entry left with its page at a change reported before
+  // its url: the place on top is then free for the url that follows.
+  bool _isTopFree = false;
 
   // The entries whose page a stack has held. Only such an entry leaves with
   // its page: the entry of a link whose page a guard has yet to let in holds
@@ -52,9 +63,42 @@ class NavigationHistoryImpl extends NavigationHistory {
         if (backCount == _backCount) _stopNavigatingBack();
       });
     }
-    final didDropTop = _dropClosed();
+    final didDropTop = _dropClosed() || _isTopFree;
+    _isTopFree = false;
     _addTopEntry(newState, isTopFree: didDropTop);
+    _giveLinkEntryToTop();
     _giveEntriesUnderTop();
+  }
+
+  // Brings the entries to the stacks after a change that may report no url:
+  // an entry whose page has gone in counts as once open from then on, so it
+  // leaves with its page, and the entry of a page that left goes at once, so
+  // length and canNavigateBack count the pages open.
+  void _onStacksChanged() {
+    if (_dropClosed()) _isTopFree = true;
+    _giveLinkEntryToTop();
+  }
+
+  // Gives the last entry, made by a link for a page not open yet, to the
+  // page on top once the link has landed on a page already open with the
+  // same url: that page keeps its own id, so the link's never goes in. When
+  // the entry before is that page's own, the two are one.
+  void _giveLinkEntryToTop() {
+    final last = _entries.lastOrNull;
+    if (last == null || _wasOpen.contains(last) || _isOpen(last)) return;
+    final top = UrlState.fromSegments(router.currentSegments);
+    final topId = top.topMatch?.id;
+    if (topId == null ||
+        topId == last.pageId ||
+        !isSameHistoryUrl(top.url, last.url) ||
+        controllerOfPage(topId) == null) {
+      return;
+    }
+    _entries.removeLast();
+    if (_entries.lastOrNull?.pageId == topId) return;
+    final entry = _entryOf(top);
+    _entries.add(entry);
+    _wasOpen.add(entry);
   }
 
   // Adds the entry of the page on top of [newState], unless it has one.

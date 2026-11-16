@@ -18,6 +18,8 @@ import 'back_after_navigations_in_one_turn_test.dart'
 import 'back_after_pages_opened_together_test.dart'
     as back_after_pages_opened_together;
 import 'back_after_push_all_test.dart' as back_after_push_all;
+import 'back_after_removing_link_page_test.dart'
+    as back_after_removing_link_page;
 import 'back_after_sign_in_test.dart' as back_after_sign_in;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
@@ -440,6 +442,7 @@ void main() {
   back_after_navigations_in_one_turn.main();
   back_after_pages_opened_together.main();
   back_after_push_all.main();
+  back_after_removing_link_page.main();
   back_after_sign_in.main();
   back_in_tabs.main();
   back_rejected_by_guard.main();
