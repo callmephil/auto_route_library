@@ -5162,19 +5162,37 @@ abstract class StackRouter extends RoutingController {
             // caller to be answered.
             takenOff.addAll(replaced);
             _takenOffByOpenBatches.addAll(replaced);
-            final pagesBefore = waitsForNewRouter ? List.of(_pages) : null;
+            // A route before the last may hold pages for a nested router not
+            // built yet too, as a pushAll that puts a shell under another
+            // page: its guards answer for the whole batch.
+            final isWaitingBelow = going
+                .take(going.length - 1)
+                .any((route) => route.children?.isNotEmpty ?? false);
+            final pagesBefore = waitsForNewRouter || isWaitingBelow
+                ? List.of(_pages)
+                : null;
             going.take(going.length - 1).forEachIndexed(putOn);
             final popped = putOnLast(going.lastOrNull ?? match);
             if (pagesBefore != null) {
-              _waitForNewNestedRouter(
-                pagesBefore: pagesBefore,
-                link: ofLink,
-                linkStep: onLinkAccepted,
-                onFailure: onFailure,
-                // Pages this step took off can't come back.
-                canTakeBack:
-                    replacement == null && pagesBefore.every(_pages.contains),
-              );
+              // Pages this step took off can't come back.
+              final canTakeBack =
+                  replacement == null && pagesBefore.every(_pages.contains);
+              if (isWaitingBelow) {
+                _waitForNestedRoutersBelowTop(
+                  pagesBefore: pagesBefore,
+                  canTakeBack: canTakeBack,
+                  onFailure: onFailure,
+                );
+              }
+              if (waitsForNewRouter) {
+                _waitForNewNestedRouter(
+                  pagesBefore: pagesBefore,
+                  link: ofLink,
+                  linkStep: onLinkAccepted,
+                  onFailure: onFailure,
+                  canTakeBack: canTakeBack,
+                );
+              }
             }
             if (popped != null) {
               // Every guard let the batch through.
@@ -5260,6 +5278,33 @@ abstract class StackRouter extends RoutingController {
           ? () => _takeBack(added)
           : null,
     ).waitOn(data);
+  }
+
+  // The pages a batch put on under its last page, whose nested routers,
+  // built only with them, ask their guards then: a "no" in any of them takes
+  // back every page the batch put on, as a guard that rejects one route of
+  // a batch rejects them all. The navigation itself waits on its last page
+  // alone, see [_waitForNewNestedRouter].
+  void _waitForNestedRoutersBelowTop({
+    required List<AutoRoutePage<Object?>> pagesBefore,
+    required bool canTakeBack,
+    OnNavigationFailure? onFailure,
+  }) {
+    final added = _pages.whereNot(pagesBefore.contains).toList();
+    for (final page in added.take(added.length - 1)) {
+      final data = page.routeData;
+      if (!data.hasPendingChildren ||
+          _innerControllerOfMatch(data.matchId) != null) {
+        continue;
+      }
+      _NestedLetIn(
+        root,
+        onFailure: onFailure,
+        takeBack: canTakeBack && pagesBefore.isNotEmpty
+            ? () => _takeBack(added)
+            : null,
+      ).waitOn(data);
+    }
   }
 
   // Takes [pages], which a navigation put on, back off the stack once a
@@ -6594,12 +6639,16 @@ class _NestedLetIn {
 
   // Waits on the nested router of the page of [data]. A page whose nested
   // router doesn't claim it by the end of the frame that builds the page,
-  // such as one that holds tabs or no router, lets the navigation in then.
+  // such as one that holds tabs or no router, lets the navigation in then,
+  // when there is something to let in.
   void waitOn(RouteData<Object?> data) {
     _ofPage[data] = this;
     final binding = SchedulerBinding.instance;
     void letInUnclaimed(Duration _) {
       if (!identical(_ofPage[data], this)) return;
+      // With nothing to let in, as for a page a batch put under its last
+      // one, which may build only frames later, it waits for its router.
+      if (linkStep == null && _onLetIn == null) return;
       _ofPage[data] = null;
       // A page that left meanwhile, as one the user went back from, lets
       // nothing in.
