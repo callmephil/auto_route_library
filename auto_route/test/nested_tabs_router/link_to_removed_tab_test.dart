@@ -91,6 +91,12 @@ RootStackRouter _build(
       ],
     ),
     _page('DetailRoute', '/detail'),
+    NamedRouteDef(
+      name: 'ShellRoute',
+      path: '/shell',
+      builder: (_, _) => const Scaffold(body: AutoRouter()),
+      children: [_page('XRoute', ''), _page('YRoute', 'y')],
+    ),
   ],
 );
 
@@ -566,30 +572,69 @@ void main() {
     ]);
   });
 
-  testWidgets('pushAll without onFailure to the tabs page on a listed tab '
-      'completes', (tester) async {
-    list.value = const [_feed, _settings];
-    final router = _build(.indexedStack, list, hasLanding: true);
-    await pumpRouterConfigApp(tester, router.config());
-    final heard = <String>[];
+  // A batch to pages the app lets in answers as before, with or without
+  // onFailure: pushAll and popAndPushAll once the pages are in, navigateAll
+  // when the page it reached closes, as navigate does. Into tabs that show
+  // the route named for them, which never take the navigation up as a
+  // stack router does, and into a page with a stack router of its own.
+  for (final way in ['pushAll', 'popAndPushAll', 'navigateAll']) {
+    for (final target in ['a listed tab', 'a page with its own stack']) {
+      for (final hasOnFailure in [false, true]) {
+        testWidgets('$way ${hasOnFailure ? 'with' : 'without'} onFailure to '
+            '$target completes once the pages are in', (tester) async {
+          list.value = const [_feed, _settings];
+          final router = _build(.indexedStack, list, hasLanding: true);
+          await pumpRouterConfigApp(tester, router.config());
+          if (way == 'popAndPushAll') {
+            unawaited(router.push(const NamedRoute('DetailRoute')));
+            await tester.pumpAndSettle();
+          }
+          final route = target == 'a listed tab'
+              ? const NamedRoute('HomeRoute', children: [_settings])
+              : const NamedRoute(
+                  'ShellRoute',
+                  children: [NamedRoute('YRoute')],
+                );
+          final failures = <NavigationFailure>[];
+          final onFailure = hasOnFailure ? failures.add : null;
+          final heard = <String>[];
 
-    unawaited(
-      router
-          .pushAll(const [
-            NamedRoute('HomeRoute', children: [_settings]),
-          ])
-          .then((_) => heard.add('done')),
-    );
-    await tester.pumpAndSettle();
+          unawaited(
+            switch (way) {
+              'pushAll' => router.pushAll([route], onFailure: onFailure),
+              'popAndPushAll' => router.popAndPushAll([
+                route,
+              ], onFailure: onFailure),
+              _ => router.navigateAll(
+                router.matcher.match(
+                      target == 'a listed tab' ? '/home/settings' : '/shell/y',
+                    ) ??
+                    const [],
+                onFailure: onFailure,
+              ),
+            }.then((_) => heard.add('done')),
+          );
+          await tester.pumpAndSettle();
+          final shown = find
+              .text(target == 'a listed tab' ? 'SettingsTab' : 'YRoute')
+              .hitTestable()
+              .evaluate()
+              .length;
+          final atIn = [...heard];
+          router.pop();
+          await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-    expect(heard, ['done']);
-    expect(
-      _state(router),
-      'shown SettingsTab, tab 1 SettingsTab, tabs FeedTab SettingsTab, '
-      'root LandingRoute HomeRoute, url /home/settings',
-    );
-  });
+          expect(tester.takeException(), isNull);
+          expect(failures, isEmpty);
+          expect(shown, 1);
+          expect(
+            (atIn.length, heard.length),
+            (way == 'navigateAll' ? 0 : 1, 1),
+          );
+        });
+      }
+    }
+  }
 
   testWidgets('A path to the removed tab of tabs inside a tab is turned '
       'down', (tester) async {

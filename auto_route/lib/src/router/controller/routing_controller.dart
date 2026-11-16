@@ -6753,7 +6753,13 @@ class _NestedLetIn {
       if (!identical(_ofPage[data], this)) return;
       // With nothing to let in, as for a page a batch put under its last
       // one, which may build only frames later, it waits for its router.
-      if (linkStep == null && _onLetIn == null) return;
+      // The call that waits for it to be taken up goes on, as for tabs that
+      // show the route named for them, which never claim it: a router that
+      // claims it later can still turn the navigation down.
+      if (linkStep == null && _onLetIn == null) {
+        _markTaken();
+        return;
+      }
       _ofPage[data] = null;
       // A page that left meanwhile, as one the user went back from, lets
       // nothing in.
