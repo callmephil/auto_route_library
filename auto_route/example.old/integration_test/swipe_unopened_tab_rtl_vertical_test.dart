@@ -14,18 +14,19 @@ void main() {
 
   group('swipe unopened tab rtl vertical', () {
     // Steps: three lazy tabs, right to left or vertical; drag the first tab
-    // a short way toward the second and hold.
+    // a fifth of the way toward the second and hold.
     // Was: the drag uncovered blank space.
     // Should: the second tab's page shows while it comes in.
     for (final kind in _Tabs.values) {
-      for (final (label, direction, axis, drag) in [
+      // The way the finger moves, toward the second tab.
+      for (final (label, direction, axis, toward) in [
         (
           'right to left',
           TextDirection.rtl,
           Axis.horizontal,
-          const Offset(80, 0),
+          const Offset(1, 0),
         ),
-        ('vertical', TextDirection.ltr, Axis.vertical, const Offset(0, -80)),
+        ('vertical', TextDirection.ltr, Axis.vertical, const Offset(0, -1)),
       ]) {
         testWidgets('${kind.name}, $label: a drag shows the unopened tab', (
           tester,
@@ -69,12 +70,19 @@ void main() {
           addTearDown(router.dispose);
           await pumpRouterApp(tester, router);
 
+          // A fifth of the view in two steps: short of the middle on any
+          // screen. A fixed 160 px passed the middle of a screen 300 px
+          // across or less, and the tabs then took the second tab.
+          final view = tester
+              .state<ScrollableState>(find.byType(Scrollable).first)
+              .position;
+          final step = toward * (view.viewportDimension / 10);
           final gesture = await tester.startGesture(
             tester.getCenter(find.text('TabA')),
           );
-          await gesture.moveBy(drag);
+          await gesture.moveBy(step);
           await tester.pump();
-          await gesture.moveBy(drag);
+          await gesture.moveBy(step);
           await tester.pump();
 
           expect(
