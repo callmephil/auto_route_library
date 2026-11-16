@@ -666,7 +666,8 @@
   a tab never opened, leaves that router on its first page when the guard rejects the page, at the url of the page on
   screen: after `navigatePath('/mail/13')` Mail shows its inbox at `/mail`, and one step back leaves it. Mail opened
   with nothing in it, under `/mail/13`, and so it did after a link and in an app opened at the link. On the web a
-  canceled navigation leaves the url of the document on screen, and Flutter's Navigator takes no empty list of pages.
+  canceled navigation leaves the url of the document on screen, and in debug builds Flutter's Navigator reports an error
+  for an empty list of pages.
 - **FIX**: two `navigate` calls to a page that is open, the first waiting on its guard, leave one page of the route: the
   one whose guard answers last shows in it, and a navigation whose guard rejects changes nothing. The first call's page
   went on as a second page with the key of the other's, so a debug build failed the Navigator's check for duplicate page

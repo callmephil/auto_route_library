@@ -27,10 +27,10 @@ import 'browser_history.dart';
 // down to Home.
 //
 // Native behavior this holds to: Flutter's Navigator, where Navigator.pop
-// takes the top-most route only, so in the tab's stack Y1 then X1. iOS and
-// Android keep a back stack per tab and never change tabs on back, so where
-// a tab change sits on the way back is the fork's own rule: the order the
-// user went through, the latest first.
+// takes the top-most route only, so in the tab's stack Y1 then X1. No iOS or
+// Android source says where a tab change sits on the way back, so that is
+// this package's own rule: the order the user went through, the latest
+// first.
 NamedRouteDef _page(String name, String path) =>
     .new(name: name, path: path, builder: (_, _) => Text(name));
 

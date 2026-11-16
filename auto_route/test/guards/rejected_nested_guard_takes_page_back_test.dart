@@ -25,8 +25,8 @@ import '../router_test_utils.dart';
 // still open. A yes opens the message, at its url. The page stays only
 // when it is the only page of the app, as when the app starts at the link.
 // Native behavior this holds to: Android's conditional navigation shows the
-// destination first and, when the check fails, pops back to where the user
-// was, up to the start destination. On the web a canceled navigation
+// destination first and, when the check fails (a declined login), pops back
+// to the start destination. On the web a canceled navigation
 // leaves the document and the url on screen, by the HTML standard's
 // navigate event. UIKit dismisses nothing because a link arrived: the
 // presenting controller dismisses what it presented.

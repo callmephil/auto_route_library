@@ -6,8 +6,10 @@ import 'package:material_ui/material_ui.dart';
 import 'support/app.dart';
 
 // A guard asked again that returns without an answer never takes its
-// router's only page: Flutter's Navigator refuses an empty page list, and
-// UINavigationController never takes its root view controller off.
+// router's only page. That is this package's own rule; in debug builds
+// Flutter's Navigator reports an error for an empty page list, and
+// UINavigationController's popToRootViewController keeps the root view
+// controller.
 // Headless test: auto_route/test/reevaluatable_router/let_go_answer_test.dart
 NamedRouteDef _page(String name, String path, AutoRouteGuard guard) => .new(
   name: name,

@@ -27,9 +27,12 @@ import '../router_test_utils.dart';
 // the tab on screen as it is, and the other tab's nested router on its
 // inbox.
 // Native behavior this holds to: on the web a navigation that is canceled
-// leaves the url of the document on screen. Flutter's Navigator shows the
-// pages its list holds and takes no empty list. On Android a screen that
-// ignores the link it was started with shows its start destination.
+// leaves the url of the document on screen (HTML standard, navigate event).
+// An app opened at the link has loaded already, so nothing is canceled
+// there: the app writes the url of the page on screen itself. In debug
+// builds Flutter's Navigator reports an error for an empty list of pages. On
+// Android a screen that ignores the link it was started with shows its start
+// destination.
 void main() {
   final mailRoutes = [
     NamedRouteDef(

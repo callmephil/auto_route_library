@@ -21,9 +21,9 @@ import 'router_test_utils.dart';
 //
 // Native behavior this holds to: within the tab's stack, Navigator.pop
 // takes the top-most route only (packages/flutter/lib/src/widgets/
-// navigator.dart 5617 and 5652, Flutter 3.47.9), so Y1 then X1. iOS and
-// Android keep a back stack per tab and never change tabs on back, so the
-// place of a tab change is the fork's own rule: the order the user went
+// navigator.dart 5617 and 5652, Flutter 3.47.9), so Y1 then X1. No iOS or
+// Android source says where a tab change sits on the way back, so the place
+// of a tab change is this package's own rule: the order the user went
 // through, the latest first. Pages opened together are opened as the page
 // on top is, so their entries go right before its entry.
 //

@@ -25,8 +25,9 @@ import '../router_test_utils.dart';
 // Native behavior this holds to: Flutter's Router drops an older route
 // transaction's work once newer route information has arrived
 // (_currentRouterTransaction, router.dart), so a later change is never
-// blocked by one that hangs; an alert on iOS (UIAlertController) or Android
-// (AlertDialog) is shown once and answered once.
+// blocked by one that hangs. That a guard waiting on the user in a dialog
+// isn't called again, so the dialog is shown once, is this package's own
+// rule; no native source says an alert is shown once.
 class _Session extends ChangeNotifier {
   bool isSignedIn = true;
 

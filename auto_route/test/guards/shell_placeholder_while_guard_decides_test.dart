@@ -18,8 +18,9 @@ import '../router_test_utils.dart';
 // Native behavior this holds to: Android's conditional navigation shows the
 // destination first and runs its check there, popping back to the start
 // destination when it fails. Flutter's Navigator shows the pages its list
-// holds and takes no empty list, so the shell shows its own placeholder
-// while its router holds none.
+// holds and, in debug builds, reports an error for an empty list; showing the
+// shell's own placeholder while its router holds none is this package's
+// choice.
 RootStackRouter _router(Completer<bool> answer, {required bool hasInbox}) =>
     .build(
       routes: [

@@ -23,7 +23,8 @@ import '../router_test_utils.dart';
 // nothing. On the web a canceled navigation leaves the document, the url and
 // an open <dialog> as they were; on Android an activity that ignores the
 // link in onNewIntent keeps its dialogs and its selected tab; on iOS an app
-// that returns false from application(_:open:options:) keeps what it shows.
+// that cannot open a link returns false from application(_:open:options:),
+// and what it then keeps on screen is this package's own rule.
 void main() {
   for (final kind in _TabsKind.values) {
     group(kind.name, () {

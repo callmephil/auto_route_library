@@ -1057,9 +1057,10 @@ class TabsRouter extends RoutingController {
   //
   // UITabBarController can select only a view controller in its
   // viewControllers array, and an app that can't open a link returns false
-  // from application(_:open:options:) and keeps what it shows. Android's
-  // NavController.handleDeepLink returns false for a destination its graph
-  // lacks, and nothing changes.
+  // from application(_:open:options:). Android's
+  // NavController.handleDeepLink returns true only if it found a valid
+  // deep link and navigated to it. That nothing else changes then is this
+  // package's own rule.
   void _turnDownRouteNotListed(
     RouteMatch<Object?> route, {
     required int? link,
@@ -5114,12 +5115,15 @@ abstract class StackRouter extends RoutingController {
             if (isWaitingOnUser) return false;
             // A later guard of the same page returned without an answer too.
             if (letGo.isCompleted) return true;
-            // A let-go never takes a router's last page: it stays on the
-            // stack and on screen until the guard answers, as Flutter's
-            // Navigator refuses an empty page list and UINavigationController
-            // never takes its root view controller off, though it pops the
-            // ones above it. So the pages above it leave all the same, and
-            // the reevaluation goes on.
+            // A let-go never takes a router's last page: it
+            // stays on the stack and on screen until the guard
+            // answers. That is this package's own rule;
+            // Flutter's Navigator reports an error for an empty
+            // page list in debug builds, and
+            // UINavigationController's popToRootViewController
+            // keeps the root view controller while it pops the
+            // ones above it. So the pages above it leave all the
+            // same, and the reevaluation goes on.
             final from = leavesPageUnder(i) ? i : i + 1;
             final leaving = takeOffPagesFrom(from);
             if (leaving.isNotEmpty) {
@@ -6573,12 +6577,13 @@ class NestedStackRouter extends StackRouter {
   // shows the pages below it that were let in, or, with none, the page it
   // opens with when it is named no pages, its first: a nested router is
   // never left blank where it has a page to show, as it isn't when a
-  // reevaluation empties it, see [_reopenInitialRoutesIfEmptied], and
-  // Flutter's Navigator takes no empty list of pages. The navigator is told,
-  // since the pages below went on without a word, and the url, which named
-  // the page that was kept out, names the page on screen, in the same
-  // history entry: on the web a canceled navigation leaves the url of the
-  // document on screen.
+  // reevaluation empties it, see [_reopenInitialRoutesIfEmptied], and in
+  // debug builds Flutter's Navigator reports an error for an empty list of
+  // pages. The navigator is told, since the pages below went on without a
+  // word, and the url, which named the page that was kept out, names the
+  // page on screen, in the same history entry. An app opened at a link has
+  // loaded already, so no navigation is canceled there; the app writes the
+  // url itself.
   //
   // While a guard of a later page decides, the pages before it that went on,
   // such as the page a link brings below its own, show: a page on the stack

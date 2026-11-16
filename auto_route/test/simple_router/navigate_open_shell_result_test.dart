@@ -16,11 +16,11 @@ import '../router_test_utils.dart';
 // Kept as the owner decided after the review of the batch: a change that
 // made a shell answer with its own result never completed an await on a
 // home shell.
-// Native behavior this holds to: going back to a screen that is already
-// open gives no result of its own (popToViewController on iOS, onNewIntent
-// on Android, popUntil in Flutter); a page a navigation shows answers when
-// it closes, as Route.popped completes with the value given to
-// Navigator.pop.
+// Native behavior this holds to: a page a navigation shows answers when it
+// closes, as Route.popped completes with the value given to Navigator.pop
+// (navigator.dart). That going back to a screen that is already open gives
+// no result of its own is this package's rule; no source for
+// popToViewController, onNewIntent or popUntil says so.
 RootStackRouter _router() => .build(
   routes: [
     NamedRouteDef(

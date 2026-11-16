@@ -10,9 +10,11 @@ import 'support/app.dart';
 // The app's own navigatePath into a tab never opened, to a page whose guard
 // says no, keeps the tab the user is on: the tab is built off the screen and
 // shows only once the guard lets the navigation in, as a link's tab does.
-// Native behavior this holds to: UITabBarController changes its tab only
-// when the app sets it; on the web a canceled navigation leaves the
-// document on screen.
+// Native behavior this holds to: UITabBarController changes its tab when
+// selectedViewController or selectedIndex is assigned (Apple docs); that a
+// refused call leaves the tab as it is is this package's own rule. On the
+// web a canceled navigation leaves the document on screen (HTML standard,
+// navigate event).
 // Headless test:
 // auto_route/test/nested_tabs_router/app_call_into_unopened_tab_waits_test.dart
 void main() {

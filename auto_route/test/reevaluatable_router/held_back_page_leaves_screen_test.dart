@@ -32,8 +32,8 @@ import '../router_test_utils.dart';
 // its call.
 // Native behavior this holds to: Flutter's Navigator shows the pages it was
 // last given (`_updatePages`, navigator.dart), so the stack and the screen
-// agree. On Android an activity that finishes leaves the screen at once and
-// back acts on the one shown (developer.android.com/guide/components/
+// agree. On Android a finished activity is popped from the back stack and
+// destroyed, and back acts on the one shown (developer.android.com/guide/components/
 // activities/tasks-and-back-stack), and the screen a sign-in callback later
 // opens goes on top of the task. On the web the address bar names the page
 // shown.

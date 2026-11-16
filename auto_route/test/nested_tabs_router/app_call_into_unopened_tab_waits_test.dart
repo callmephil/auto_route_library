@@ -20,10 +20,12 @@ import '../router_test_utils.dart';
 // and the tab bar.
 // Should: FirstTab stays on screen, at its url, while the guard decides
 // and after a no. A yes shows the message in MailTab.
-// Native behavior this holds to: UITabBarController changes its tab only
-// when the app sets it, and a link an Android app doesn't navigate to
-// leaves the selected destination of its bottom bar; on the web a canceled
-// navigation leaves the document on screen.
+// Native behavior this holds to: UITabBarController changes its tab when
+// selectedViewController or selectedIndex is assigned (Apple docs); that a
+// link or a refused call leaves the tab as it is, on iOS and in an Android
+// bottom bar, is this package's own rule, since no source covers it. On the
+// web a canceled navigation leaves the document on screen (HTML standard,
+// navigate event).
 enum _Tabs { indexedStack, pageView, tabBar, builder }
 
 enum _Way { navigatePath, navigate }

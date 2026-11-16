@@ -20,8 +20,8 @@ import 'router_test_utils.dart';
 // Native behavior this holds to: Flutter's Navigator changes its history as
 // each call is made, for a nested Navigator as for the root one, so a push
 // on a nested Navigator right after one that put a route on it lands above
-// that route. A TabController's index is the one set last, and on iOS
-// selectedIndex set twice in a row ends on the second.
+// that route. A TabController's index is the one set last
+// (tab_controller.dart, _changeIndex).
 void main() {
   List<String> stackNames(StackRouter router) =>
       router.stack.map((page) => page.routeData.name).toList();

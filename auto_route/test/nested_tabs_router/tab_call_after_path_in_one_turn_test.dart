@@ -23,9 +23,10 @@ import '../router_test_utils.dart';
 //   choice of the selected tab (round 1, T16).
 // - A link from the platform: it reaches the app in a later engine message,
 //   so it comes after the call and wins.
-// Native behavior this holds to: a TabController's index is the one set
-// last, and on iOS a UITabBarController's selectedIndex set twice in one run
-// loop turn ends on the second.
+// Native behavior this holds to: a TabController's index is the one set last
+// (tab_controller.dart, _changeIndex). Apple's selectedIndex docs only say
+// that setting it changes the selected view controller; the same for two
+// sets in one turn is this package's rule.
 void main() {
   for (final kind in _Tabs.values) {
     for (final guards in _Guards.values) {

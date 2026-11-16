@@ -27,9 +27,11 @@ import 'browser_history.dart';
 // opens Home and Mail with Inbox under message 77; the guard of message 77
 // holds its answer, then says yes.
 //
-// Native behavior this holds to: the browser makes one entry for a url it
-// opens, as a document a link opens has one however much it shows; and
-// Flutter's Router, which reports its first route over that entry.
+// Native behavior this holds to: Flutter's Router reports its first route
+// over the entry the app was opened on (router.dart:
+// routerReportsNewRouteInformation with replace true updates the current
+// history entry), so one launch is one entry. No source is quoted for the
+// browser making one entry for a url it opens.
 late HeldGuard _guard;
 
 RootStackRouter _router() => .build(

@@ -29,11 +29,12 @@ import '../utils/held_guard.dart';
 // onFailure hears a RouteNotFoundFailure, and the app's own call without
 // one throws, as the tabs router's own navigate does.
 // Native behavior this holds to: UITabBarController can select only a view
-// controller in its viewControllers array, and an app that can't open a
-// link returns false from its app delegate's open-url method and keeps what
-// it shows; Android's NavController.handleDeepLink returns false for a
-// destination the graph lacks, and nothing changes; on the web a canceled
-// navigation keeps the document on screen and its url.
+// controller in its viewControllers array, and an app that can't open a link
+// returns false from its app delegate's open-url method; Android's
+// NavController.handleDeepLink returns true only if it found a valid deep
+// link and navigated to it. That nothing else changes then is this package's
+// own rule. On the web a canceled navigation keeps the document on screen
+// and its url.
 enum _Tabs { indexedStack, pageView, tabBar, builder }
 
 enum _Way { navigatePath, link, rootNavigate }

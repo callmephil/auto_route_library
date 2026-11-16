@@ -359,12 +359,14 @@ void main() {
   // caller hears null.
   // A push of the same route with other arguments (finding H of the second
   // review) opens another page: both come back.
-  // Native behavior this holds to: navigate reaches a page already open
-  // rather than open a second one, as Android's Navigation does with
-  // launchSingleTop and popUpTo (developer.android.com/guide/navigation/
-  // backstack) and UIKit's popToViewController(_:animated:); a push opens a
-  // new screen on iOS (pushViewController(_:animated:)) and Android, so two
-  // items are two pages.
+  // Native behavior this holds to: a push opens a new screen on iOS
+  // (pushViewController(_:animated:)) and on Android, whose navigate
+  // pushes a copy unless launchSingleTop is set and the destination is
+  // already on top (developer.android.com/guide/navigation/backstack), so
+  // two items are two pages. That navigate reaches a page already open
+  // rather than open a second one is this package's own rule; UIKit's
+  // popToViewController(_:animated:) is the nearest native call, going
+  // back down to a controller already on the stack.
   group('A navigation to the let-go page meanwhile', () {
     Future<(RootStackRouter, List<String?>)> navigatedTo(
       WidgetTester tester,
@@ -488,9 +490,12 @@ void main() {
   // any let-go guard; a yes leaves one copy, and a no does what a no on that
   // page in a reevaluation does: the root shows no page, and the nested
   // router opens its first route again, through its guards.
-  // Native behavior this holds to: Flutter's Navigator refuses an empty
-  // page list (navigator.dart), UINavigationController never takes its
-  // root view controller off, and an emptied Android task closes the app.
+  // Native behavior this holds to: keeping a router's last page is this
+  // package's own rule. In debug builds Flutter's Navigator reports an
+  // error for an empty page list (navigator.dart),
+  // UINavigationController's popToRootViewController(animated:) keeps the
+  // root view controller, and an Android task with no activity left no
+  // longer exists (developer.android.com, tasks and back stack).
   group("A router's only page", () {
     late List<String> asked;
 
@@ -597,10 +602,12 @@ void main() {
   // (popToRootViewController(animated:)), and Orders leaves with the let-go, as
   // the pages above a let-go page do, and comes back through its own guard
   // on the yes. The screen always matches the stack.
-  // Native behavior this holds to: UIKit's UINavigationController never
-  // takes its root view controller off, and pops the ones above it, and
-  // Flutter's Navigator needs one page (navigator.dart: "The Navigator.pages
-  // must not be empty to use the Navigator.pages API").
+  // Native behavior this holds to: UIKit's
+  // popToRootViewController(animated:) pops all the view controllers
+  // except the root, and in debug builds Flutter's Navigator reports an
+  // error for an empty page list (navigator.dart: "The Navigator.pages
+  // must not be empty to use the Navigator.pages API"). Keeping the
+  // router's last page is this package's own rule.
   group("Pages above a router's only page", () {
     late List<bool> ordersAsked;
 
