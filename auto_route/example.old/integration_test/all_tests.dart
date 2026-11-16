@@ -179,6 +179,8 @@ import 'path_state_after_replace_test.dart' as path_state_after_replace;
 import 'path_state_browser_back_test.dart' as path_state_browser_back;
 import 'platform_link_over_launch_page_test.dart'
     as platform_link_over_launch_page;
+import 'pop_after_removal_at_frame_end_test.dart'
+    as pop_after_removal_at_frame_end;
 import 'pop_after_replace_in_one_turn_test.dart'
     as pop_after_replace_in_one_turn;
 import 'pop_and_back_test.dart' as pop_and_back;
@@ -556,6 +558,7 @@ void main() {
   path_state_after_replace.main();
   path_state_browser_back.main();
   platform_link_over_launch_page.main();
+  pop_after_removal_at_frame_end.main();
   pop_after_replace_in_one_turn.main();
   pop_and_back.main();
   pop_and_push_all.main();
