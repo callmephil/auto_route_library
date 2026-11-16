@@ -561,9 +561,10 @@ abstract class RoutingController with ChangeNotifier {
   /// stack router of its own, the page the navigation reaches in that stack,
   /// so an await on navigate into the stack of a page that never closes, such
   /// as the app's home, goes on once that inner page closes. A navigation
-  /// that names no page for a nested router with no first page, or goes on
-  /// into tabs, answers null once it is done, as does one that is turned
-  /// down.
+  /// that names no page for a nested router with no first page answers null
+  /// once it is done, as does one that is turned down; one that goes on into
+  /// tabs answers null once the tab change has started, also before a guard
+  /// of the tab has answered.
   ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
@@ -2136,34 +2137,19 @@ class TabsRouter extends RoutingController {
   }) async {
     final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
-    // The navigation answers once it is let in, or once what it waits on
-    // has ended without that: a change to another tab, which its guards may
-    // keep out or a later change replace, or the navigation inside the tab
-    // on screen. So a step back the app's own history takes into a tab whose
-    // guard decides later ends with that guard's answer, as one into a page
-    // of a stack does. A change that goes on into the nested router of its
-    // tab ends once the tab's own guards have answered.
-    final letIn = Completer<void>();
-    void onTabLetIn() {
-      onLetIn?.call();
-      if (!letIn.isCompleted) letIn.complete();
-    }
-
-    final waitedOn = <Future<void>>[];
     for (final mayUpdateRoute in routesToProcess) {
       final pageToUpdateIndex = _tabIndexOf(mayUpdateRoute);
 
       if (pageToUpdateIndex != -1) {
         if (!isReevaluating && _activeIndex != pageToUpdateIndex) {
-          final change = _changeTab(
+          _changeTab(
             pageToUpdateIndex,
             route: mayUpdateRoute,
             onFailure: onFailure,
             keepsUnnamedPages: keepsUnnamedPages,
             link: ofLink,
-            onLetIn: onTabLetIn,
+            onLetIn: onLetIn,
           );
-          if (change is Future<_TabChange>) waitedOn.add(change);
         } else {
           // A navigation to the tab on screen is the latest choice: it calls
           // off a change to another tab still waiting for its guards. A
@@ -2193,13 +2179,13 @@ class TabsRouter extends RoutingController {
                   isReevaluating: isReevaluating,
                   keepsUnnamedPages: keepsUnnamedPages,
                   link: ofLink,
-                  onLetIn: onTabLetIn,
+                  onLetIn: onLetIn,
                   onGuardShowsPage: onGuardShowsPage,
                 );
           if (isReevaluating) {
             await inside;
           } else if (inside != null) {
-            waitedOn.add(inside);
+            unawaited(inside);
           }
         }
       }
@@ -2219,9 +2205,7 @@ class TabsRouter extends RoutingController {
         }
       }
     }
-    if (!letIn.isCompleted && waitedOn.isNotEmpty) {
-      await Future.any([letIn.future, Future.wait(waitedOn)]);
-    }
+
     return null;
   }
 
@@ -5761,6 +5745,18 @@ abstract class StackRouter extends RoutingController {
   }) {
     return _navigateAll(routes, onFailure: onFailure);
   }
+
+  /// [navigateAll] for a step back the app's own history takes off the web:
+  /// [onLetIn] runs once the guards of [routes], and those of the nested
+  /// routers and tabs they reach, let the navigation in. That may be after
+  /// the returned future has completed, as when the guard of a tab answers
+  /// later: the tabs answer once their change has started. A navigation they
+  /// turn down, or that a later change of the tab replaces, never runs it.
+  @internal
+  Future<void> navigateAllBack(
+    List<RouteMatch<Object?>> routes, {
+    required VoidCallback onLetIn,
+  }) => _navigateAll(routes, onLetIn: onLetIn);
 
   @override
   Future<T?> _navigateAll<T extends Object?>(

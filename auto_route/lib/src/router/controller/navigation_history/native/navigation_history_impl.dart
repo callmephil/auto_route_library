@@ -308,13 +308,19 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   @override
   void rebuildUrlAfterClosingUnbuilt(Iterable<LocalKey> closedPageIds) {
+    _entries.removeWhere((entry) => closedPageIds.any(entry.showsPage));
     // The page under a closed one may have reported its url again over the
     // closed page's entry, as the tabs page a turned-down link went on
-    // through does: the page keeps one entry, as a step back to the same
-    // page shows nothing new.
+    // through does.
+    _mergeRepeatedEntries();
+    rebuildUrl();
+  }
+
+  // Keeps one entry for a page where two entries in a row show it at the
+  // same url, as a step back from one to the other would show nothing new.
+  void _mergeRepeatedEntries() {
     final kept = <_HistoryEntry>[];
     for (final entry in _entries) {
-      if (closedPageIds.any(entry.showsPage)) continue;
       final before = kept.lastOrNull;
       if (before != null &&
           before.url == entry.url &&
@@ -326,7 +332,6 @@ class NavigationHistoryImpl extends NavigationHistory {
     _entries
       ..clear()
       ..addAll(kept);
-    rebuildUrl();
   }
 
   @override
@@ -394,7 +399,9 @@ class NavigationHistoryImpl extends NavigationHistory {
       final backCount = ++_backCount;
       _backTargetUrl = last.url;
       removePagesAbove(last.pageId);
-      final navigation = router.navigateAll([last.route]);
+      final navigation = router.navigateAllBack([
+        last.route,
+      ], onLetIn: () => _takeStepBackLate(backCount, left));
       // The router shows the entry as the navigation returns, as it does when
       // no guard makes it wait, so this step back is done: a back() called
       // right after it takes the next step, as two calls of history.back() in
@@ -423,6 +430,23 @@ class NavigationHistoryImpl extends NavigationHistory {
   void _stopNavigatingBack() {
     _isNavigatingBack = false;
     _backTargetUrl = null;
+  }
+
+  // The step back numbered [backCount], which left the page of [left], is
+  // let in after back() has ended, as a step into a tab whose guard decides
+  // later is: the tabs answer once their change has started, so back() took
+  // the step for refused and put [left] back, and the page gone back to has
+  // reported its url again since. The step is taken after all: [left]
+  // leaves, and the page gone back to keeps one entry, so the next back()
+  // goes one step further, as when the guard answers at once. Nothing
+  // changes when [left] is no longer an entry, as when the step was taken in
+  // time, or when a later back() has started.
+  void _takeStepBackLate(int backCount, _HistoryEntry left) {
+    if (backCount != _backCount) return;
+    final at = _entries.indexWhere((entry) => identical(entry, left));
+    if (at == -1) return;
+    _entries.removeAt(at);
+    _mergeRepeatedEntries();
   }
 
   @override
