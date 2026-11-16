@@ -292,7 +292,24 @@ class NavigationHistoryImpl extends NavigationHistory {
 
   @override
   void rebuildUrlAfterClosingUnbuilt(Iterable<LocalKey> closedPageIds) {
-    _entries.removeWhere((entry) => closedPageIds.any(entry.showsPage));
+    // The page under a closed one may have reported its url again over the
+    // closed page's entry, as the tabs page a turned-down link went on
+    // through does: the page keeps one entry, as a step back to the same
+    // page shows nothing new.
+    final kept = <_HistoryEntry>[];
+    for (final entry in _entries) {
+      if (closedPageIds.any(entry.showsPage)) continue;
+      final before = kept.lastOrNull;
+      if (before != null &&
+          before.url == entry.url &&
+          before.pageId == entry.pageId) {
+        continue;
+      }
+      kept.add(entry);
+    }
+    _entries
+      ..clear()
+      ..addAll(kept);
     rebuildUrl();
   }
 

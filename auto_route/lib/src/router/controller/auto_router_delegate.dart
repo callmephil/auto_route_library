@@ -217,7 +217,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         !_isDisposed &&
         controller.hasEntries &&
         count == controller.root._linkCount) {
-      return _reportTurnedDownLink();
+      return _reportTurnedDownLink(link);
     }
     _reportRejectedLaunch();
   }
@@ -275,12 +275,17 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     );
   }
 
-  // The running app turned down the link it was handed, as when a guard
-  // rejected it or deepLinkBuilder answered DeepLink.none. The link's url,
-  // set before its guards ran, gives way to that of the pages the app shows,
-  // reported over the link's browser entry, as [_reportRejectedLaunch] does
-  // for the launch.
-  void _reportTurnedDownLink() {
+  // The running app turned down [link], the link it was handed, as when a
+  // guard rejected it or deepLinkBuilder answered DeepLink.none. The link's
+  // url, set before its guards ran, gives way to that of the pages the app
+  // shows, reported over the link's browser entry, as [_reportRejectedLaunch]
+  // does for the launch. Off the web that url went into the app's own
+  // history as an entry of its own, and the pages the link reached again,
+  // such as a tabs page the link went on through, may have reported theirs
+  // after it: the entry of the page the link named, which never opened,
+  // leaves, or back() would go to it.
+  void _reportTurnedDownLink(DeepLink link) {
+    final history = controller.navigationHistory;
     final shown = UrlState.fromSegments(
       controller.currentSegments,
       shouldReplace: true,
@@ -290,10 +295,17 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       urlState.segments,
       shown.segments,
     )) {
-      controller.navigationHistory.onNewUrlState(shown, notify: false);
+      history.onNewUrlState(shown, notify: false);
+    }
+    // The url is the page's on screen by now, so this changes the entries
+    // alone.
+    if (link is PlatformDeepLink && !history.writesBrowser) {
+      if (link.configuration.flatten.topMatch?.id case final linkPage?) {
+        history.rebuildUrlAfterClosingUnbuilt([linkPage]);
+      }
     }
     final context = controller.navigatorKey.currentContext;
-    if (context == null || controller.navigationHistory.writesBrowser) {
+    if (context == null || history.writesBrowser) {
       return notifyListeners();
     }
     Router.neglect(context, notifyListeners);
@@ -538,7 +550,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       await opening;
       // A later link reports its own url.
       if (!isAccepted && !_isDisposed && count == controller.root._linkCount) {
-        return _reportTurnedDownLink();
+        return _reportTurnedDownLink(resolvedLink);
       }
     }
 

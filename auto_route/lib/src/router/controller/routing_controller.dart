@@ -1035,32 +1035,35 @@ class TabsRouter extends RoutingController {
     super._reassemble();
   }
 
-  // A child route of this router's parent route that is not one of the tabs
-  // has no place here: report it, as any route no router can show is, instead
-  // of leaving the tabs as they are without a word.
-  @override
-  Future<T?> _navigate<T extends Object?>(
-    PageRouteInfo route, {
+  // A child route of this router's parent route that is not one of the tabs,
+  // such as a tab the app removed from its list, has no place here. The
+  // navigation is turned down, as a guard's "no" turns one down: the tab on
+  // screen, its url and the dialogs over it stay, and a link counts as
+  // turned down, so the url goes back to the page on screen. The caller
+  // hears of it, as of any route no router can show: [onFailure] gets a
+  // [RouteNotFoundFailure], and without it the app's own call throws. A link
+  // has no caller to throw to.
+  //
+  // UITabBarController can select only a view controller in its
+  // viewControllers array, and an app that can't open a link returns false
+  // from application(_:open:options:) and keeps what it shows. Android's
+  // NavController.handleDeepLink returns false for a destination its graph
+  // lacks, and nothing changes.
+  void _turnDownRouteNotListed(
+    RouteMatch<Object?> route, {
+    required int? link,
     OnNavigationFailure? onFailure,
-  }) async {
-    final match = _matchOrReportFailure(route, onFailure: onFailure);
-    if (match == null) return null;
-    if (_pages.isNotEmpty && _tabIndexOf(match) == -1) {
-      if (onFailure != null) {
-        onFailure(RouteNotFoundFailure(route.routeName));
-        return null;
-      }
-      throw FlutterError(
-        'Can not navigate to ${route.routeName}: it is not one of the tabs '
-        'of the tabs router of '
-        '${routeData.name}. Add it to the routes of its AutoTabsRouter, or '
-        'show it in a router of its own.',
-      );
+  }) {
+    // The link's step is never taken: the link is not let in.
+    if (link != null) root._takeLinkStep(link);
+    if (onFailure != null) {
+      return onFailure(RouteNotFoundFailure(route.name));
     }
-    return await _navigateAll(
-      [match],
-      onFailure: onFailure,
-      keepsUnnamedPages: true,
+    if (link != null) return;
+    throw FlutterError(
+      'Can not navigate to ${route.name}: it is not one of the tabs of the '
+      'tabs router of ${routeData.name}. Add it to the routes of its '
+      'AutoTabsRouter, or show it in a router of its own.',
     );
   }
 
@@ -1816,6 +1819,15 @@ class TabsRouter extends RoutingController {
     final change = ++_tabChanges;
     var guardedIndex = -1;
     Future<ResolverResult>? guarding;
+    // The route a navigation named for these tabs, when it is not one of
+    // them. A restore names a route for each tab it brings back, and shows
+    // the tabs that are left.
+    final notListed =
+        pendingChildren.length == 1 &&
+            preMatchedRoute != null &&
+            _listedTabOf(routesToPush, preMatchedRoute) == -1
+        ? preMatchedRoute
+        : null;
     if (preMatchedRoute != null) {
       final correspondingRouteIndex = _listedTabOf(
         routesToPush,
@@ -1848,6 +1860,7 @@ class TabsRouter extends RoutingController {
       _pushAll(routesToPush, isFromDefault: routes == null);
     }
     _routeData.pendingChildren.clear();
+    if (notListed != null) _turnDownPendingRoute(notListed);
     if (guarding != null) {
       final index = guardedIndex;
       final match = preMatchedRoute!;
@@ -1888,6 +1901,24 @@ class TabsRouter extends RoutingController {
         notify: false,
       );
     }
+  }
+
+  // The navigation that put this router's page on named [route] for it, a
+  // route that is not one of the tabs: it is turned down, as in
+  // [_turnDownRouteNotListed], once the frame that builds the tabs ends,
+  // and the first tab shows meanwhile. The page is taken back, so the stack
+  // and the url are as before the navigation, unless it is the only page
+  // its stack has, as when the app starts at the link: it then stays, on its
+  // first tab. Nothing waits when the page went on long before.
+  void _turnDownPendingRoute(RouteMatch<Object?> route) {
+    final waiting = _NestedLetIn.claim(_routeData);
+    if (waiting == null) return;
+    SchedulerBinding.instance
+      ..addPostFrameCallback((_) {
+        waiting.onFailure?.call(RouteNotFoundFailure(route.name));
+        waiting.turnDown();
+      })
+      ..ensureVisualUpdate();
   }
 
   // When a widget above AutoTabsRouter rebuilds it from scratch, the new
@@ -2147,11 +2178,19 @@ class TabsRouter extends RoutingController {
         }
       }
       if (!isReevaluating && pageToUpdateIndex == -1) {
-        onLetIn?.call();
-        _updateSharedPathData(
-          queryParams: mayUpdateRoute.queryParams.rawMap,
-          fragment: mayUpdateRoute.fragment,
-        );
+        if (_pages.isNotEmpty) {
+          _turnDownRouteNotListed(
+            mayUpdateRoute,
+            link: ofLink,
+            onFailure: onFailure,
+          );
+        } else {
+          onLetIn?.call();
+          _updateSharedPathData(
+            queryParams: mayUpdateRoute.queryParams.rawMap,
+            fragment: mayUpdateRoute.fragment,
+          );
+        }
       }
     }
 

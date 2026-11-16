@@ -126,6 +126,7 @@ import 'leading_button_nested_pageless_route_test.dart'
     as leading_button_nested_pageless_route;
 import 'leading_button_pop_test.dart' as leading_button_pop;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
+import 'link_to_removed_tab_test.dart' as link_to_removed_tab;
 import 'list_query_param_test.dart' as list_query_param;
 import 'listener_asks_for_waiting_tab_test.dart'
     as listener_asks_for_waiting_tab;
@@ -536,6 +537,7 @@ void main() {
   leading_button_nested_pageless_route.main();
   leading_button_pop.main();
   link_during_initial_guard.main();
+  link_to_removed_tab.main();
   list_query_param.main();
   listener_asks_for_waiting_tab.main();
   login_state.main();
