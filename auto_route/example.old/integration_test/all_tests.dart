@@ -109,6 +109,8 @@ import 'listener_asks_for_waiting_tab_test.dart'
     as listener_asks_for_waiting_tab;
 import 'login_state_test.dart' as login_state;
 import 'logout_redirect_back_test.dart' as logout_redirect_back;
+import 'maybe_pop_over_nested_router_in_one_turn_test.dart'
+    as maybe_pop_over_nested_router_in_one_turn;
 import 'moved_router_keeps_pages_test.dart' as moved_router_keeps_pages;
 import 'navigate_absolute_path_test.dart' as navigate_absolute_path;
 import 'navigate_after_dialog_test.dart' as navigate_after_dialog;
@@ -490,6 +492,7 @@ void main() {
   listener_asks_for_waiting_tab.main();
   login_state.main();
   logout_redirect_back.main();
+  maybe_pop_over_nested_router_in_one_turn.main();
   moved_router_keeps_pages.main();
   navigate_absolute_path.main();
   navigate_after_dialog.main();

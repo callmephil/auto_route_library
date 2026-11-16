@@ -2986,8 +2986,15 @@ abstract class StackRouter extends RoutingController {
     if (_landingPushes.isNotEmpty) {
       await Future.wait(_landingPushes);
     }
-    if (_didPopUnbuiltTop(result)) return true;
-    _removeLeftRoutesOverTop();
+    // The navigator hands the pop to the nested router on top, through that
+    // router's navigator, which knows neither of a page not built yet nor
+    // of one that just left. So the routers from the one on top down to
+    // this one each take their step first, as the router on top does for
+    // maybePopTop and the system back button.
+    for (final router in _stackRoutersFromTop()) {
+      if (router._didPopUnbuiltTop(result)) return true;
+      router._removeLeftRoutesOverTop();
+    }
     final navigator = _navigatorKey.currentState;
     if (await navigator?.maybePop<T>(result) ?? false) {
       return true;
@@ -3028,6 +3035,16 @@ abstract class StackRouter extends RoutingController {
       navigator?.pop(result);
     }
   }
+
+  // The stack routers from the one on top of this router's pages down to
+  // this router, which is the last.
+  List<StackRouter> _stackRoutersFromTop() => [
+    ..._topMostRouter()
+        ._buildRoutersHierarchy()
+        .whereType<StackRouter>()
+        .takeWhile((router) => router != this),
+    this,
+  ];
 
   // Removes the top page when the navigator has not built it yet, as right
   // after a push, and completes it with [result]. Navigator.pop would pop
