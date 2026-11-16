@@ -555,13 +555,15 @@ abstract class RoutingController with ChangeNotifier {
   /// [StackRouter.replaceAll]. The nested router of a page that is new is
   /// built with the page, and opens its children then.
   ///
-  /// The returned future completes with the result the page [route] reaches
-  /// is popped with, as [StackRouter.push]'s does, also when that page was
-  /// open already and the navigation goes on into the stack of its nested
-  /// router. A navigation that goes on into the tabs of a page already open,
-  /// or names no page for its nested router, completes once it is done. A
-  /// navigation that is turned down, by a guard of [route] or of its nested
-  /// router, completes at once with null.
+  /// The returned future answers as the innermost page the navigation
+  /// reaches does: when that page closes, with the result it is popped with.
+  /// For a plain page that is the page [route] names; for a page that holds a
+  /// stack router of its own, the page the navigation reaches in that stack,
+  /// so an await on navigate into the stack of a page that never closes, such
+  /// as the app's home, goes on once that inner page closes. A navigation
+  /// that names no page for a nested router with no first page, or goes on
+  /// into tabs, answers null once it is done, as does one that is turned
+  /// down.
   ///
   /// if [onFailure] callback is provided, navigation errors will be passed to
   /// it otherwise they'll be thrown
@@ -5918,35 +5920,6 @@ abstract class StackRouter extends RoutingController {
       // navigation changes nothing; a link's do already. A nested router not
       // built yet asks its guards only once its page is in.
       if (mayUpdateController != null && newChildren.isNotEmpty) {
-        // A navigation into the stack of a page already open waits until a
-        // page closes, as the page it puts on or reaches there answers then:
-        // it answers with the result the page this router reached is popped
-        // with, as push of that page does. One into tabs, or into a router
-        // the app's widgets manage, answers once it is done, as before.
-        if (popped != null &&
-            mayUpdateController is StackRouter &&
-            !mayUpdateController.managedByWidget) {
-          var isLetIn = false;
-          final letIn = Completer<void>();
-          final inside = mayUpdateController._navigateAll<T>(
-            newChildren,
-            onFailure: onFailure,
-            keepsUnnamedPages: keepsUnnamedPages,
-            link: ofLink,
-            onLetIn: () {
-              isLetIn = true;
-              lettingIn?.call();
-              if (!letIn.isCompleted) letIn.complete();
-            },
-            onGuardShowsPage: onNestedGuardShowsPage,
-          );
-          return await _answerOfReachedPage(
-            inside,
-            letIn: letIn.future,
-            isLetIn: () => isLetIn,
-            popped: popped,
-          );
-        }
         return await mayUpdateController._navigateAll(
           newChildren,
           onFailure: onFailure,
@@ -5993,27 +5966,6 @@ abstract class StackRouter extends RoutingController {
       if (hadPages && !isReevaluating) notifyAll(forceUrlRebuild: true);
     }
     return await popped;
-  }
-
-  // What a navigation that reached an open page, and went on with [inside]
-  // into the stack of that page's nested router, answers: [popped], the
-  // result the page is popped with, once that router lets it in, as push of
-  // that page answers; [inside]'s own answer, at once, when it turns it
-  // down, as a refused navigation answers. [letIn] completes, and [isLetIn]
-  // turns true, as it lets it in, which may be in the same turn as [inside]
-  // ends.
-  //
-  // Flutter's Navigator keeps the route of a page with the same type and
-  // key, with its future, and Route.popped completes with the value given
-  // to Navigator.pop.
-  static Future<T?> _answerOfReachedPage<T extends Object?>(
-    Future<T?> inside, {
-    required Future<void> letIn,
-    required ValueGetter<bool> isLetIn,
-    required Future<T?> popped,
-  }) async {
-    await Future.any([letIn, inside]);
-    return isLetIn() ? await popped : await inside;
   }
 
   // Asks the guards of the pages in the nested router of the page [route]
