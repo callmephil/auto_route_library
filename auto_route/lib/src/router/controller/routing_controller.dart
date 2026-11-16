@@ -3964,6 +3964,10 @@ abstract class StackRouter extends RoutingController {
       // redirect with replace finds none of them to replace and a rejection
       // brings back them all.
       _reportPageGoesOn();
+      final hasChildren = result.route.children?.isNotEmpty ?? false;
+      // Before [onAccepted], which may take pages off, as replace and
+      // pushAndPopUntil do.
+      final pagesBefore = hasChildren ? List.of(_pages) : null;
       onAccepted?.call();
       _updateSharedPathData(
         queryParams: route.rawQueryParams,
@@ -3971,8 +3975,6 @@ abstract class StackRouter extends RoutingController {
         includeAncestors: true,
       );
 
-      final hasChildren = result.route.children?.isNotEmpty ?? false;
-      final pagesBefore = hasChildren ? List.of(_pages) : null;
       final popped = _addNewPage<T>(
         result.route,
         notify: notify,
@@ -3981,8 +3983,10 @@ abstract class StackRouter extends RoutingController {
       );
       // A new page with pages named for its nested router, which asks its
       // guards once built: a "no" there takes the page back, as for the
-      // other ways a page goes on, see [_waitForNewNestedRouter]. Not after
-      // replace, whose page took the place of one that can't come back.
+      // other ways a page goes on, see [_waitForNewNestedRouter]. Not when
+      // the call took pages off, as replace does, and pushAndPopUntil when
+      // its predicate rejects a page: their callers were answered as they
+      // left, so they can't come back, and the page stays.
       final newPage = _pages
           .lastWhereOrNull((page) => page.routeData.matchId == result.route.id)
           ?.routeData;
@@ -3991,7 +3995,7 @@ abstract class StackRouter extends RoutingController {
           pagesBefore: pagesBefore,
           link: null,
           linkStep: null,
-          canTakeBack: onAccepted == null && pagesBefore.every(_pages.contains),
+          canTakeBack: pagesBefore.every(_pages.contains),
           onFailure: onFailure,
           newPage: newPage,
         );
