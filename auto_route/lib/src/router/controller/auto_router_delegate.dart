@@ -193,13 +193,33 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     if (deepLinkBuilder != null) {
       final resolvedLink = await deepLinkBuilder!(platformDeepLink);
       if (_wasOvertaken(handover)) return;
-      await _handleDeepLink(resolvedLink, handover: handover);
-      return _reportRejectedLaunch();
+      return await _openLaunchLink(resolvedLink, handover: handover);
     } else if (platformDeepLink.isValid) {
-      await _handleDeepLink(platformDeepLink, handover: handover);
-      return _reportRejectedLaunch();
+      return await _openLaunchLink(platformDeepLink, handover: handover);
     }
     throw FlutterError(_unresolvedMessage(platformDeepLink));
+  }
+
+  // Opens [link], the link the app is launched at. When the app turns it
+  // down, the url is that of the pages a guard let in below it, such as the
+  // page a link brings below its own, or '/' with none; a later link reports
+  // its own url.
+  Future<void> _openLaunchLink(DeepLink link, {required int handover}) async {
+    var isAccepted = false;
+    final opening = _handleDeepLink(
+      link,
+      handover: handover,
+      onAccepted: () => isAccepted = true,
+    );
+    final count = controller.root._linkCount;
+    await opening;
+    if (!isAccepted &&
+        !_isDisposed &&
+        controller.hasEntries &&
+        count == controller.root._linkCount) {
+      return _reportTurnedDownLink();
+    }
+    _reportRejectedLaunch();
   }
 
   // Whether a link handed over after the link numbered [handover] started
@@ -233,10 +253,10 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   Future<void> _handleDeepLink(
     DeepLink deepLink, {
     required int handover,
+    required VoidCallback onAccepted,
     bool replacesLaunchPage = false,
     bool rebuildsStack = false,
     List<Route<Object?>> closing = const [],
-    VoidCallback? onAccepted,
   }) {
     if (deepLink is _IgnoredDeepLink) return SynchronousFuture(null);
 
@@ -250,7 +270,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       ),
       onAccepted: () {
         _closePagelessRoutes(closing);
-        onAccepted?.call();
+        onAccepted();
       },
     );
   }
