@@ -53,15 +53,18 @@ void main() {
     // guard takes its time, let it in, then go back with system back.
     // Happened: the shell showed ChildBRoute at /shell/b while the guard
     // decided, and /guarded then went in as a new history entry.
-    // Should: the shell keeps ChildARoute while the guard decides; /guarded
-    // replaces the history entry, and back shows the shell on ChildBRoute.
+    // Should: the shell keeps ChildARoute while the guard decides, and back
+    // shows the shell on ChildBRoute. In a browser the shell's new child and
+    // /guarded each get an entry: the entry of ChildARoute, which left,
+    // gives way to the one of ChildBRoute, and /guarded is one entry over
+    // it, as each page replaceAll opens is closed by a back of its own.
     testWidgets(
       'The shell shows the new child once a guard lets the batch in',
       (tester) async {
         final guard = _HeldGuard();
         final router = _buildRouter(guard);
         await _openShellOnChildA(tester, router);
-        await expectBrowserEntryAfter(0, () async {
+        await expectBrowserEntryAfter(1, () async {
           await _replaceAllBehindGuard(tester, router);
           expect(find.text('Child A'), findsOneWidget);
           await expectBrowserUrl('/shell/a');

@@ -567,28 +567,35 @@ void main() {
 
   // Steps: with a browser that keeps no entries, as in a widget test in
   // Chrome, show Home, push A and B, pop, show the same again, replace A
-  // with C, and ask for a step back.
+  // with C as the app reports a replace, then push D and E together, and
+  // ask for a step back.
   // Native behavior this holds to: Flutter's Router, which reports the url
-  // of each change to the platform, a new one for a push and over the last
-  // one for a replace or a pop.
+  // of each change to the platform: over the last one for its first url and
+  // for a change the app reports as a replace, as a new one otherwise, a pop
+  // included, and nothing for the url it reported last.
   test('A browser that keeps no entries is told the url of the page on top '
-      'on each change, and is never stepped', () async {
+      'as the Router tells it, and is never stepped', () async {
     final web = _Web();
     web.browser
       ..keepsEntries = false
       ..losesWrites = true;
-    for (final urls in ['/', '/ /a', '/ /a /b', '/ /a', '/ /a', '/ /c']) {
+    for (final urls in ['/', '/ /a', '/ /a /b', '/ /a', '/ /a']) {
       web.show(urls);
       await web.finish();
     }
+    web.writer.bringTo(_entries('/ /c'), isReplace: true);
+    await web.finish();
+    web.show('/ /c /d /e');
+    await web.finish();
     web.writer.step(-1);
     await web.finish();
     expect(web.browser.asked, [
       'replace /',
       'push /a',
       'push /b',
-      'replace /a',
+      'push /a',
       'replace /c',
+      'push /e',
     ]);
   });
 

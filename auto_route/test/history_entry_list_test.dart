@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/history_entry_list.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,7 +38,11 @@ class _ListHistory extends NavigationHistory {
 
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
-    final shown = list.show(newState);
+    final shown = list.show(
+      newState,
+      under: pagesUnderTop(router),
+      isLink: router.root.isShowingLink,
+    );
     super.onNewUrlState(
       shown.copyWith(shouldReplace: newState.shouldReplace),
       notify: notify,
@@ -58,6 +63,11 @@ class _ListHistory extends NavigationHistory {
 
   @override
   Object? get pathState => urlState.pathState;
+
+  // As the web history: the router then reports what such a history needs,
+  // such as the url once a nested router's first pages are all on.
+  @override
+  bool get writesBrowser => true;
 
   @override
   bool get canNavigateBack => length > 1;

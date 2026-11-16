@@ -6,9 +6,46 @@ import 'package:auto_route/src/router/controller/navigation_history/browser/hist
 import 'package:auto_route/src/router/controller/navigation_history/navigation_history.dart';
 import 'package:auto_route/src/router/controller/routing_controller.dart';
 import 'package:auto_route/src/router/parser/default_route_parser.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' show LocalKey, protected;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/widgets.dart' show BuildContext;
+
+/// The url state of every open page of [router] and the routers nested in
+/// it that the system back reaches from the page on top, the first page
+/// first: every page of a stack, and of tabs the active tab alone. A page
+/// that holds a nested router stands for that router's pages.
+///
+/// Native behavior this holds to: Flutter's Navigator, where each back
+/// closes the page on top of the innermost navigator that can pop, and then
+/// the page that holds it.
+List<UrlState> pagesUnderTop(RoutingController router) {
+  final states = <UrlState>[];
+  void collect(RoutingController controller, List<RouteMatch<Object?>> above) {
+    final pages = controller is StackRouter
+        ? controller.stackData
+        : [?controller.currentChild];
+    for (final data in pages) {
+      final segments = [...above, data.route];
+      final nested = controller.childControllers.lastWhereOrNull(
+        (child) => child.matchId == data.matchId,
+      );
+      if (nested != null && nested.hasEntries) {
+        collect(nested, segments);
+      } else {
+        states.add(
+          UrlState.fromSegments([
+            ...segments,
+            ...?data.pendingChildren.lastOrNull?.flattened,
+          ]),
+        );
+      }
+    }
+  }
+
+  collect(router, const []);
+  return states.isEmpty ? states : states.sublist(0, states.length - 1);
+}
 
 /// A [NavigationHistory] that keeps a browser's history as the pages of the
 /// app are: one entry for each page on the way back, the browser on the
@@ -105,12 +142,17 @@ class BrowserNavigationHistory extends NavigationHistory {
 
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
-    final shown = _list.show(newState, keepsClosedUnder: _keepsClosedUnder);
+    final shown = _list.show(
+      newState,
+      keepsClosedUnder: _keepsClosedUnder,
+      under: pagesUnderTop(router),
+      isLink: router.root.isShowingLink,
+    );
     super.onNewUrlState(
       shown.copyWith(shouldReplace: newState.shouldReplace),
       notify: notify,
     );
-    _writer.bringTo(_list.entries);
+    _writer.bringTo(_list.entries, isReplace: newState.shouldReplace);
   }
 
   /// Starts this history over on the entry the browser stands on, which

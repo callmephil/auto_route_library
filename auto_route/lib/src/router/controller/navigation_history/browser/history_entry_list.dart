@@ -1,5 +1,6 @@
 import 'package:auto_route/src/router/parser/default_route_parser.dart';
 import 'package:auto_route/src/utils.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' show LocalKey;
 
 /// Whether [a] and [b] name the same url, however each is escaped; the empty
@@ -38,6 +39,9 @@ bool isSameHistoryUrl(String a, String b) {
 ///   free, and the state is a new entry there.
 /// * Any other state is a new entry: another page on top, or another url of
 ///   the same page.
+/// * Every open page under the page on top that the back button should
+///   reach has an entry too, see [show]: pages the app opened together get
+///   one each, and pages a link opened together share the link's entry.
 class HistoryEntryList {
   /// Creates an empty list that asks [isPageOpen] whether a stack still holds
   /// the page with a given id.
@@ -47,6 +51,13 @@ class HistoryEntryList {
   final bool Function(LocalKey pageId) isPageOpen;
 
   final _entries = <UrlState>[];
+
+  // The pages that share the entry of a page over them, as the pages a link
+  // opened under its page.
+  final _sharing = <LocalKey>{};
+
+  // The pages whose entry a link made.
+  final _linkPages = <LocalKey>{};
 
   /// The entries, the app's first one first.
   List<UrlState> get entries => .unmodifiable(_entries);
@@ -59,7 +70,76 @@ class HistoryEntryList {
   ///
   /// With [keepsClosedUnder] an entry whose page has left keeps its place
   /// while the entry of an open page is over it, until [didDropClosed].
-  UrlState show(UrlState state, {bool keepsClosedUnder = false}) {
+  ///
+  /// [under] holds the url state of each open page the back button should
+  /// reach from [state], the first page first. One that no entry stands for
+  /// yet gets an entry of its own, in its place among the others, as each
+  /// route of Navigator.pushAll-like calls is closed by a back of its own.
+  /// With [isLink], when a link, the launch url or the browser's own move
+  /// opened [state], it gets none and shares the entry of [state]: the user
+  /// made one navigation, and back leaves it as one. So does a page that
+  /// turns up later under an entry a link made, as the first pages of a
+  /// nested router that is built a frame after its page.
+  UrlState show(
+    UrlState state, {
+    bool keepsClosedUnder = false,
+    List<UrlState> under = const [],
+    bool isLink = false,
+  }) {
+    final shown = _showOnTop(state, keepsClosedUnder: keepsClosedUnder);
+    _sharing.removeWhere((pageId) => !isPageOpen(pageId));
+    _linkPages.removeWhere((pageId) => !isPageOpen(pageId));
+    final topId = shown.topMatch?.id;
+    if (topId != null) {
+      _sharing.remove(topId);
+      if (isLink) _linkPages.add(topId);
+    }
+    _giveEntries([...under, shown], isLink: isLink);
+    return shown;
+  }
+
+  // Gives each page of [wayBack] but the last, which has its entry, an
+  // entry of its own or a share in the entry over it.
+  void _giveEntries(List<UrlState> wayBack, {required bool isLink}) {
+    bool hasEntry(UrlState page) =>
+        _entries.any((entry) => entry.topMatch?.id == page.topMatch?.id);
+    for (final (place, page) in wayBack.indexed) {
+      final pageId = page.topMatch?.id;
+      if (pageId == null ||
+          place == wayBack.length - 1 ||
+          _sharing.contains(pageId) ||
+          hasEntry(page)) {
+        continue;
+      }
+      // The last page has its entry, so one over is always found.
+      final overId = wayBack
+          .skip(place + 1)
+          .firstWhereOrNull(hasEntry)
+          ?.topMatch
+          ?.id;
+      if (overId == null) continue;
+      if (isLink || _linkPages.contains(overId)) {
+        _sharing.add(pageId);
+        continue;
+      }
+      // After the entry of the nearest page under it that has one, else
+      // before the entry of the page over it.
+      final belowId = wayBack
+          .take(place)
+          .toList()
+          .reversed
+          .firstWhereOrNull(hasEntry)
+          ?.topMatch
+          ?.id;
+      final at = belowId == null
+          ? _entries.indexWhere((entry) => entry.topMatch?.id == overId)
+          : _entries.lastIndexWhere((entry) => entry.topMatch?.id == belowId) +
+                1;
+      _entries.insert(at, _withoutReplaceMark(page));
+    }
+  }
+
+  UrlState _showOnTop(UrlState state, {required bool keepsClosedUnder}) {
     final topBefore = _entries.lastOrNull;
     // The place on top is free when the entry that held it leaves with its
     // page.

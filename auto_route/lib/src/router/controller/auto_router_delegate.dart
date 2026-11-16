@@ -582,7 +582,10 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         pathInBrowser != matchedUrlState.path) {
       matchedUrlState = matchedUrlState.copyWith(shouldReplace: true);
     }
-    controller.navigationHistory.onNewUrlState(matchedUrlState);
+    controller.root._showingLink(
+      () => controller.navigationHistory.onNewUrlState(matchedUrlState),
+      isLink: true,
+    );
   }
 
   @override

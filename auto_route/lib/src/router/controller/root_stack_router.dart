@@ -40,6 +40,30 @@ abstract class RootStackRouter extends StackRouter {
   // navigation of that link takes it, see [_takeLinkStep].
   final _linkSteps = <int, VoidCallback>{};
 
+  // Whether the url reported right now is that of a link the delegate
+  // opened, the launch url included.
+  bool _isShowingLink = false;
+
+  /// Whether the url state that reaches the [navigationHistory] right now is
+  /// that of a link the delegate opened, the launch url included, and not
+  /// of a navigation the app called.
+  ///
+  /// The pages a link opens together share its browser entry, while pages
+  /// the app opens together get one each.
+  @internal
+  bool get isShowingLink => _isShowingLink;
+
+  // Runs [show], which reports a url, as the url of a link when [isLink].
+  T _showingLink<T>(T Function() show, {required bool isLink}) {
+    final wasShowingLink = _isShowingLink;
+    _isShowingLink = isLink || wasShowingLink;
+    try {
+      return show();
+    } finally {
+      _isShowingLink = wasShowingLink;
+    }
+  }
+
   // Runs [open], which starts the navigation of a new link, as that link's.
   // The navigation starts before [open] returns, up to its first guard, and
   // knows its link from [_startingLink] then. What it goes on to later, such

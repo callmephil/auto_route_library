@@ -4601,7 +4601,10 @@ abstract class StackRouter extends RoutingController {
         openChildrenOfTakeovers();
         return null;
       }
-      final popped = _addNewPage<T>(match, notify: notify);
+      final popped = root._showingLink(
+        () => _addNewPage<T>(match, notify: notify),
+        isLink: ofLink != null,
+      );
       openChildrenOfTakeovers();
       if (pushed != null && !pushed.isCompleted) pushed.complete();
       return popped;
@@ -5721,7 +5724,20 @@ class NestedStackRouter extends StackRouter {
     if (hasPendingChildren) {
       _routeData.pendingChildren.clear();
     }
+    _reportPagesUnderFirstPages(initialRoutes.length);
     return true;
+  }
+
+  // The first [count] pages of this router went on together, after the url
+  // that names the last of them was reported: the url itself is the same,
+  // and nobody hears of the pages under it. A web history that writes the
+  // browser gives each its entry from the url state of the pages on, once
+  // they are, so the url is reported again then.
+  void _reportPagesUnderFirstPages(int count) {
+    if (count < 2 || !navigationHistory.writesBrowser) return;
+    scheduleMicrotask(() {
+      if (!_isDisposed) navigationHistory.rebuildUrl();
+    });
   }
 
   // Opens [routes], the pages a link or a navigation named for this router
@@ -5746,7 +5762,10 @@ class NestedStackRouter extends StackRouter {
     await _pushAllGuarded(
       routes,
       returnLastRouteCompleter: false,
-      onLastRouteAdded: (_) => isLastPageOn = true,
+      onLastRouteAdded: (_) {
+        isLastPageOn = true;
+        _reportPagesUnderFirstPages(routes.length);
+      },
       // The batch goes on without a pause until a guard makes it wait. So
       // when its last page is not on a microtask after its first, a guard is
       // deciding, or has kept a page out, and nobody has told the navigator

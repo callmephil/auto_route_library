@@ -56,18 +56,23 @@ void main() {
     },
   );
 
-  // pushAll records only the last page, so the entry before the popped one
-  // belongs to FirstRoute; SecondRoute must take the popped page's entry.
-  testWidgets('Popping a page pushed with pushAll on web replaces its entry', (
-    tester,
-  ) async {
+  // Steps: on FirstRoute, pushAll SecondRoute and ThirdRoute, pop, then
+  // press the browser's back button.
+  // Each page pushAll opens has an entry, so the pop steps the browser back
+  // to the entry of SecondRoute, and back from there shows FirstRoute. Until
+  // pages opened together got an entry each, pushAll recorded only the last
+  // page, and SecondRoute took the popped page's entry.
+  // Native behavior this holds to: Flutter's Navigator, where each route
+  // pushed is closed by a system back of its own.
+  testWidgets('Popping a page pushed with pushAll on web steps back to the '
+      'entry of the page under it', (tester) async {
     await pumpRouterConfigApp(tester, router.config());
     await settleBrowser(tester);
     final start = browserSerialCount;
 
     unawaited(router.pushAll([const SecondRoute(), const ThirdRoute()]));
     await settleBrowser(tester);
-    expect(browserSerialCount, start + 1);
+    expect(browserSerialCount, start + 2);
 
     router.pop();
     await settleBrowser(tester);

@@ -115,6 +115,17 @@ HistoryCall _replaceAll(List<String> names) =>
 HistoryCall _pushAll(List<String> names) =>
     (router) =>
         unawaited(router.pushAll([for (final name in names) NamedRoute(name)]));
+HistoryCall _popAndPushAll(List<String> names) =>
+    (router) => unawaited(
+      router.popAndPushAll([for (final name in names) NamedRoute(name)]),
+    );
+// replaceAll with a page whose guard rejects it: the pages closed for it
+// are put back.
+void _replaceAllRejected(HistoryRouter router) {
+  router.isMember = false;
+  unawaited(router.replaceAll(const [NamedRoute('MemberRoute')]));
+}
+
 HistoryCall _pushAndPopUntil(String name, {required String until}) =>
     (router) => unawaited(
       router.pushAndPopUntil(
@@ -441,6 +452,51 @@ final Map<String, HistoryRow> nativeSequences = {
     _onABC,
     [_pushAndPopUntil('DRoute', until: 'ARoute')],
     ['/', '/a', '/d'],
+  ),
+  // Each page the app opens with others is closed by a back of its own.
+  'pushAll [A, B, C]': (
+    [],
+    [
+      _pushAll(['ARoute', 'BRoute', 'CRoute']),
+    ],
+    ['/', '/a', '/b', '/c'],
+  ),
+  'on A: replaceAll [B, C]': (
+    _onA,
+    [
+      _replaceAll(['BRoute', 'CRoute']),
+    ],
+    ['/b', '/c'],
+  ),
+  'on A: popAndPushAll [B, C]': (
+    _onA,
+    [
+      _popAndPushAll(['BRoute', 'CRoute']),
+    ],
+    ['/', '/b', '/c'],
+  ),
+  'pushAll [A, Mail [Inbox, message 5]]': (
+    [],
+    [
+      (router) => unawaited(
+        router.pushAll(const [
+          NamedRoute('ARoute'),
+          NamedRoute(
+            'MailRoute',
+            children: [
+              NamedRoute('InboxRoute'),
+              NamedRoute('MessageRoute', params: {'id': '5'}),
+            ],
+          ),
+        ]),
+      ),
+    ],
+    ['/', '/a', '/mail', '/mail/5'],
+  ),
+  'on A, B: replaceAll [Member], rejected': (
+    _onAB,
+    [_replaceAllRejected],
+    ['/', '/a', '/b'],
   ),
 };
 

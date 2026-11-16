@@ -140,10 +140,8 @@ class HistoryWriter {
   // written last, or of the route handed to the app last.
   String? _providerUrl;
 
-  // What a browser that keeps no entries was told last, see [_tellTop]: the
-  // entry of the page on top, and how many entries the app had.
+  // What a browser that keeps no entries was told last, see [_tellTop].
   UrlState? _toldTop;
-  int _toldCount = 0;
 
   bool _isRunning = false;
   bool _isWriting = false;
@@ -220,7 +218,6 @@ class HistoryWriter {
     _endStep(didLand: false);
     _entries.clear();
     _toldTop = null;
-    _toldCount = 0;
     _ownLandingUrl = null;
     _isLandingUnreported = false;
     _isPaused = true;
@@ -240,9 +237,14 @@ class HistoryWriter {
   /// should hold up to the entry it stands on. An entry the app keeps out of
   /// the address bar, see [HistoryBrowser.keepsOut], is left out when its
   /// turn comes.
-  void bringTo(List<UrlState> entries) {
+  ///
+  /// [isReplace] tells that the app reported the last entry as a replace.
+  /// Only a browser that keeps no entries needs it, see
+  /// [HistoryBrowser.keepsEntries]: the others are brought to the entries
+  /// whatever the app reported.
+  void bringTo(List<UrlState> entries, {bool isReplace = false}) {
     if (entries.isEmpty || _isDisposed) return;
-    _queue.add(_Entries(List.unmodifiable(entries)));
+    _queue.add(_Entries(List.unmodifiable(entries), isReplace: isReplace));
     _run();
   }
 
@@ -367,7 +369,7 @@ class HistoryWriter {
       await Future<void>.value();
       while (_queue.isNotEmpty && !_isPaused && !_isDisposed) {
         switch (_nextWork()) {
-          case _Entries(:final entries):
+          case _Entries(:final entries, :final isReplace):
             final wanted = [
               for (final (place, entry) in entries.indexed)
                 if (hasBrowserEntry(place, entry)) entry,
@@ -375,7 +377,7 @@ class HistoryWriter {
             if (_browser.keepsEntries) {
               await _reach(wanted);
             } else {
-              _tellTop(wanted);
+              _tellTop(wanted, isReplace: isReplace);
             }
           case _Step(:final delta):
             // With no entries kept there is none to step to.
@@ -428,25 +430,23 @@ class HistoryWriter {
   }
 
   // Tells the url of the page on top of [entries] to a browser that keeps
-  // no entries: as a new entry when pages were added since the last one
-  // told, and over the last one otherwise, a pop included. That is what a
-  // Router reports for each change, and what a test that listens to the
-  // navigation channel hears.
-  void _tellTop(List<UrlState> entries) {
+  // no entries, as Flutter's Router reports a change: nothing when the url
+  // and its state are the ones told last, over the last one for the first
+  // url and for a change reported as a replace ([isReplace]), and as a new
+  // entry otherwise, a pop included. That is what a test that listens to
+  // the navigation channel hears.
+  void _tellTop(List<UrlState> entries, {required bool isReplace}) {
     final top = entries.lastOrNull;
     if (top == null) return;
     final told = _toldTop;
-    final isNew = told != null && entries.length > _toldCount;
-    _toldCount = entries.length;
-    if (!isNew &&
-        told != null &&
+    if (told != null &&
         isSameHistoryUrl(told.url, top.url) &&
         told.pathState == top.pathState) {
       return;
     }
     _toldTop = top;
     _providerUrl = top.url;
-    _browser.write(top, replaces: !isNew);
+    _browser.write(top, replaces: told == null || isReplace);
   }
 
   // Brings the browser to [entries]; stops when the user moves it meanwhile.
@@ -582,9 +582,12 @@ sealed class _Work {
 }
 
 final class _Entries extends _Work {
-  const new(this.entries);
+  const new(this.entries, {required this.isReplace});
 
   final List<UrlState> entries;
+
+  // Whether the app reported the last entry as a replace.
+  final bool isReplace;
 }
 
 final class _Step extends _Work {
