@@ -17,6 +17,8 @@ import 'back_after_navigations_in_one_turn_test.dart'
     as back_after_navigations_in_one_turn;
 import 'back_after_opening_nested_pages_together_test.dart'
     as back_after_opening_nested_pages_together;
+import 'back_after_opening_pages_together_in_tabs_test.dart'
+    as back_after_opening_pages_together_in_tabs;
 import 'back_after_pages_opened_together_test.dart'
     as back_after_pages_opened_together;
 import 'back_after_push_all_test.dart' as back_after_push_all;
@@ -443,6 +445,7 @@ void main() {
   back_after_link_page_removed.main();
   back_after_navigations_in_one_turn.main();
   back_after_opening_nested_pages_together.main();
+  back_after_opening_pages_together_in_tabs.main();
   back_after_pages_opened_together.main();
   back_after_push_all.main();
   back_after_removing_link_page.main();

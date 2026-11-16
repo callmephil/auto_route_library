@@ -173,17 +173,10 @@ class NavigationHistoryImpl extends NavigationHistory {
         _sharing[pageId] = overId;
         continue;
       }
-      // After the entry of the nearest page under it that has one, else
-      // before the entry of the page over it.
-      final belowId = under
-          .take(place)
-          .toList()
-          .reversed
-          .map((below) => below.topMatch?.id)
-          .firstWhereOrNull((id) => id != null && _hasEntry(id));
-      final at = belowId == null
-          ? _entries.indexWhere((entry) => entry.pageId == overId)
-          : _entries.lastIndexWhere((entry) => entry.pageId == belowId) + 1;
+      // Right before the latest entry of the page over it: the page went in
+      // with that page, so after any tab change made before, and back()
+      // shows it next, as Navigator.pop does.
+      final at = _entries.lastIndexWhere((entry) => entry.pageId == overId);
       final entry = _entryOf(page);
       _entries.insert(at, entry);
       _wasOpen.add(entry);
