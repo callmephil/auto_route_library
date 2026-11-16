@@ -215,7 +215,9 @@ void main() {
   }, skip: kIsWeb);
 
   // A step back that waits on a guard is still under way, so a second call
-  // does nothing, in one turn as a frame apart.
+  // does nothing, in one turn as a frame apart. Once the guard lets the tab
+  // in, the history holds one entry per page and tab change: '/' and
+  // '/tabs/g'.
   testWidgets('While the guard of the page gone back to decides, a second '
       'back does nothing', (tester) async {
     final guard = HeldGuard(mode: .answersYes);
@@ -239,5 +241,6 @@ void main() {
       (stackNames(router).join(' '), tabs.current.name),
       ('HomeRoute TabsRoute', 'GTab'),
     );
+    expect(router.navigationHistory.length, 2);
   }, skip: kIsWeb);
 }

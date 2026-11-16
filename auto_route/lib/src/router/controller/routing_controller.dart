@@ -2125,19 +2125,34 @@ class TabsRouter extends RoutingController {
   }) async {
     final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
+    // The navigation answers once it is let in, or once what it waits on
+    // has ended without that: a change to another tab, which its guards may
+    // keep out or a later change replace, or the navigation inside the tab
+    // on screen. So a step back the app's own history takes into a tab whose
+    // guard decides later ends with that guard's answer, as one into a page
+    // of a stack does. A change that goes on into the nested router of its
+    // tab ends once the tab's own guards have answered.
+    final letIn = Completer<void>();
+    void onTabLetIn() {
+      onLetIn?.call();
+      if (!letIn.isCompleted) letIn.complete();
+    }
+
+    final waitedOn = <Future<void>>[];
     for (final mayUpdateRoute in routesToProcess) {
       final pageToUpdateIndex = _tabIndexOf(mayUpdateRoute);
 
       if (pageToUpdateIndex != -1) {
         if (!isReevaluating && _activeIndex != pageToUpdateIndex) {
-          _changeTab(
+          final change = _changeTab(
             pageToUpdateIndex,
             route: mayUpdateRoute,
             onFailure: onFailure,
             keepsUnnamedPages: keepsUnnamedPages,
             link: ofLink,
-            onLetIn: onLetIn,
+            onLetIn: onTabLetIn,
           );
+          if (change is Future<_TabChange>) waitedOn.add(change);
         } else {
           // A navigation to the tab on screen is the latest choice: it calls
           // off a change to another tab still waiting for its guards. A
@@ -2167,13 +2182,13 @@ class TabsRouter extends RoutingController {
                   isReevaluating: isReevaluating,
                   keepsUnnamedPages: keepsUnnamedPages,
                   link: ofLink,
-                  onLetIn: onLetIn,
+                  onLetIn: onTabLetIn,
                   onGuardShowsPage: onGuardShowsPage,
                 );
           if (isReevaluating) {
             await inside;
           } else if (inside != null) {
-            unawaited(inside);
+            waitedOn.add(inside);
           }
         }
       }
@@ -2193,7 +2208,9 @@ class TabsRouter extends RoutingController {
         }
       }
     }
-
+    if (!letIn.isCompleted && waitedOn.isNotEmpty) {
+      await Future.any([letIn.future, Future.wait(waitedOn)]);
+    }
     return null;
   }
 
