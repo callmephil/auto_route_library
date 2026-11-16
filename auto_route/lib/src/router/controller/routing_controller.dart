@@ -3711,6 +3711,22 @@ abstract class StackRouter extends RoutingController {
         // which the browser has taken: the pages above leave in it, and the
         // url is that entry's, not a new one.
         !root._isOpeningBrowserEntry;
+    // Or the last route goes on as a new page whose nested router, built
+    // only with it, asks its guards then: the pages leaving stay under the
+    // new pages until those guards let the navigation in, and the new pages
+    // are taken back if they turn it down, see [_waitForNewNestedRouter].
+    // Not for a step in the browser's history either.
+    final last = toPush.lastOrNull;
+    final holdsUnderNewPage =
+        !holdsPagesAbove &&
+        !isReevaluating &&
+        !root._isOpeningBrowserEntry &&
+        anchorPage == null &&
+        leaving.isNotEmpty &&
+        last != null &&
+        (last.children?.isNotEmpty ?? false) &&
+        _innerControllerOfMatch(last.id) == null;
+    final holds = holdsPagesAbove || holdsUnderNewPage;
     // Where the anchor was, once it has left for its new page.
     int? anchorIndex;
     return _pushAllGuarded(
@@ -3734,7 +3750,7 @@ abstract class StackRouter extends RoutingController {
         leaving = null;
         bool isAnchor(AutoRoutePage<Object?> page) =>
             anchorId != null && page.routeData.matchId == anchorId;
-        if (holdsPagesAbove) {
+        if (holds) {
           final above = pagesLeaving.where((page) => !isAnchor(page)).toSet();
           onPagesAboveHeld(() {
             final left = _pages.where(above.contains).toList();
@@ -3748,8 +3764,7 @@ abstract class StackRouter extends RoutingController {
         final left = _pages
             .where(
               (page) =>
-                  (pagesLeaving.contains(page) && !holdsPagesAbove) ||
-                  isAnchor(page),
+                  (pagesLeaving.contains(page) && !holds) || isAnchor(page),
             )
             .toList();
         if (holdsPagesAbove) {
@@ -6486,7 +6501,13 @@ class _NestedLetIn {
     void letInUnclaimed(Duration _) {
       if (!identical(_ofPage[data], this)) return;
       _ofPage[data] = null;
-      letIn();
+      // A page that left meanwhile, as one the user went back from, lets
+      // nothing in.
+      final router = data.router;
+      final isOn =
+          router is StackRouter &&
+          router._pages.any((page) => identical(page.routeData, data));
+      isOn ? letIn() : turnDown(canTakeBack: false);
     }
 
     // A page put on while widgets build is built in the next frame.
