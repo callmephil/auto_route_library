@@ -7,9 +7,10 @@ import 'package:material_ui/material_ui.dart';
 
 import 'support/app.dart';
 
-// The app's navigate and navigatePath into a page already open keep the
-// dialog over it when a guard of that page's nested router rejects the
-// navigation, and close it once that guard lets it in.
+// The app's navigate into a page already open keeps the dialog over it when
+// a guard of that page's nested router rejects the navigation, and closes it
+// once that guard lets it in. navigatePath leaves it open, so a dialog that
+// navigates and then pops itself ends on the page it opened.
 // Headless test: auto_route/test/guards/navigate_into_open_page_keeps_dialog_test.dart
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -17,9 +18,11 @@ void main() {
   group('navigate into open page keeps dialog', () {
     // Steps: Mail is open on message 42 with a dialog over it. The app
     // navigates to message 13, whose guard rejects it, then to message 14,
-    // which its guard lets in; then the same with navigatePath, to 13 and 15.
-    // Was: navigate closed the dialog on 13; navigatePath never closed it.
-    // Should: the dialog stays after 13 and closes as 14 and 15 open.
+    // which its guard lets in. Then a second dialog navigates with
+    // navigatePath to 15 and pops itself.
+    // Was: navigate closed the dialog on 13.
+    // Should: the dialog stays after 13 and closes as 14 opens; the second
+    // dialog's own pop ends on 15.
     testWidgets('A navigate a nested guard rejects keeps the dialog', (
       tester,
     ) async {
@@ -83,17 +86,16 @@ void main() {
       expect(find.text('Unsaved draft'), findsNothing);
       expect(find.text('Mail 14'), findsOneWidget);
 
-      // navigatePath pops until its path as navigate does.
+      // navigatePath leaves the dialog open: its own button navigates and
+      // then pops it, in one handler.
       showDialog<void>(
         context: router.navigatorKey.currentContext!,
         builder: (_) => const AlertDialog(title: Text('Unsent reply')),
       );
       await tester.pumpAndSettle();
-      unawaited(router.navigatePath('/mail/13'));
-      await tester.pumpAndSettle();
-      expect(find.text('Unsent reply'), findsOneWidget);
-
+      final reply = tester.element(find.text('Unsent reply'));
       unawaited(router.navigatePath('/mail/15'));
+      Navigator.of(reply).pop();
       await tester.pumpAndSettle();
       expect(find.text('Unsent reply'), findsNothing);
       expect(find.text('Mail 15'), findsOneWidget);

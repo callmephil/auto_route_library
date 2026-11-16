@@ -13,12 +13,13 @@ import '../router_test_utils.dart';
 // closed them as soon as it had reached the page, and the nested router
 // asked its guards after. So a navigation those guards rejected still closed
 // the dialog, such as an unsaved draft, and while a slow guard decided the
-// dialog was already gone. A link's dialogs wait already. navigatePath with
-// an absolute path went straight to the nested router and never closed them,
-// let in or not, although it pops until its path as navigate does. The
-// dialogs now close once the nested guards let the navigation in, for both
-// calls, also two routers deep. A nested router not built yet asks its
-// guards only once its page is in, so there the dialogs still close first.
+// dialog was already gone. A link's dialogs wait already. The dialogs now
+// close once the nested guards let the navigation in, also two routers deep.
+// A nested router not built yet asks its guards only once its page is in, so
+// there the dialogs still close first. navigatePath with an absolute path
+// goes straight to the nested router and leaves the dialogs over the page
+// open, let in or not, as on dev: an app closes them itself, as a dialog's
+// button that navigates and then pops its dialog does.
 // Steps: Mail is open on message 42, with a dialog over it. The app calls
 // navigate or navigatePath to a message whose guard rejects it or lets it
 // in, at once or after a request. The same one router deeper: Mail's folder,
@@ -135,39 +136,69 @@ void main() {
         expect(router.currentUrl, '$prefix/42');
       });
 
-      testWidgets('$how $where to a page a guard lets in at once closes the '
-          'dialog', (tester) async {
+      testWidgets('$how $where to a page a guard lets in at once '
+          '${isPath ? 'leaves the dialog open' : 'closes the dialog'}', (
+        tester,
+      ) async {
         final router = await openWithDialog(tester);
 
         go(router, '14');
         await tester.pumpAndSettle();
 
-        expect(find.text('Unsaved draft'), findsNothing);
-        expect(find.text('Mail 14'), findsOneWidget);
+        expect(
+          find.text('Unsaved draft'),
+          isPath ? findsOneWidget : findsNothing,
+        );
+        expect(find.text('Mail 14', skipOffstage: false), findsOneWidget);
         expect(router.currentUrl, '$prefix/14');
       });
 
+      // The dialog's own button navigates and then pops its dialog, in one
+      // handler: the pop closes the dialog, not the page under it.
+      testWidgets('$how $where from a dialog that then pops itself ends on '
+          'the page it opened', (tester) async {
+        final router = await openWithDialog(tester);
+        final dialog = tester.element(find.text('Unsaved draft'));
+
+        go(router, '14');
+        Navigator.of(dialog).pop();
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(router.stack.map((page) => page.routeData.name), [
+          'HomeRoute',
+          'MailRoute',
+        ]);
+        expect(find.text('Unsaved draft'), findsNothing);
+        expect(find.text('Mail 14'), findsOneWidget);
+      });
+
       for (final isLetIn in [false, true]) {
-        testWidgets('$how $where to a page whose guard answers later keeps the '
-            'dialog while it decides, and '
-            '${isLetIn ? 'closes it once let in' : 'after it rejects'}', (
-          tester,
-        ) async {
-          final router = await openWithDialog(tester);
+        final keeps = isLetIn && isPath;
+        testWidgets(
+          '$how $where to a page whose guard answers later keeps the '
+          'dialog while it decides, and '
+          '${isLetIn ? (keeps ? 'after it lets the page in' : 'closes it once let in') : 'after it rejects'}',
+          (tester) async {
+            final router = await openWithDialog(tester);
 
-          go(router, '77');
-          await tester.pumpAndSettle();
-          expect(find.text('Unsaved draft'), findsOneWidget);
+            go(router, '77');
+            await tester.pumpAndSettle();
+            expect(find.text('Unsaved draft'), findsOneWidget);
 
-          slowAnswer!.complete(isLetIn);
-          await tester.pumpAndSettle();
+            slowAnswer!.complete(isLetIn);
+            await tester.pumpAndSettle();
 
-          expect(
-            find.text('Unsaved draft'),
-            isLetIn ? findsNothing : findsOneWidget,
-          );
-          expect(find.text('Mail 77'), isLetIn ? findsOneWidget : findsNothing);
-        });
+            expect(
+              find.text('Unsaved draft'),
+              isLetIn && !keeps ? findsNothing : findsOneWidget,
+            );
+            expect(
+              find.text('Mail 77', skipOffstage: false),
+              isLetIn ? findsOneWidget : findsNothing,
+            );
+          },
+        );
       }
     }
   }

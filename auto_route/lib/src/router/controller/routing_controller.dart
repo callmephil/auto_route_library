@@ -574,6 +574,12 @@ abstract class RoutingController with ChangeNotifier {
   /// page it reaches that [path] names no page for, and whose route has no
   /// initial child, is emptied. See [navigate] to keep its pages.
   ///
+  /// An absolute [path] into the nested router of a page already open goes
+  /// straight to that router: the dialogs over that page stay open, and the
+  /// app closes them itself, as a dialog's button that navigates and then
+  /// pops its dialog does. [navigate] closes them once the guards of that
+  /// router let the navigation in.
+  ///
   /// if [includePrefixMatches] is true prefixed-matches
   /// will be added to to target destination
   /// see [RouteMatcher.matchUri]
@@ -592,49 +598,9 @@ abstract class RoutingController with ChangeNotifier {
       onFailure: onFailure,
     );
     if (scope != null) {
-      final router = scope.router;
-      // An absolute path reaches the router that holds its last part at
-      // once, past the open pages that hold that router. The dialogs over
-      // those pages close as a navigate to them closes them: once the
-      // navigation is let in.
-      final closeAbove = path.startsWith('/')
-          ? _closingPagesAbove(router)
-          : null;
-      if (router is StackRouter) {
-        return router._navigateAll(
-          scope.matches,
-          onFailure: onFailure,
-          onLetIn: closeAbove,
-        );
-      }
-      closeAbove?.call();
-      return router._navigateAll(scope.matches, onFailure: onFailure);
+      return scope.router._navigateAll(scope.matches, onFailure: onFailure);
     }
     return SynchronousFuture(null);
-  }
-
-  // Closes the dialogs over the pages that hold [router], from its parent
-  // up, as long as each is the top page of its stack router; null when
-  // [router] is the root's or no such page holds it.
-  VoidCallback? _closingPagesAbove(RoutingController router) {
-    // Each with the page that holds the router below, as it is now.
-    final holders = <(StackRouter, AutoRoutePage<Object?>)>[];
-    for (var child = router; child._parent is StackRouter;) {
-      final parent = child._parent! as StackRouter;
-      final top = parent._pages.lastOrNull;
-      if (top == null ||
-          parent._innerControllerOfMatch(top.routeData.matchId) != child) {
-        break;
-      }
-      holders.add((parent, top));
-      child = parent;
-    }
-    if (holders.isEmpty) return null;
-    return () {
-      for (final (holder, page) in holders) {
-        holder._closePagelessRoutesOverTop(over: page);
-      }
-    };
   }
 
   Future<T?> _navigate<T extends Object?>(
