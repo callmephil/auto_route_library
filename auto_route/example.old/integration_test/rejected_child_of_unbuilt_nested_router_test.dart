@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,9 +9,12 @@ import 'package:material_ui/material_ui.dart';
 import 'support/app.dart';
 
 // A path or a link to a guarded page inside a nested router that is not
-// built yet shows that router's first page when the guard rejects the page,
-// at the url of the page on screen, as a canceled navigation on the web
-// leaves the url of the document on screen.
+// built yet, which the guard rejects, takes the page holding that router
+// back, as Android's conditional navigation pops back from a destination
+// whose check fails. The url is that of the page on screen, as a canceled
+// navigation on the web leaves the url of the document on screen. An app
+// opened at the link keeps that page, on the router's first page, when it
+// is its only page.
 // Headless test:
 // auto_route/test/guards/rejected_child_of_unbuilt_nested_router_test.dart
 void main() {
@@ -64,10 +68,10 @@ void main() {
 
     // Steps: open Home and tap 'Open message 13', which calls navigatePath
     // with the path of message 13, whose guard rejects it. Mail is not open.
-    // Go back.
     // Was: Mail opened with nothing in it, and the url named message 13.
-    // Should: Mail shows its inbox, at /mail, and back shows Home.
-    testWidgets('A path to a rejected page in a shell shows its first page', (
+    // Later Mail stayed open on its inbox.
+    // Should: Home stays, at the root url.
+    testWidgets('A path to a rejected page in a shell takes the shell back', (
       tester,
     ) async {
       final router = buildRouter();
@@ -77,21 +81,19 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(find.text('InboxRoute'), findsOneWidget);
-      expect(find.text('Mail 13'), findsNothing);
-      expect(router.currentUrl, '/mail');
-      await expectBrowserUrl('/mail');
-
-      await systemBack(tester);
-
       expect(router.stack.map((page) => page.name), ['HomeRoute']);
       expect(find.text('HomeRoute'), findsOneWidget);
+      expect(find.text('InboxRoute'), findsNothing);
+      expect(router.currentUrl, '/');
+      await expectBrowserUrl('/');
     });
 
     // Steps: the app is opened at the link to message 13.
     // Was: Mail showed nothing, under the link's url.
-    // Should: Mail shows its inbox, at /mail.
-    testWidgets('An app opened at a rejected page shows the first page', (
+    // Should: on the web, where a link brings only its own page, Mail is the
+    // only page and shows its inbox. Off the web the link brings Home below
+    // Mail, and Home shows.
+    testWidgets('An app opened at a rejected page shows Mail or Home', (
       tester,
     ) async {
       final router = buildRouter();
@@ -106,9 +108,14 @@ void main() {
       );
 
       expect(tester.takeException(), isNull);
-      expect(find.text('InboxRoute'), findsOneWidget);
-      expect(router.currentUrl, '/mail');
-      await expectBrowserUrl('/mail');
+      if (kIsWeb) {
+        expect(find.text('InboxRoute'), findsOneWidget);
+        expect(router.currentUrl, '/mail');
+        await expectBrowserUrl('/mail');
+      } else {
+        expect(find.text('HomeRoute'), findsOneWidget);
+        expect(router.currentUrl, '/');
+      }
     });
   });
 }

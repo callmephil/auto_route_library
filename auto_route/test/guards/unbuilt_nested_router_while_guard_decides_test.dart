@@ -18,7 +18,7 @@ import '../router_test_utils.dart';
 // Was: while the guard decided, Mail showed its placeholder, though its
 // router held the inbox, whose navigator nobody had told.
 // Should: the inbox shows while the guard decides. Then the message opens
-// over it, or, when the guard rejects, the inbox stays, at '/mail'.
+// over it, or, when the guard rejects, Mail is taken back and Home shows.
 // Native behavior this holds to: Flutter's Navigator shows the pages its
 // list holds. On Android a link puts the start destination under the linked
 // screen, and it is on screen until the linked screen is.
@@ -101,9 +101,10 @@ void main() {
     expect(router.currentUrl, '/mail/20');
   });
 
-  testWidgets('It stays, at its own url, when the guard then rejects', (
-    tester,
-  ) async {
+  // A "no" takes Mail back, with the inbox in it: a refused navigation
+  // changes nothing, as Android's conditional navigation pops back from a
+  // destination whose check fails.
+  testWidgets('Mail is taken back when the guard then rejects', (tester) async {
     final router = await openLink(tester);
     final shownMeanwhile = find.text('InboxRoute').evaluate().length;
 
@@ -111,9 +112,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect((shownMeanwhile, find.text('InboxRoute').evaluate().length), (1, 1));
-    expect(mailPages(router), ['InboxRoute']);
-    expect(router.currentUrl, '/mail');
+    expect(shownMeanwhile, 1);
+    expect(router.stack.map((page) => page.routeData.name), ['HomeRoute']);
+    expect(find.text('HomeRoute'), findsOneWidget);
+    expect(router.currentUrl, '/');
   });
 
   // A path the app calls names the message alone, so the nested router has

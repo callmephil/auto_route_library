@@ -4694,10 +4694,18 @@ abstract class StackRouter extends RoutingController {
           if (isLast) {
             // The link that starts the batch is let in, before its pages go
             // on; or, when it goes on into the nested router of the page it
-            // reaches again, once the guards there let it in.
-            if (onLinkAccepted != null) {
-              _innerControllerOfMatch(match.id) != null &&
-                      (match.children?.isNotEmpty ?? false)
+            // reaches again, once the guards there let it in; or, into the
+            // nested router of a new page, built only with the page, once
+            // the guards there let it in, see [_NestedLetIn].
+            final hasChildren = match.children?.isNotEmpty ?? false;
+            final isNestedRouterBuilt =
+                _innerControllerOfMatch(match.id) != null;
+            final waitsForNewRouter =
+                hasChildren &&
+                !isNestedRouterBuilt &&
+                match is! ReevaluatableRouteMatch;
+            if (onLinkAccepted != null && !waitsForNewRouter) {
+              hasChildren && isNestedRouterBuilt
                   ? root._handLinkStepOn(ofLink!, onLinkAccepted)
                   : onLinkAccepted();
             }
@@ -4719,8 +4727,19 @@ abstract class StackRouter extends RoutingController {
             // caller to be answered.
             takenOff.addAll(replaced);
             _takenOffByOpenBatches.addAll(replaced);
+            final pagesBefore = waitsForNewRouter ? List.of(_pages) : null;
             going.take(going.length - 1).forEachIndexed(putOn);
             final popped = putOnLast(going.lastOrNull ?? match);
+            if (pagesBefore != null) {
+              _waitForNewNestedRouter(
+                pagesBefore: pagesBefore,
+                link: ofLink,
+                linkStep: onLinkAccepted,
+                // Pages this step took off can't come back.
+                canTakeBack:
+                    replacement == null && pagesBefore.every(_pages.contains),
+              );
+            }
             if (popped != null) {
               // Every guard let the batch through.
               _endWaitOfTakenOff(takenOff);
@@ -4763,6 +4782,56 @@ abstract class StackRouter extends RoutingController {
       }
     }
     return null;
+  }
+
+  // The last page of a batch went on with pages named for its nested router,
+  // which is built only with the page and asks its guards then, with its own
+  // context. Until they let the navigation in, the step of its [link]
+  // ([linkStep]) waits, so a link's dialog stays open, and so does what the
+  // routers above do once let in; see [_NestedLetIn]. A "no" there takes the
+  // pages this step put on back, when [canTakeBack] and a page this router
+  // had before stays under them: the root is never left empty, and a router
+  // the navigation opened with this page alone keeps it, on its first page.
+  void _waitForNewNestedRouter({
+    required List<AutoRoutePage<Object?>> pagesBefore,
+    required int? link,
+    required VoidCallback? linkStep,
+    required bool canTakeBack,
+  }) {
+    final data = _pages.lastOrNull?.routeData;
+    if (data == null ||
+        !data.hasPendingChildren ||
+        _innerControllerOfMatch(data.matchId) != null) {
+      linkStep?.call();
+      return;
+    }
+    final added = _pages.whereNot(pagesBefore.contains).toList();
+    _NestedLetIn(
+      root,
+      link: link,
+      linkStep: linkStep,
+      takeBack: canTakeBack && pagesBefore.isNotEmpty
+          ? () => _takeBack(added)
+          : null,
+    ).waitOn(data);
+  }
+
+  // Takes [pages], which a navigation put on, back off the stack once a
+  // guard of a nested router turned that navigation down: the stack and the
+  // url are as before it, in the same history entry, and their callers get
+  // null. Returns false, and takes nothing, when none of them is on the
+  // stack any longer, or when no page would be left.
+  bool _takeBack(List<AutoRoutePage<Object?>> pages) {
+    final onStack = pages.where(_pages.contains).toList();
+    if (_isDisposed || onStack.isEmpty || onStack.length == _pages.length) {
+      return false;
+    }
+    markUrlStateForReplace();
+    for (final page in onStack.reversed) {
+      removeRoute(page.routeData, notify: false);
+    }
+    notifyAll(forceUrlRebuild: true);
+    return true;
   }
 
   // Runs [step], which takes pages off for a new page: the top page that
@@ -5301,7 +5370,22 @@ abstract class StackRouter extends RoutingController {
           onGuardShowsPage: onGuardShowsPage,
         );
       }
-      lettingIn?.call();
+      // A new page whose nested router, built with the page, asks its guards
+      // only then: the navigation is let in once they let it in.
+      final waiting = mayUpdateController == null && newChildren.isNotEmpty
+          ? _NestedLetIn.waitingOn(
+              _pages
+                  .lastWhereOrNull(
+                    (page) => page.routeData.matchId == mayUpdateRoute.id,
+                  )
+                  ?.routeData,
+            )
+          : null;
+      if (waiting != null && lettingIn != null) {
+        waiting.addLetIn(lettingIn);
+      } else {
+        lettingIn?.call();
+      }
       if (mayUpdateController != null) {
         return await mayUpdateController._navigateAll(
           newChildren,
@@ -5700,6 +5784,7 @@ class NestedStackRouter extends StackRouter {
   /// [setupInitialRoutes], which runs guards with a context.
   @internal
   bool setupInitialRoutesSynchronously() {
+    _nestedLetIn ??= _NestedLetIn.claim(_routeData);
     if (managedByWidget || root.guards.isNotEmpty) {
       return false;
     }
@@ -5725,7 +5810,39 @@ class NestedStackRouter extends StackRouter {
       _routeData.pendingChildren.clear();
     }
     _reportPagesUnderFirstPages(initialRoutes.length);
+    // No guard here can turn the navigation down; one of a router this
+    // router's last page builds still can.
+    _letInOrHandOn(_takeNestedLetIn());
     return true;
+  }
+
+  // What the navigation that named this router's first pages does once the
+  // guards here let it in, see [_NestedLetIn]: claimed as the router is
+  // built, before the end of the frame that builds it.
+  _NestedLetIn? _nestedLetIn;
+
+  _NestedLetIn? _takeNestedLetIn() {
+    final letIn = _nestedLetIn ?? _NestedLetIn.claim(_routeData);
+    _nestedLetIn = null;
+    return letIn;
+  }
+
+  // The pages named for this router are on: [letIn] waits for the nested
+  // router of the last of them instead, when that page went on with pages
+  // of its own for a router not built yet; otherwise the navigation is let
+  // in, after the frame, as this may run while widgets build.
+  void _letInOrHandOn(_NestedLetIn? letIn) {
+    if (letIn == null) return;
+    final inner = _NestedLetIn.waitingOn(_pages.lastOrNull?.routeData);
+    if (inner != null) {
+      letIn.handOnTo(inner);
+    } else if (_pages.lastOrNull?.routeData case final last?
+        when last.hasPendingChildren &&
+            _innerControllerOfMatch(last.matchId) == null) {
+      letIn.waitOn(last);
+    } else {
+      SchedulerBinding.instance.addPostFrameCallback((_) => letIn.letIn());
+    }
   }
 
   // The first [count] pages of this router went on together, after the url
@@ -5757,8 +5874,16 @@ class NestedStackRouter extends StackRouter {
   // is a page on screen, as Flutter's Navigator shows the pages its list
   // holds. The url is left to the answer. A router that is named one page
   // alone has none to show meanwhile and shows its placeholder.
-  Future<void> _openPendingRoutes(List<RouteMatch<Object?>> routes) async {
+  //
+  // The navigation that named them, [letIn], is let in once the last page is
+  // on. A "no" takes back the page this router is in, see [_NestedLetIn],
+  // unless a later navigation reached that page or this router meanwhile.
+  Future<void> _openPendingRoutes(
+    List<RouteMatch<Object?>> routes, {
+    _NestedLetIn? letIn,
+  }) async {
     var isLastPageOn = false;
+    final dataBefore = _routeData;
     await _pushAllGuarded(
       routes,
       returnLastRouteCompleter: false,
@@ -5774,7 +5899,18 @@ class NestedStackRouter extends StackRouter {
         if (!isLastPageOn && !_isDisposed) notifyListeners();
       }),
     );
-    if (isLastPageOn || _isDisposed) return;
+    if (isLastPageOn) {
+      if (!_isDisposed) _letInOrHandOn(letIn);
+      return;
+    }
+    if (_isDisposed) return;
+    // A later navigation that reached this router's page, or put a page of
+    // its own here, keeps the page.
+    final ownIds = {for (final route in routes) route.id};
+    final isReachedSince =
+        !identical(_routeData, dataBefore) ||
+        _pages.any((page) => !ownIds.contains(page.routeData.matchId));
+    if (letIn?.turnDown(canTakeBack: !isReachedSince) ?? false) return;
     // The pages kept out are the ones this router opens with, as when its
     // first page is the guarded one: it has no other page to show, and its
     // guard is not asked a second time.
@@ -5799,6 +5935,7 @@ class NestedStackRouter extends StackRouter {
   /// A router built by `AutoRouter.declarative` pushes nothing: it hands the
   /// routes a link opened to [pendingRoutesHandler] for its routes callback.
   void setupInitialRoutes() {
+    final letIn = _takeNestedLetIn();
     if (_routeData.hasPendingChildren) {
       final initialRoutes = List<RouteMatch<Object?>>.unmodifiable(
         _routeData.pendingChildren,
@@ -5807,11 +5944,14 @@ class NestedStackRouter extends StackRouter {
         pendingRoutesHandler._initialPendingRoutes = initialRoutes
             .map((e) => e.toPageRouteInfo())
             .toList();
+        // The app's routes callback asks no guard.
+        _letInOrHandOn(letIn);
       } else {
-        unawaited(_openPendingRoutes(initialRoutes));
+        unawaited(_openPendingRoutes(initialRoutes, letIn: letIn));
       }
       _routeData.pendingChildren.clear();
     } else if (!managedByWidget) {
+      _letInOrHandOn(letIn);
       final possibleInitialRoutes = matcher.match('');
       if (possibleInitialRoutes != null) {
         unawaited(
@@ -5822,6 +5962,131 @@ class NestedStackRouter extends StackRouter {
         );
       }
     }
+  }
+}
+
+// What a navigation does once the guards of the nested router of a page it
+// put on let it in. That router is built only with the page and asks its
+// guards then, with its own context, so the page shows first. Until they
+// answer, the step of the navigation's link waits, so a link's dialog stays
+// open, and so does what the routers above do once let in, such as closing
+// the dialogs over their page. A "no" there takes the page back, as
+// Android's conditional navigation pops back from a destination whose check
+// fails, and as on the web a canceled navigation leaves the document on
+// screen.
+class _NestedLetIn {
+  new(this._root, {this.link, this.linkStep, this.takeBack});
+
+  // The navigation waiting on the nested router of the page of a route data,
+  // until that router claims it.
+  static final _ofPage = Expando<_NestedLetIn>();
+
+  final RootStackRouter _root;
+
+  // The link whose navigation this is, if any.
+  int? link;
+
+  // What the link does once let in, see [RootStackRouter._openLink].
+  VoidCallback? linkStep;
+  VoidCallback? _onLetIn;
+
+  // Takes the page back after a "no"; answers whether it did.
+  bool Function()? takeBack;
+
+  // The navigation waiting on the nested router of the page of [data], not
+  // claimed yet.
+  static _NestedLetIn? waitingOn(RouteData<Object?>? data) =>
+      data == null ? null : _ofPage[data];
+
+  // Takes the navigation waiting on the nested router of the page of [data],
+  // for that router to let it in or turn it down.
+  static _NestedLetIn? claim(RouteData<Object?> data) {
+    final letIn = _ofPage[data];
+    _ofPage[data] = null;
+    return letIn;
+  }
+
+  // Waits on the nested router of the page of [data]. A page whose nested
+  // router doesn't claim it by the end of the frame that builds the page,
+  // such as one that holds tabs or no router, lets the navigation in then.
+  void waitOn(RouteData<Object?> data) {
+    _ofPage[data] = this;
+    final binding = SchedulerBinding.instance;
+    void letInUnclaimed(Duration _) {
+      if (!identical(_ofPage[data], this)) return;
+      _ofPage[data] = null;
+      letIn();
+    }
+
+    // A page put on while widgets build is built in the next frame.
+    switch (binding.schedulerPhase) {
+      case .persistentCallbacks || .midFrameMicrotasks:
+        binding.addPostFrameCallback(
+          (_) => binding.addPostFrameCallback(letInUnclaimed),
+        );
+      case .idle || .transientCallbacks || .postFrameCallbacks:
+        binding.addPostFrameCallback(letInUnclaimed);
+    }
+  }
+
+  // Adds [step] to what is done once the navigation is let in.
+  void addLetIn(VoidCallback step) {
+    final before = _onLetIn;
+    _onLetIn = before == null
+        ? step
+        : () {
+            before();
+            step();
+          };
+  }
+
+  // The guards let the navigation in. A link a later link was let in after
+  // gives way to it.
+  void letIn() {
+    final step = linkStep;
+    final onLetIn = _onLetIn;
+    linkStep = null;
+    _onLetIn = null;
+    takeBack = null;
+    final link = this.link;
+    if (link == null || !_root._isLinkOvertaken(link)) step?.call();
+    onLetIn?.call();
+  }
+
+  // A guard turned the navigation down: nothing it waited for is done, and
+  // the page is taken back, when [canTakeBack] and it can be. Answers
+  // whether it was.
+  bool turnDown({bool canTakeBack = true}) {
+    final toTakeBack = canTakeBack ? takeBack : null;
+    linkStep = null;
+    _onLetIn = null;
+    takeBack = null;
+    return toTakeBack?.call() ?? false;
+  }
+
+  // The navigation goes on into the nested router of a page the nested
+  // router this waited on put on: [inner] waits there in its place. A "no"
+  // there takes back the page this would have taken back, the outermost one
+  // the navigation put on.
+  void handOnTo(_NestedLetIn inner) {
+    inner
+      ..link ??= link
+      ..takeBack = takeBack ?? inner.takeBack;
+    final step = linkStep;
+    if (step != null) {
+      final innerStep = inner.linkStep;
+      inner.linkStep = innerStep == null
+          ? step
+          : () {
+              innerStep();
+              step();
+            };
+    }
+    final onLetIn = _onLetIn;
+    if (onLetIn != null) inner.addLetIn(onLetIn);
+    linkStep = null;
+    _onLetIn = null;
+    takeBack = null;
   }
 }
 

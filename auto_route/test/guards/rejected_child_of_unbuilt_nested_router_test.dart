@@ -19,7 +19,10 @@ import '../router_test_utils.dart';
 // Was: Mail opened with nothing in it, at '/mail/13'. With a link its nested
 // router held the inbox, but its navigator was never told; with a path it
 // held no page.
-// Should: Mail shows its inbox, at '/mail'. A link turned down inside a tab
+// Should: Mail shows its inbox, at '/mail'. Since the guard's "no" takes
+// back a page that was not open, Home shows instead, at '/', unless Mail is
+// the app's only page, as when the app starts at the link without the pages
+// below it. A link turned down inside a tab
 // that is not on screen leaves the tab on screen as it is, and the other
 // tab's nested router on its inbox.
 // Native behavior this holds to: on the web a navigation that is canceled
@@ -100,9 +103,12 @@ void main() {
             unawaited(router.navigatePath(path)),
       };
 
+  // Since the guard's "no" takes back the page whose nested router asked it,
+  // a refused navigation into a shell that is not open changes nothing: Home
+  // shows, at its url, in its own history entry.
   for (final MapEntry(key: way, value: open) in ways.entries) {
-    testWidgets('$way to a rejected page in a shell that is not open shows '
-        "the shell's first page", (tester) async {
+    testWidgets('$way to a rejected page in a shell that is not open takes '
+        'the shell back', (tester) async {
       final router = buildRouter();
       await pumpRouterConfigApp(tester, router.config());
 
@@ -110,21 +116,14 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
-      expect(stackNames(router), ['HomeRoute', 'MailRoute']);
-      expect(stackNames(router.innerRouterOf('MailRoute')), ['InboxRoute']);
-      expect(find.text('InboxRoute'), findsOneWidget);
+      expect(stackNames(router), ['HomeRoute']);
+      expect(find.text('HomeRoute'), findsOneWidget);
       expect(find.text('Mail 13'), findsNothing);
-      expect(router.currentUrl, '/mail');
+      expect(router.currentUrl, '/');
       expect(router.isPathActive('/mail/13'), isFalse);
-      // The url took the entry the rejected page's url had: one step back
-      // shows Home. The headless runner in Chrome writes no entries to count.
-      if (!kIsWeb) {
-        expect(router.navigationHistory.length, 2);
-        router.back();
-        await tester.pumpAndSettle();
-
-        expect(stackNames(router), ['HomeRoute']);
-      }
+      // The url took the entry the rejected page's url had. The headless
+      // runner in Chrome writes no entries to count.
+      if (!kIsWeb) expect(router.navigationHistory.length, 1);
     });
   }
 
@@ -200,8 +199,11 @@ void main() {
     expect(router.currentUrl, '/mail');
   });
 
+  // The app started at the link has no page to go back to: the shell stays,
+  // on its first page. With the pages a link brings below its own, as off
+  // the web, Home is under it, and the shell is taken back.
   testWidgets('An app opened at a link to a rejected page in a shell shows '
-      "the shell's first page", (tester) async {
+      "the shell's first page, or Home below it", (tester) async {
     tester.binding.platformDispatcher.defaultRouteNameTestValue = '/mail/13';
     addTearDown(
       tester.binding.platformDispatcher.clearDefaultRouteNameTestValue,
@@ -209,9 +211,15 @@ void main() {
     final router = buildRouter();
     await pumpRouterConfigApp(tester, router.config());
 
-    expect(stackNames(router.innerRouterOf('MailRoute')), ['InboxRoute']);
-    expect(find.text('InboxRoute'), findsOneWidget);
-    expect(router.currentUrl, '/mail');
+    if (kIsWeb) {
+      expect(stackNames(router.innerRouterOf('MailRoute')), ['InboxRoute']);
+      expect(find.text('InboxRoute'), findsOneWidget);
+      expect(router.currentUrl, '/mail');
+    } else {
+      expect(stackNames(router), ['HomeRoute']);
+      expect(find.text('HomeRoute'), findsOneWidget);
+      expect(router.currentUrl, '/');
+    }
   });
 
   // Should: a page its guard lets in opens as before, over the inbox when

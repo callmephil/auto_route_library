@@ -18,10 +18,14 @@ typedef OnNavigation = FutureOr<void> Function(
 /// tab with it, and the tab stays on the page under it if the guard then
 /// rejects. When that
 /// router isn't built yet, as for a page that isn't open or a tab never
-/// opened, it asks its guards only once its page or tab is in, a frame later:
-/// a rejection then leaves that page or tab open, on its first page. A link
-/// into a tab never opened builds the tab off the screen first instead, and a
-/// rejection keeps the tab the user is on.
+/// opened, it asks its guards only once its page or tab is in, a frame later.
+/// A rejection then takes that page back off, so the stack, the url and the
+/// dialogs are as before, and the page's caller gets null; the dialogs of a
+/// link stay open while the guard decides. A page that is the only page of
+/// its router, as when the app starts at the link, stays, on its first page.
+/// A tab never opened stays open on its first page. A link into a tab never
+/// opened builds the tab off the screen first instead, and a rejection keeps
+/// the tab the user is on.
 abstract class AutoRouteGuard {
   /// Default constructor
   const new();
