@@ -1574,12 +1574,16 @@ class TabsRouter extends RoutingController {
   // every guard does, so a tab change that no guard delays stays
   // synchronous. Once [change] is replaced by a later change, or the tabs
   // are disposed, no further guard is asked: the change won't happen.
+  // [onLetGo] is called when a guard asked again returns without an answer
+  // and without a redirect: the tab leaves the screen until it answers, see
+  // [_reevaluateActiveTab].
   FutureOr<ResolverResult> _checkTabGuards(
     RouteMatch<Object?> route, {
     required int change,
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     int from = 0,
+    VoidCallback? onLetGo,
   }) {
     final guards = route.guards;
     final guard = guards.elementAtOrNull(from);
@@ -1613,10 +1617,21 @@ class TabsRouter extends RoutingController {
         onFailure: onFailure,
         isReevaluating: isReevaluating,
         from: from + 1,
+        onLetGo: onLetGo,
       );
     }
 
-    final checking = resolver.checkGuard(guard, router);
+    final checking = resolver._checkGuard(
+      guard,
+      router,
+      onLeftUndecided: onLetGo == null
+          ? null
+          : ({required isWaitingOnUser}) {
+              if (isWaitingOnUser) return false;
+              onLetGo();
+              return true;
+            },
+    );
     if (resolver._result case final result?) {
       checking.ignore();
       return onResult(result);
@@ -2127,13 +2142,41 @@ class TabsRouter extends RoutingController {
   // say otherwise with reevaluateNext. Answers once the pages inside the tab
   // are reevaluated, or null when that is done at once. A guard that throws
   // reports its error as an uncaught one, and the reevaluation goes on.
+  //
+  // A guard that returns without an answer lets go of the tab, as a stack's
+  // guard lets go of its page: the tab leaves the screen at once, for the
+  // tab a rejection would show, and the reevaluation goes on without it.
+  // Once the guard lets it through, the tab shows again, through its guards,
+  // unless the user chose another tab meanwhile. A guard that wants the tab
+  // kept while it decides awaits its answer inside its call.
   Future<void>? _reevaluateActiveTab(
     RouteMatch<Object?> route, {
     OnNavigationFailure? onFailure,
   }) {
     final page = _activePage;
     final change = _tabChanges;
+    // The latest tab change once the guard let go of the tab, or null while
+    // it has not.
+    int? changeAfterLetGo;
+    void showAgain(ResolverResult result) {
+      final index = page == null ? -1 : _pages.indexOf(page);
+      if (_isDisposed ||
+          !result.continueNavigation ||
+          changeAfterLetGo != _tabChanges ||
+          index == -1) {
+        return;
+      }
+      if (_changeTab(index, remember: false, onFailure: onFailure)
+          case final Future<void> shown) {
+        unawaited(shown);
+      }
+    }
+
     Future<void>? apply(ResolverResult result) {
+      if (changeAfterLetGo != null) {
+        showAgain(result);
+        return null;
+      }
       // Another tab was chosen meanwhile, or the tabs are gone.
       if (_isDisposed || change != _tabChanges || _activePage != page) {
         return null;
@@ -2164,18 +2207,40 @@ class TabsRouter extends RoutingController {
       return null;
     }
 
+    final letGo = Completer<void>();
     final checked = _checkTabGuards(
       route,
       change: change,
       onFailure: onFailure,
       isReevaluating: true,
+      onLetGo: () {
+        if (!letGo.isCompleted) letGo.complete();
+      },
     );
     if (checked is ResolverResult) return apply(checked);
-    return checked.then(
+    final applied = checked.then(
       apply,
       onError: (Object error, StackTrace stackTrace) =>
           Zone.current.handleUncaughtError(error, stackTrace),
     );
+    return Future.any([
+      applied,
+      letGo.future.then((_) {
+        if (_isDisposed || change != _tabChanges || _activePage != page) {
+          // The tab left already: it doesn't come back.
+          changeAfterLetGo = -1;
+          return;
+        }
+        final fallback = _homeTab == -1 ? 0 : _homeTab;
+        if (fallback != _activeIndex) {
+          if (_changeTab(fallback, remember: false, onFailure: onFailure)
+              case final Future<void> shown) {
+            unawaited(shown);
+          }
+        }
+        changeAfterLetGo = _tabChanges;
+      }),
+    ]);
   }
 
   // Puts [mayUpdateRoute] in the page of the tab at [index], and answers the
@@ -2526,6 +2591,30 @@ abstract class StackRouter extends RoutingController {
   // that asked it has ended, see [_awaitLetGoAnswer].
   final _waitingForLetGoGuards = <AutoRoutePage<Object?>>{};
 
+  // The guards asked again that returned without an answer and let go of
+  // their page or tab, until they answer. Nothing on screen waits for them,
+  // and they may wait for something as long as a sign-in, so
+  // [activeGuardObserver] no longer counts them: a loading indicator shown
+  // from it would cover the app meanwhile. Each later reevaluation asks them
+  // again without waiting for them, see [_composeMatchesForReevaluate].
+  final _guardsLettingGo = <GuardEntry>[];
+
+  // Moves the entries of [resolver], whose guard let go of its page, from
+  // [activeGuardObserver] to [_guardsLettingGo] until it answers.
+  void _letGoOfGuard(NavigationResolver resolver) {
+    final entries = activeGuardObserver.value
+        .where((entry) => identical(entry._resolver, resolver))
+        .toList();
+    if (entries.isEmpty) return;
+    entries.forEach(activeGuardObserver._remove);
+    _guardsLettingGo.addAll(entries);
+    unawaited(
+      resolver.future.then(
+        (_) => _guardsLettingGo.removeWhere(entries.contains),
+      ),
+    );
+  }
+
   // Whether the app took the page of [match] off since the reevaluation that
   // asks about it began, as replace, replaceAll, removeWhere and navigate
   // do. Such a page stays off, whatever its guard answers: a reevaluation
@@ -2768,7 +2857,11 @@ abstract class StackRouter extends RoutingController {
   /// page goes back on top of the stack as it then is, and the pages that
   /// were above it follow as their guards let them; a rejection closes it for
   /// good. A guard that wants its page kept while it decides awaits its
-  /// answer inside its call.
+  /// answer inside its call. Such a guard holds no later reevaluation up:
+  /// each one asks it again without waiting for its answer, and
+  /// [ActiveGuardObserver.guardInProgress] no longer counts it. The same
+  /// holds for the guard of the active tab of a [TabsRouter], whose tab
+  /// leaves the screen for the home tab until the guard lets it through.
   ///
   /// A page the app takes off while a guard still decides, as [replace],
   /// [replaceAll], [removeWhere] and [navigate] do, stays off whatever the
@@ -2872,6 +2965,13 @@ abstract class StackRouter extends RoutingController {
             .putIfAbsent(result.route.id, () => [])
             .add(entry.guard);
       }
+    }
+    // A guard that let go of its page holds no reevaluation up: it is asked
+    // again, and its page comes back once it lets it through, but nothing
+    // waits for it here.
+    for (final entry in List.of(_guardsLettingGo)) {
+      if (entry._resolver.isResolved) continue;
+      unawaited(entry._resolver.checkGuard(entry.guard, this));
     }
 
     final matches = <ReevaluatableRouteMatch<Object?, Object?>>[];
@@ -4748,15 +4848,20 @@ abstract class StackRouter extends RoutingController {
           // takes the place of the pages to replace whoever puts it on, see
           // [_replaceAllMatches].
           onLeftUndecided: ({required isWaitingOnUser}) {
-            if (!isReevaluating) return replacement?.onGuardReturned();
+            if (!isReevaluating) {
+              replacement?.onGuardReturned();
+              return false;
+            }
+            if (isWaitingOnUser) return false;
             // A later guard of the same page returned without an answer too.
-            if (isWaitingOnUser || letGo.isCompleted) return;
+            if (letGo.isCompleted) return true;
             letGoPages = takeOffPagesFrom(i);
             // As a guard that closes its page: the page below takes its
             // history entry, and the pages heard they were removed.
             _markLeaving(letGoPages, .removed);
             markUrlStateForReplace();
             letGo.complete(null);
+            return true;
           },
           // The page a guard of replaceAll shows itself takes their place
           // also while its call still runs; and a tab that waits for these
@@ -6305,8 +6410,10 @@ typedef _RoutesChange = List<RouteMatch<Object?>> Function(
 
 // Called when a guard returns without an answer. [isWaitingOnUser] says it
 // waits on the user, on screen: behind a redirect it started, or a page or a
-// dialog it put on screen in its call.
-typedef _GuardHoldsCallback = void Function({required bool isWaitingOnUser});
+// dialog it put on screen in its call. Answers whether the navigation let go
+// of the guard's page, as a reevaluation does, see
+// [StackRouter._letGoOfGuard].
+typedef _GuardHoldsCallback = bool Function({required bool isWaitingOnUser});
 
 // How many times in a row a guard is asked again because the state the
 // guards are asked again for changed while it ran its check. A guard whose
@@ -6425,6 +6532,10 @@ class ActiveGuardObserver extends ValueNotifier<List<GuardEntry>> {
   }
 
   /// Whether there's a guard  pending completion
+  ///
+  /// A guard asked again by [StackRouter.reevaluateGuards] that returned
+  /// without an answer doesn't count: it let go of its page, which left the
+  /// screen, so nothing on screen waits for it.
   bool get guardInProgress => value.isNotEmpty;
 
   /// returns a list of active guards

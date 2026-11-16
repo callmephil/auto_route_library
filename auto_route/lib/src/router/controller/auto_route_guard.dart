@@ -572,7 +572,9 @@ class NavigationResolver {
 
   // [checkGuard], with [onLeftUndecided] called when [guard] returns without
   // having resolved: it holds the navigation until it resolves later, behind
-  // a redirect it started or with nothing shown. And with [onShowsPage]
+  // a redirect it started or with nothing shown. When [onLeftUndecided] says
+  // the navigation let go of the guard's page, the guard no longer counts as
+  // in progress, see [StackRouter._letGoOfGuard]. And with [onShowsPage]
   // called each time [guard] puts a page of its own on a stack before it has
   // resolved, at the step the page goes on.
   Future<ResolverResult> _checkGuard(
@@ -600,10 +602,12 @@ class NavigationResolver {
       // Not when a redirect ended this check and a later one began meanwhile.
       if (identical(_waitingCompleter, waiting)) _endCheck();
     }
-    if (!isResolved) {
-      onLeftUndecided?.call(
-        isWaitingOnUser: _isRedirecting || _isWaitingOnUser,
-      );
+    if (!isResolved &&
+        (onLeftUndecided?.call(
+              isWaitingOnUser: _isRedirecting || _isWaitingOnUser,
+            ) ??
+            false)) {
+      _router._letGoOfGuard(this);
     }
     return await future;
   }
