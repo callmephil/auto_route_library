@@ -210,6 +210,12 @@ final _redirectingResolvers = Expando<NavigationResolver>(
 // route is one of them, not of the stack router the guard runs on.
 final _tabRoutesOfResolvers = Expando<RouteMatcher>('tabRoutesOfResolvers');
 
+// Marks the resolvers of a tab's guards that a reevaluation asks, see
+// [TabsRouter._reevaluateActiveTab]: a change the guard makes itself
+// meanwhile starts no other round, see
+// [StackRouter._composeMatchesForReevaluate].
+final _tabAsksOfReevaluation = Expando<bool>('tabAsksOfReevaluation');
+
 /// Represents a guarded navigation event
 /// which can be either continued or aborted
 /// used in [AutoRouteGuard.onNavigation]

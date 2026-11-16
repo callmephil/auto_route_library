@@ -1619,6 +1619,7 @@ class TabsRouter extends RoutingController {
       isReevaluating: isReevaluating,
     );
     _tabRoutesOfResolvers[resolver] = matcher;
+    if (isReevaluating) _tabAsksOfReevaluation[resolver] = true;
     final entry = GuardEntry(guard, resolver);
     router.activeGuardObserver._add(entry);
     FutureOr<ResolverResult> onResult(ResolverResult result) {
@@ -3007,8 +3008,13 @@ abstract class StackRouter extends RoutingController {
 
   // Has the reevaluation in progress, of this router or of one above it, ask
   // its guards again once it ends; see [_isAskingAgainDue]. [isOwnChange]
-  // says the change that asks for it is the checking guard's own.
-  void _askAgainAfterReevaluation({required bool isOwnChange}) {
+  // says the change that asks for it is the checking guard's own. Without
+  // [isOwnChangeFollowed], an own change asks nothing again, also in the
+  // round a change started, and starts no round of its own either.
+  void _askAgainAfterReevaluation({
+    required bool isOwnChange,
+    bool isOwnChangeFollowed = true,
+  }) {
     for (
       RoutingController? router = this;
       router != null;
@@ -3016,6 +3022,11 @@ abstract class StackRouter extends RoutingController {
     ) {
       if (router is! StackRouter || !router._isReevaluating) continue;
       final rounds = router._roundsAskedAgain;
+      if (isOwnChange && !isOwnChangeFollowed) {
+        // Left to the round in progress, which asks nothing for it.
+        router._askAgainRequests += 1;
+        continue;
+      }
       final isAskedAgain =
           rounds == 0 || (!isOwnChange && rounds < _kMaxAsksAgainInARow);
       if (isAskedAgain) {
@@ -3043,6 +3054,14 @@ abstract class StackRouter extends RoutingController {
         if (resolver.route is ReevaluatableRouteMatch) {
           // Of a page being reevaluated.
           _askAgainAfterReevaluation(isOwnChange: resolver._isOwnCodeRunning);
+        } else if (_tabAsksOfReevaluation[resolver] ?? false) {
+          // Of the shown tab, asked again. A change the guard makes itself,
+          // as one that signs the user out when a token is refused, asks it
+          // nothing again: it would make that change again without end.
+          _askAgainAfterReevaluation(
+            isOwnChange: resolver._isOwnCodeRunning,
+            isOwnChangeFollowed: false,
+          );
         } else if (!resolver._isOwnCodeRunning && !resolver._isWaitingOnUser) {
           // Of a navigation: it is asked again before its page goes in.
           resolver._isAnswerStale = true;
