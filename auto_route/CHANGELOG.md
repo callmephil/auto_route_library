@@ -321,6 +321,37 @@
 - **FIX**: on the web, two pushes in one turn get a browser entry each, so the browser's back button returns to the
   first, as two `history.pushState` calls do. Only the second got an entry: back skipped the first page, still on the
   stack, and forward reopened the second without its arguments.
+- **FIX**, **BEHAVIOR CHANGE**: on the web, the browser's back button walks the pages the way the system back does on a
+  phone, however fast the app navigates: each press closes the page on top, and a page the app closed never comes back.
+  After several navigations in one turn, or one made while the browser was still stepping back after a pop, the back
+  button could show a closed page, skip a page or need a press too many. Flutter's Router wrote the url once a frame and
+  the web history moved the browser between frames, each from its own account of where the browser stood. Now the web
+  history alone writes the browser, one operation at a time, and the Router writes nothing on the web.
+- **FIX**, **BEHAVIOR CHANGE**: on the web, pages the app opens together, with `pushAll`, `replaceAll` or
+  `popAndPushAll`, have a browser entry each, so the back button closes them one by one, as the system back does. Only
+  the page on top had one. Pages a link opens together still share the link's entry.
+- **FIX**: on the web, a page the app takes off the stack without a pop, with `navigate` to a page underneath,
+  `removeLast`, `removeWhere`, `removeUntil`, `replaceAll` or `pushAndPopUntil`, leaves no entry on the way back. Its
+  entry stayed under the page on top, so the back button showed the closed page. After `replaceAll` or
+  `pushAndPopUntil` with no page kept, the new page has the app's first entry, and the back button leaves the app, as
+  the system back does after `Navigator.pushAndRemoveUntil`.
+- **FIX**: on the web, an app opened at a url the router writes otherwise, such as `/a?b=` for `/a`, one with a
+  trailing slash or one a route redirects, has one browser entry, with the url as the router writes it. It had two, so
+  the first press of the back button seemed to do nothing. A guard's login page shown at launch no longer leaves an
+  entry under the page it guards.
+- **FIX**: on the web, after a reload, a call that leaves one page, such as `pushAndPopUntil` with no page kept, ends
+  on the entry the app was reloaded on. It could step the browser under it, onto an entry from before the reload.
+- **FIX**: on the web, with a url kept out of the address bar by `neglectWhen`, a replace, `popUntilRoot` or several
+  navigations in one turn over the page kept out leave one entry for each page not kept out. They could leave an entry
+  too many or the url of a page under the one shown.
+- **BEHAVIOR CHANGE**: on the web, `AutoRouterDelegate.currentConfiguration` is null, which is how Flutter has a
+  delegate report no route to the Router. Read `router.urlState` for the url; off the web nothing changes.
+- **CHANGE**: on the web, when the active tab of an `AutoTabsRouter` is removed, or a guard closes a page after a
+  logout, the browser steps back to the entry of the page now shown, and when the browser's forward button lands on an
+  entry whose guard rejects it, the browser steps back to the entry it came from. The url of the page shown was
+  written over the other entry before, which gave that page two entries.
+- **CHANGE**: on the web, an app whose `routeInformationProvider` writes no browser entry is never stepped through the
+  browser's history. A pop stepped the browser back before, for an entry the app had not written.
 - **FIX**: a `RedirectRoute` among a route's children whose target is shorter than its path, such as `old/users` to
   `users`, or the catch-all `*` to `''` for two segments, opens its target. It matched nothing before.
 - **FIX**: a url whose fragment holds a `?`, such as `/books/a%20b#what?`, opens its page. It threw a `RangeError`
