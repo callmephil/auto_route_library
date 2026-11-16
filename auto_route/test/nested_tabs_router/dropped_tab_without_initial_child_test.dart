@@ -68,6 +68,39 @@ void main() {
     }
   }
 
+  // The same tab listed with no pages, so a path is what first opens it on a
+  // page. Found by the review of this fix, whose first form opened such a
+  // tab again with no page: the tabs list gave it none to wait for, and
+  // navigate no longer read the pages of its route.
+  // Should: it opens again on the path's page, as navigate did before the
+  // fix, by either call.
+  for (final kind in _Tabs.values) {
+    for (final byNavigate in [false, true]) {
+      testWidgets('${kind.name}: listed with no pages, opened by a path, '
+          'dropped and opened again by '
+          '${byNavigate ? 'navigate' : 'setActiveIndex'}, it shows the '
+          "path's page", (tester) async {
+        final router = _buildRouter(kind, listsPages: false);
+        await pumpRouterApp(tester, router);
+        final tabs = router.innerRouterOf<TabsRouter>('HomeRoute')!;
+        unawaited(router.navigatePath('/profiletab/orders'));
+        await tester.pumpAndSettle();
+        tabs.setActiveIndex(0);
+        await tester.pumpAndSettle();
+
+        if (byNavigate) {
+          unawaited(tabs.navigate(const NamedRoute('ProfileTab')));
+        } else {
+          tabs.setActiveIndex(1);
+        }
+        await tester.pumpAndSettle();
+
+        expect(_profilePages(tabs), ['ProfileOrdersRoute']);
+        expect(router.urlState.url, '/profiletab/orders');
+      });
+    }
+  }
+
   testWidgets('with a guard that answers later, the tab opened again shows '
       'its listed pages once the guard lets it in', (tester) async {
     final router = _buildRouter(.indexedStack, hasSlowGuard: true);
@@ -121,16 +154,20 @@ RootStackRouter _buildRouter(
   _Tabs kind, {
   bool hasInitialChild = false,
   bool hasSlowGuard = false,
+  bool listsPages = true,
 }) {
-  const routes = [
-    NamedRoute<Object?>('FeedTab'),
-    NamedRoute<Object?>(
-      'ProfileTab',
-      children: [
-        NamedRoute('ProfileInfoRoute'),
-        NamedRoute('ProfileOrdersRoute'),
-      ],
-    ),
+  final routes = [
+    const NamedRoute<Object?>('FeedTab'),
+    if (listsPages)
+      const NamedRoute<Object?>(
+        'ProfileTab',
+        children: [
+          NamedRoute('ProfileInfoRoute'),
+          NamedRoute('ProfileOrdersRoute'),
+        ],
+      )
+    else
+      const NamedRoute<Object?>('ProfileTab'),
   ];
   return .build(
     routes: [
@@ -139,9 +176,9 @@ RootStackRouter _buildRouter(
         path: '/',
         builder: (_, _) => Scaffold(
           body: switch (kind) {
-            .indexedStack => const AutoTabsRouter(routes: routes),
-            .pageView => const AutoTabsRouter.pageView(routes: routes),
-            .tabBar => const AutoTabsRouter.tabBar(routes: routes),
+            .indexedStack => AutoTabsRouter(routes: routes),
+            .pageView => AutoTabsRouter.pageView(routes: routes),
+            .tabBar => AutoTabsRouter.tabBar(routes: routes),
             .builder => AutoTabsRouter.builder(
               routes: routes,
               builder: (_, children, tabs) =>

@@ -2186,8 +2186,9 @@ class TabsRouter extends RoutingController {
   // opens the pages its tab still waits for, else its initial child. With
   // neither it would show no page, so a tab whose router has no initial
   // child waits again for the pages the tabs list gave it, as it did when it
-  // first opened. A tab with an initial child opens on that child, as
-  // before.
+  // first opened. When the list gives it none, it waits for the pages of the
+  // route it was opened with, such as a path's. A tab with an initial child
+  // opens on that child, as before.
   @override
   void removeChildController(RoutingController childController) {
     super.removeChildController(childController);
@@ -2201,7 +2202,10 @@ class TabsRouter extends RoutingController {
       return;
     }
     final listed = _listedTabChildren.elementAtOrNull(index) ?? const [];
-    if (listed.isNotEmpty) data._pendingChildren = List.of(listed);
+    final pages = listed.isNotEmpty
+        ? listed
+        : (data._route.children ?? const <RouteMatch<Object?>>[]);
+    if (pages.isNotEmpty) data._pendingChildren = List.of(pages);
   }
 
   // A url can't hold constructor args, so a tab it opens gets [tabArgs], the
