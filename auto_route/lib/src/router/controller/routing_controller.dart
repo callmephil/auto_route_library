@@ -5074,16 +5074,17 @@ abstract class StackRouter extends RoutingController {
             // A let-go never takes a router's last page: it stays on the
             // stack and on screen until the guard answers, as Flutter's
             // Navigator refuses an empty page list and UINavigationController
-            // never takes its root view controller off. The reevaluation goes
-            // on all the same.
-            if (!leavesPageUnder(i)) {
-              letGo.complete(null);
-              return true;
+            // never takes its root view controller off, though it pops the
+            // ones above it. So the pages above it leave all the same, and
+            // the reevaluation goes on.
+            final from = leavesPageUnder(i) ? i : i + 1;
+            final leaving = takeOffPagesFrom(from);
+            if (leaving.isNotEmpty) {
+              // As a guard that closes its page: the page below takes its
+              // history entry, and the pages heard they were removed.
+              _markLeaving(leaving, .removed);
+              markUrlStateForReplace();
             }
-            // As a guard that closes its page: the page below takes its
-            // history entry, and the pages heard they were removed.
-            _markLeaving(takeOffPagesFrom(i), .removed);
-            markUrlStateForReplace();
             letGo.complete(null);
             return true;
           },
@@ -5377,9 +5378,14 @@ abstract class StackRouter extends RoutingController {
       // does, or is opening it while that navigation's guards decide: that
       // page takes its place, as a page the app takes off while its guard
       // decides stays off, and the stack holds one page of it.
-      final heldKey = match.currentPage.routeKey;
+      final held = match.currentPage.routeData;
+      final heldKey = held.key;
       final isOpenedAgain =
-          _pages.any((page) => page.routeKey == heldKey) ||
+          _pages.any(
+            // Not the page itself, kept on the stack as a router's only
+            // page is.
+            (page) => page.routeKey == heldKey && page.routeData != held,
+          ) ||
           activeGuardObserver.value.any(
             (entry) =>
                 !entry._resolver.isResolved &&

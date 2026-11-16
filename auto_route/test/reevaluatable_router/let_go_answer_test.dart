@@ -267,6 +267,10 @@ void main() {
   // guard, once over, released every page that had left with Account,
   // Settings too, though a wait of Settings' own guard had started.
   // Should: Settings' caller waits, and Settings comes back on its yes.
+  // Native behavior this holds to: Flutter's Navigator completes a route's
+  // popped future only when the route leaves for good
+  // (_RouteEntry.handleComplete, navigator.dart), so the code that opened a
+  // page goes on waiting while the page may still come back.
   group('A page above the let-go page', () {
     testWidgets('whose guard lets go after the yes comes back on its own yes', (
       tester,
@@ -483,6 +487,117 @@ void main() {
         expect(askedWhileHeld, 2);
         expect(asked.length, isLetIn ? 3 : greaterThanOrEqualTo(4));
       });
+    }
+  });
+
+  // Finding A of the second review. Steps: the router's first page,
+  // Overview, has a guard that lets a signed-in user through and otherwise
+  // returns; Orders, pushed on it, has a guard that rejects a signed-out
+  // user. The router is the root, or a nested router. The user signs out,
+  // then signs in again, or a later change ends as Overview's no.
+  // Was: the rule that keeps a router's only page kept Orders too: it stayed
+  // on screen for the signed-out user, its guard never asked. After
+  // Overview's later no the nested router's stack was empty while Orders
+  // still showed, at /shell/orders.
+  // Should: only the bottom page is kept, as UINavigationController keeps
+  // its root view controller and pops the ones above it
+  // (popToRootViewController(animated:)), and Orders leaves with the let-go, as
+  // the pages above a let-go page do, and comes back through its own guard
+  // on the yes. The screen always matches the stack.
+  // Native behavior this holds to: UIKit's UINavigationController never
+  // takes its root view controller off, and pops the ones above it, and
+  // Flutter's Navigator needs one page (navigator.dart: "The Navigator.pages
+  // must not be empty to use the Navigator.pages API").
+  group("Pages above a router's only page", () {
+    late List<bool> ordersAsked;
+
+    setUp(() => ordersAsked = []);
+
+    final overviewGuard = AutoRouteGuard.simple((resolver, _) {
+      if (session.isSignedIn) return resolver.next();
+      if (!session.isPremium) resolver.reject();
+    });
+    final ordersGuard = AutoRouteGuard.simple((resolver, _) {
+      ordersAsked.add(session.isSignedIn);
+      session.isSignedIn ? resolver.next() : resolver.reject();
+    });
+
+    // The pages of [router], the pages a tap reaches and the url.
+    String seenIn(RootStackRouter root, StackRouter router) {
+      final names = [...router.stack.map((page) => page.routeData.name)];
+      final shown = [
+        for (final name in ['HomeRoute', 'OverviewRoute', 'OrdersRoute'])
+          if (find.text(name).hitTestable().evaluate().isNotEmpty) name,
+      ];
+      return '${names.join(' ')} | shown: ${shown.join(' ')} | '
+          '${root.urlState.url}';
+    }
+
+    for (final isNested in [false, true]) {
+      for (final isLetIn in [true, false]) {
+        final where = isNested ? 'a nested router' : 'the root';
+        testWidgets('leave with the let-go in $where, then the guard says '
+            '${isLetIn ? 'yes' : 'no'}', (tester) async {
+          final pages = [
+            page('OverviewRoute', '', guard: overviewGuard),
+            page('OrdersRoute', 'orders', guard: ordersGuard),
+          ];
+          final router = RootStackRouter.build(
+            routes: isNested
+                ? [
+                    page('HomeRoute', '/'),
+                    NamedRouteDef(
+                      name: 'ShellRoute',
+                      path: '/shell',
+                      builder: (_, _) => const AutoRouter(),
+                      children: pages,
+                    ),
+                  ]
+                : [
+                    page('OverviewRoute', '/', guard: overviewGuard),
+                    page('OrdersRoute', '/orders', guard: ordersGuard),
+                  ],
+          );
+          await pumpRouterApp(tester, router, reevaluationNotifier: session);
+          if (isNested) {
+            unawaited(router.pushPath('/shell'));
+            await tester.pumpAndSettle();
+          }
+          final target = isNested
+              ? router.innerRouterOf<StackRouter>('ShellRoute')!
+              : router;
+          final ordersAnswers = <String?>[];
+          unawaited(
+            target
+                .push<String>(const NamedRoute('OrdersRoute'))
+                .then(ordersAnswers.add),
+          );
+          await tester.pumpAndSettle();
+          final base = isNested ? '/shell' : '/';
+          final ordersUrl = isNested ? '/shell/orders' : '/orders';
+
+          session.set(signedIn: false);
+          await tester.pumpAndSettle();
+          final seen = [seenIn(router, target)];
+          session.set(signedIn: isLetIn, premium: isLetIn);
+          await tester.pumpAndSettle();
+          seen.add(seenIn(router, target));
+
+          expect(tester.takeException(), isNull);
+          expect(seen, [
+            'OverviewRoute | shown: OverviewRoute | $base',
+            if (isLetIn)
+              'OverviewRoute OrdersRoute | shown: OrdersRoute | $ordersUrl'
+            else
+              ' | shown:  | ${isNested ? '/shell' : '/'}',
+          ]);
+          // Asked when pushed, and on the yes; never for the signed-out user
+          // while it showed.
+          expect(ordersAsked, [true, if (isLetIn) true]);
+          expect(ordersAnswers, isLetIn ? isEmpty : [null]);
+          expect(router.activeGuardObserver.guardInProgress, isFalse);
+        });
+      }
     }
   });
 }
