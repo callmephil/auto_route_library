@@ -22,9 +22,14 @@ import 'router_test_utils.dart';
 // place; on Android, a back press that an OnBackPressedCallback consumes
 // leaves the back stack as it was.
 //
-// Steps: push Guarded over Home, then navigate to Home, which pushes no page
-// and leaves three entries. Close the guard and take a back step with the
-// router's back method, then open the guard and take another.
+// Steps: open Tabs on its guarded tab, then show the Feed tab, which leaves
+// three entries. Close the guard and take a back step with the router's back
+// method, then open the guard and take another.
+//
+// The setup used to push Guarded and then navigate to Home underneath it,
+// which kept Guarded's entry although Guarded had left the stack. The history
+// now drops the entry of a page the app removed, so back() never reopens a
+// closed page and a guard is asked only on the way back into a tab.
 void main() {
   testWidgets('Off the web, back() to a page whose guard rejects keeps the '
       'history', (tester) async {
@@ -38,30 +43,45 @@ void main() {
           builder: (_, _) => const Text('HomeRoute'),
         ),
         NamedRouteDef(
-          name: 'GuardedRoute',
-          path: '/guarded',
-          guards: [
-            AutoRouteGuard.simple(
-              (resolver, _) =>
-                  isOpen.value ? resolver.next() : resolver.reject(),
+          name: 'TabsRoute',
+          path: '/tabs',
+          builder: (_, _) => const AutoTabsRouter(
+            routes: [
+              NamedRoute<Object?>('GuardedTab'),
+              NamedRoute<Object?>('FeedTab'),
+            ],
+          ),
+          children: [
+            NamedRouteDef(
+              name: 'GuardedTab',
+              path: 'guarded',
+              guards: [
+                AutoRouteGuard.simple(
+                  (resolver, _) =>
+                      isOpen.value ? resolver.next() : resolver.reject(),
+                ),
+              ],
+              builder: (_, _) => const Text('GuardedTab'),
+            ),
+            NamedRouteDef(
+              name: 'FeedTab',
+              path: 'feed',
+              builder: (_, _) => const Text('FeedTab'),
             ),
           ],
-          builder: (_, _) => const Text('GuardedRoute'),
         ),
       ],
     );
     await pumpRouterConfigApp(tester, router.config());
-    unawaited(router.push(const NamedRoute('GuardedRoute')));
+    unawaited(router.push(const NamedRoute('TabsRoute')));
     await tester.pumpAndSettle();
-    unawaited(router.navigate(const NamedRoute('HomeRoute')));
+    final tabs = router.innerRouterOf<TabsRouter>('TabsRoute')!
+      ..setActiveIndex(1);
     await tester.pumpAndSettle();
     final history = router.navigationHistory;
-    // The history's length, the url, and the names on the stack.
-    (int, String, String) shown() => (
-      history.length,
-      history.urlState.url,
-      router.stack.map((page) => page.name).join(' '),
-    );
+    // The history's length, the url, and the name of the tab shown.
+    (int, String, String) shown() =>
+        (history.length, history.urlState.url, tabs.current.name);
     // Before, after the rejected back step, and after the one let through.
     final readings = [shown()];
     for (final isLetThrough in [false, true]) {
@@ -71,9 +91,9 @@ void main() {
       readings.add(shown());
     }
     expect(readings, [
-      (3, '/', 'HomeRoute'),
-      (3, '/', 'HomeRoute'),
-      (2, '/guarded', 'HomeRoute GuardedRoute'),
+      (3, '/tabs/feed', 'FeedTab'),
+      (3, '/tabs/feed', 'FeedTab'),
+      (2, '/tabs/guarded', 'GuardedTab'),
     ]);
   });
 }

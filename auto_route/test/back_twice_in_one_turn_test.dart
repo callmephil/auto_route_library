@@ -36,8 +36,8 @@ void main() {
       NamedRouteDef(name: name, path: path, builder: (_, _) => NamedPage(name)),
   ];
 
-  // Opens Home and pushes [before] over it, a frame apart. A, B and C ask
-  // [guard], when one is given.
+  // Opens Home and pushes [before] over it, a frame apart. A, B, C and the
+  // tab G ask [guard], when one is given.
   Future<RootStackRouter> open(
     WidgetTester tester, {
     List<PageRouteInfo> before = const [a, b],
@@ -57,6 +57,22 @@ void main() {
             guards: [?guard],
             builder: (_, _) => NamedPage(name),
           ),
+        NamedRouteDef(
+          name: 'TabsRoute',
+          path: '/tabs',
+          builder: (_, _) => const AutoTabsRouter(
+            routes: [NamedRoute<Object?>('GTab'), NamedRoute<Object?>('FTab')],
+          ),
+          children: [
+            NamedRouteDef(
+              name: 'GTab',
+              path: 'g',
+              guards: [?guard],
+              builder: (_, _) => const NamedPage('GTab'),
+            ),
+            ...pagesNamed([('FTab', 'f')]),
+          ],
+        ),
         NamedRouteDef(
           name: 'ShellRoute',
           path: '/shell',
@@ -162,22 +178,30 @@ void main() {
     expect(router.currentUrl, '/shell');
   }, skip: kIsWeb);
 
-  // back() asks the guard of a page it has to open again: A is pushed, then
-  // navigate to Home closes it, which leaves the entries /, /a, /.
-  Future<RootStackRouter> openWithClosedPageBehind(
+  // back() asks the guard of the tab it goes back into: Tabs opens on its
+  // guarded tab G, then shows F, which leaves the entries /, /tabs/g,
+  // /tabs/f. These tests used to push A and navigate to Home under it, and
+  // back() then opened A again; the history now drops the entry of a page
+  // the app removed, so back() asks a guard again only on its way into a tab.
+  Future<(RootStackRouter, TabsRouter)> openOnSecondTab(
     WidgetTester tester,
     AutoRouteGuard guard,
   ) async {
-    final router = await open(tester, before: const [a], guard: guard);
-    unawaited(router.navigate(const NamedRoute('HomeRoute')));
+    final router = await open(
+      tester,
+      before: const [NamedRoute('TabsRoute')],
+      guard: guard,
+    );
+    final tabs = router.innerRouterOf<TabsRouter>('TabsRoute')!
+      ..setActiveIndex(1);
     await tester.pumpAndSettle();
     expect(router.navigationHistory.length, 3);
-    return router;
+    return (router, tabs);
   }
 
   testWidgets('When the guard of the page gone back to answers in its own '
       'call, the second back of the turn steps on', (tester) async {
-    final router = await openWithClosedPageBehind(
+    final (router, _) = await openOnSecondTab(
       tester,
       AutoRouteGuard.simple((resolver, _) => resolver.next()),
     );
@@ -195,14 +219,14 @@ void main() {
   testWidgets('While the guard of the page gone back to decides, a second '
       'back does nothing', (tester) async {
     final guard = HeldGuard(mode: .answersYes);
-    final router = await openWithClosedPageBehind(tester, guard);
+    final (router, tabs) = await openOnSecondTab(tester, guard);
     guard
       ..clear()
       ..holdCall();
 
     back(router, times: 2);
     await tester.pumpAndSettle();
-    final whileAsked = stackNames(router);
+    final whileAsked = (stackNames(router).join(' '), tabs.current.name);
     for (final ask in guard.waiting) {
       unawaited(ask.allow());
     }
@@ -210,8 +234,10 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(guard.askCount, 1);
-    expect(whileAsked, ['HomeRoute']);
-    expect(stackNames(router), ['HomeRoute', 'ARoute']);
-    expect(router.navigationHistory.length, 2);
+    expect(whileAsked, ('HomeRoute TabsRoute', 'FTab'));
+    expect(
+      (stackNames(router).join(' '), tabs.current.name),
+      ('HomeRoute TabsRoute', 'GTab'),
+    );
   }, skip: kIsWeb);
 }

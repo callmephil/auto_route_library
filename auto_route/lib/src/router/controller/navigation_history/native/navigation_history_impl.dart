@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart'
-    show RouteMatch, StackRouter, UrlState;
+    show RouteMatch, RoutingController, StackRouter, UrlState;
 import 'package:auto_route/src/router/controller/navigation_history/navigation_history.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
@@ -22,6 +22,11 @@ class NavigationHistoryImpl extends NavigationHistory {
   int _backCount = 0;
   bool _isRebuildingAfterPop = false;
 
+  // The entries whose page a stack has held. Only such an entry leaves with
+  // its page: the entry of a link whose page a guard has yet to let in holds
+  // a page that is not open yet.
+  final _wasOpen = Set<_HistoryEntry>.identity();
+
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
     super.onNewUrlState(newState, notify: notify);
@@ -33,6 +38,7 @@ class NavigationHistoryImpl extends NavigationHistory {
         if (backCount == _backCount) _stopNavigatingBack();
       });
     }
+    final didDropTop = _dropClosed();
     if (_isLastEntry(newState)) return;
 
     // Don't add entries during back navigation to prevent duplicates
@@ -40,14 +46,61 @@ class NavigationHistoryImpl extends NavigationHistory {
 
     if (_isRebuildingAfterPop) {
       // The last entry belongs to the popped page; drop it so back() can't
-      // return to it. If the page now on top is the entry before, _addEntry
-      // skips it as the same page.
-      if (_entries.isNotEmpty) _entries.removeLast();
+      // return to it, unless it left with its page. If the page now on top is
+      // the entry before, _addEntry skips it as the same page.
+      if (!didDropTop && _entries.isNotEmpty) _entries.removeLast();
       _addEntry(newState.copyWith(shouldReplace: false));
       return;
     }
 
-    _addEntry(newState);
+    // A replace takes the place of the entry before, unless that entry just
+    // left with its page: the place is then free.
+    _addEntry(didDropTop ? newState.copyWith(shouldReplace: false) : newState);
+  }
+
+  // Drops the entries of the pages that have left their stacks, however they
+  // left. A page leaves when it is popped or replaced, and also when the app
+  // takes it off with removeLast, removeWhere, removeUntil, replaceAll or a
+  // navigation to a page underneath. An entry whose page no stack has held
+  // yet stays, as the entry of a link while a guard decides. Returns whether
+  // the last entry was one of them.
+  //
+  // Like Flutter's Navigator.removeRoute, which disposes the route, so no
+  // later pop returns to it, and the web history, which drops such entries on
+  // every change.
+  bool _dropClosed() {
+    final last = _entries.lastOrNull;
+    _entries.removeWhere((entry) {
+      if (_isOpen(entry)) {
+        _wasOpen.add(entry);
+        return false;
+      }
+      return _wasOpen.contains(entry);
+    });
+    _wasOpen.retainWhere(
+      (entry) => _entries.any((kept) => identical(kept, entry)),
+    );
+    return last != null && !identical(_entries.lastOrNull, last);
+  }
+
+  // Whether the page [entry] stands for is still open: each page on the way
+  // to it, from the root router down, is in the stack of the router that the
+  // page before it holds. A router keeps a closed page's nested router among
+  // its children until that page's widget is gone, so the way is followed
+  // from the root. A page under one whose router isn't built yet, as the
+  // first page of a nested router built a frame after its page, is open.
+  bool _isOpen(_HistoryEntry entry) {
+    RoutingController? controller = router;
+    for (final match in entry.route.flattened) {
+      if (controller == null || !controller.hasEntries) return true;
+      if (!controller.stackData.any((data) => data.route.id == match.id)) {
+        return false;
+      }
+      controller = controller.childControllers.lastWhereOrNull(
+        (child) => child.matchId == match.id,
+      );
+    }
+    return true;
   }
 
   @override
@@ -118,10 +171,12 @@ class NavigationHistoryImpl extends NavigationHistory {
       if (_entries.lastOrNull?.url == urlState.url) return;
     }
     _entries.add(newEntry);
+    if (_isOpen(newEntry)) _wasOpen.add(newEntry);
   }
 
   @override
   void back() {
+    _dropClosed();
     if (canNavigateBack) {
       _isNavigatingBack = true;
       final left = _entries.removeLast();

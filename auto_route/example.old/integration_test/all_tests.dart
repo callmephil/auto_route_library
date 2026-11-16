@@ -16,6 +16,7 @@ import 'back_after_link_page_removed_test.dart' as back_after_link_page_removed;
 import 'back_after_navigations_in_one_turn_test.dart'
     as back_after_navigations_in_one_turn;
 import 'back_after_push_all_test.dart' as back_after_push_all;
+import 'back_after_sign_in_test.dart' as back_after_sign_in;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
@@ -434,6 +435,7 @@ void main() {
   back_after_link_page_removed.main();
   back_after_navigations_in_one_turn.main();
   back_after_push_all.main();
+  back_after_sign_in.main();
   back_in_tabs.main();
   back_rejected_by_guard.main();
   back_same_route_params.main();
