@@ -180,6 +180,8 @@ import 'page_view_swipe_back_test.dart' as page_view_swipe_back;
 import 'page_view_tabs_under_cover_test.dart' as page_view_tabs_under_cover;
 import 'page_view_zero_duration_test.dart' as page_view_zero_duration;
 import 'pageless_push_rebuild_test.dart' as pageless_push_rebuild;
+import 'pages_over_open_page_wait_for_nested_guards_test.dart'
+    as pages_over_open_page_wait_for_nested_guards;
 import 'param_converter_test.dart' as param_converter;
 import 'parent_pages_build_test.dart' as parent_pages_build;
 import 'path_key_link_then_navigate_test.dart' as path_key_link_then_navigate;
@@ -568,6 +570,7 @@ void main() {
   page_view_tabs_under_cover.main();
   page_view_zero_duration.main();
   pageless_push_rebuild.main();
+  pages_over_open_page_wait_for_nested_guards.main();
   param_converter.main();
   parent_pages_build.main();
   path_key_link_then_navigate.main();

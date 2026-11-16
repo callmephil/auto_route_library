@@ -12,12 +12,11 @@ typedef OnNavigation = FutureOr<void> Function(
 /// A guard of a route inside a nested router is asked by that router, once
 /// the router above has let the route that holds it through. When that
 /// router is built, as for an open page or a tab opened before, the tab
-/// doesn't change and the dialogs over the page stay until it answers; the
-/// pages pushed over that page close first, though. A guard that puts a page
-/// of its own in that tab while it decides, such as a sign-in page, shows the
-/// tab with it, and the tab stays on the page under it if the guard then
-/// rejects. When that
-/// router isn't built yet, as for a page that isn't open or a tab never
+/// doesn't change, and the dialogs and pages over the page stay until it
+/// answers, and after a rejection. A guard that puts a page of its own there
+/// while it decides, such as a sign-in page, shows it: the tab shows, and
+/// the pages over the page leave first. The tab stays on the page under the
+/// sign-in page if the guard then rejects. When that router isn't built yet, as for a page that isn't open or a tab never
 /// opened, it asks its guards only once its page or tab is in, a frame later.
 /// A rejection then takes that page back off, so the stack, the url and the
 /// dialogs are as before, and the page's caller gets null; the dialogs of a

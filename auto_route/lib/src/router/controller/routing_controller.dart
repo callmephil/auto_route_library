@@ -3446,6 +3446,9 @@ abstract class StackRouter extends RoutingController {
     List<RouteMatch<Object?>> matches, {
     required Completer<void> pushed,
     required ValueChanged<RouteMatch<Object?>> onLastRouteAdded,
+    // Told, with what takes them off, when the pages above the page the
+    // navigation reaches again stay until its nested router lets it in.
+    required ValueChanged<VoidCallback> onPagesAboveHeld,
     OnNavigationFailure? onFailure,
     bool isReevaluating = false,
     _PagesReplacement? replacement,
@@ -3492,6 +3495,20 @@ abstract class StackRouter extends RoutingController {
     List<AutoRoutePage<Object?>>? leaving = _pages.sublist(
       anchorPage == null ? end : staying.lastIndexOf(anchorPage),
     );
+    // The anchor alone goes on again, into its nested router, which asks its
+    // own guards: the pages above it stay until they let the navigation in,
+    // as the dialogs over it do, and stay if they turn it down. The anchor
+    // goes back in its own place under them meanwhile.
+    final holdsPagesAbove =
+        anchorPage != null &&
+        anchorId != null &&
+        toPush.length == 1 &&
+        (anchor.children?.isNotEmpty ?? false) &&
+        _innerControllerOfMatch(anchorId) != null &&
+        identical(leaving.firstOrNull, anchorPage) &&
+        leaving.length > 1;
+    // Where the anchor was, once it has left for its new page.
+    int? anchorIndex;
     return _pushAllGuarded(
       toPush,
       onFailure: onFailure,
@@ -3501,6 +3518,7 @@ abstract class StackRouter extends RoutingController {
       onLastRouteAdded: onLastRouteAdded,
       link: link,
       onGuardShowsPage: onGuardShowsPage,
+      lastPageAt: holdsPagesAbove ? () => anchorIndex : null,
       onFirstRouteAccepted: () {
         // A page popped while the guards decided has left already. And a
         // later navigation to the same page, let in while these guards
@@ -3509,14 +3527,31 @@ abstract class StackRouter extends RoutingController {
         // its screen, or the stack would hold two pages with one key, which
         // Flutter's Navigator forbids.
         final pagesLeaving = leaving ?? const [];
+        leaving = null;
+        bool isAnchor(AutoRoutePage<Object?> page) =>
+            anchorId != null && page.routeData.matchId == anchorId;
+        if (holdsPagesAbove) {
+          final above = pagesLeaving.where((page) => !isAnchor(page)).toSet();
+          onPagesAboveHeld(() {
+            final left = _pages.where(above.contains).toList();
+            above.clear();
+            if (left.isEmpty || _isDisposed) return;
+            _markLeaving(left, .removed);
+            _pages.removeWhere(left.contains);
+            notifyAll(forceUrlRebuild: true);
+          });
+        }
         final left = _pages
             .where(
               (page) =>
-                  pagesLeaving.contains(page) ||
-                  (anchorId != null && page.routeData.matchId == anchorId),
+                  (pagesLeaving.contains(page) && !holdsPagesAbove) ||
+                  isAnchor(page),
             )
             .toList();
-        leaving = null;
+        if (holdsPagesAbove) {
+          final index = _pages.indexWhere(isAnchor);
+          anchorIndex = index == -1 ? null : index;
+        }
         _markLeaving(left, .removed);
         _pages.removeWhere(left.contains);
         if (anchorId == null) return;
@@ -4544,6 +4579,9 @@ abstract class StackRouter extends RoutingController {
     _PagesReplacement? replacement,
     int? link,
     ValueChanged<StackRouter>? onGuardShowsPage,
+    // Where the last page goes, when not on top: a page reached again under
+    // the pages above it, see [_popUntilOrPushAll].
+    int? Function()? lastPageAt,
   }) async {
     assert(!managedByWidget, _managedByWidgetMessage);
 
@@ -4638,7 +4676,7 @@ abstract class StackRouter extends RoutingController {
         return null;
       }
       final popped = root._showingLink(
-        () => _addNewPage<T>(match, notify: notify),
+        () => _addNewPage<T>(match, notify: notify, index: lastPageAt?.call()),
         isLink: ofLink != null,
       );
       openChildrenOfTakeovers();
@@ -5302,6 +5340,9 @@ abstract class StackRouter extends RoutingController {
       // the router above does then, and closing the dialogs over that page.
       // A router the app's widgets manage asks no guard.
       var lettingIn = managedByWidget ? onLetIn : null;
+      // Told when a guard of the nested router of that page shows a page of
+      // its own while it decides.
+      var onNestedGuardShowsPage = onGuardShowsPage;
       // Read in the call, before the first wait: the link the delegate is
       // starting is known only then.
       final ofLink = isReevaluating ? null : (link ?? root._startingLink);
@@ -5313,6 +5354,9 @@ abstract class StackRouter extends RoutingController {
         // right away.
         final pushed = Completer<void>();
         var isLastRouteAdded = false;
+        // Takes off the pages above the page reached again, once its nested
+        // router lets the navigation in, see [_popUntilOrPushAll].
+        VoidCallback? takeOffPagesAbove;
         popped = _popUntilOrPushAll<T>(
           routes,
           onFailure: onFailure,
@@ -5330,6 +5374,7 @@ abstract class StackRouter extends RoutingController {
           ),
           link: ofLink,
           onGuardShowsPage: onGuardShowsPage,
+          onPagesAboveHeld: (takeOff) => takeOffPagesAbove = takeOff,
         );
         // No pause when the last page went on in the call, as it does when
         // no guard makes the routes wait: the nested router or the tabs of
@@ -5359,11 +5404,25 @@ abstract class StackRouter extends RoutingController {
             if (!_isDisposed) notifyAll();
           }
         } else if (pushed.isCompleted) {
-          final reached = _pages.lastOrNull;
+          final takeOff = takeOffPagesAbove;
+          final reached = takeOff == null
+              ? _pages.lastOrNull
+              : _pages.lastWhereOrNull(
+                  (page) => page.routeData.matchId == mayUpdateRoute.id,
+                );
           lettingIn = () {
+            takeOff?.call();
             _closePagelessRoutesOverTop(link: ofLink, over: reached);
             onLetIn?.call();
           };
+          // A guard there that shows a page of its own, such as a sign-in
+          // page, has the pages above taken off first, so the user sees it.
+          if (takeOff != null) {
+            onNestedGuardShowsPage = (router) {
+              takeOff();
+              onGuardShowsPage?.call(router);
+            };
+          }
           _openChildrenInKeptScreens(keptScreens, onFailure: onFailure);
         }
       }
@@ -5407,7 +5466,7 @@ abstract class StackRouter extends RoutingController {
           keepsUnnamedPages: keepsUnnamedPages,
           link: ofLink,
           onLetIn: lettingIn,
-          onGuardShowsPage: onGuardShowsPage,
+          onGuardShowsPage: onNestedGuardShowsPage,
         );
       }
       // A new page whose nested router, built with the page, asks its guards
