@@ -59,6 +59,11 @@ void main() {
         builder: (_, _) => const Scaffold(body: Text('HomeRoute')),
       ),
       NamedRouteDef(
+        name: 'SettingsRoute',
+        path: '/settings',
+        builder: (_, _) => const Scaffold(body: Text('SettingsRoute')),
+      ),
+      NamedRouteDef(
         name: 'MailRoute',
         path: '/mail',
         builder: (_, _) => const Scaffold(body: AutoRouter()),
@@ -165,6 +170,56 @@ void main() {
         });
       }
     }
+  }
+
+  // Found by the review of batch 2: the closing waits for the nested
+  // guards, and it closed the dialogs over whatever page was on top by then.
+  // Steps: Mail is open on message 42. The app calls navigate or
+  // navigatePath to message 77, or a link to it comes, and its guard takes
+  // its time. Meanwhile the app pushes Settings and shows a dialog over it.
+  // The guard lets 77 in.
+  // Should: the dialog over Settings stays: the navigation closes only what
+  // was over the page it reached.
+  for (final how in ['navigate', 'navigatePath', 'a link']) {
+    testWidgets('$how let in after a page and a dialog opened over the page it '
+        'reached keeps that dialog', (tester) async {
+      final router = build();
+      await pumpRouterConfigApp(tester, router.config());
+      unawaited(router.navigatePath('/mail/42'));
+      await tester.pumpAndSettle();
+
+      switch (how) {
+        case 'navigate':
+          unawaited(
+            router.navigate(
+              const NamedRoute(
+                'MailRoute',
+                children: [
+                  NamedRoute('MessageRoute', params: {'id': '77'}),
+                ],
+              ),
+            ),
+          );
+        case 'navigatePath':
+          unawaited(router.navigatePath('/mail/77'));
+        default:
+          await tester.binding.handlePushRoute('/mail/77');
+      }
+      await tester.pumpAndSettle();
+      unawaited(router.push(const NamedRoute('SettingsRoute')));
+      await tester.pumpAndSettle();
+      showDialog<void>(
+        context: router.navigatorKey.currentContext!,
+        builder: (_) => const AlertDialog(title: Text('Leave settings?')),
+      );
+      await tester.pumpAndSettle();
+
+      slowAnswer!.complete(true);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Leave settings?'), findsOneWidget);
+      expect(router.topRoute.name, 'SettingsRoute');
+    });
   }
 
   testWidgets('navigate to the open page with no children closes the dialog '

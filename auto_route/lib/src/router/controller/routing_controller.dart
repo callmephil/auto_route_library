@@ -617,20 +617,22 @@ abstract class RoutingController with ChangeNotifier {
   // up, as long as each is the top page of its stack router; null when
   // [router] is the root's or no such page holds it.
   VoidCallback? _closingPagesAbove(RoutingController router) {
-    final holders = <StackRouter>[];
+    // Each with the page that holds the router below, as it is now.
+    final holders = <(StackRouter, AutoRoutePage<Object?>)>[];
     for (var child = router; child._parent is StackRouter;) {
       final parent = child._parent! as StackRouter;
-      final top = parent.stackData.lastOrNull;
-      if (top == null || parent._innerControllerOfMatch(top.matchId) != child) {
+      final top = parent._pages.lastOrNull;
+      if (top == null ||
+          parent._innerControllerOfMatch(top.routeData.matchId) != child) {
         break;
       }
-      holders.add(parent);
+      holders.add((parent, top));
       child = parent;
     }
     if (holders.isEmpty) return null;
     return () {
-      for (final holder in holders) {
-        holder._closePagelessRoutesOverTop();
+      for (final (holder, page) in holders) {
+        holder._closePagelessRoutesOverTop(over: page);
       }
     };
   }
@@ -4832,8 +4834,9 @@ abstract class StackRouter extends RoutingController {
             if (!_isDisposed) notifyAll();
           }
         } else if (pushed.isCompleted) {
+          final reached = _pages.lastOrNull;
           lettingIn = () {
-            _closePagelessRoutesOverTop(link: ofLink);
+            _closePagelessRoutesOverTop(link: ofLink, over: reached);
             onLetIn?.call();
           };
           _openChildrenInKeptScreens(keptScreens, onFailure: onFailure);
@@ -4945,14 +4948,22 @@ abstract class StackRouter extends RoutingController {
   // Navigator.push, such as dialogs, would stay on screen. They close: those
   // on top are popped, those under pages leaving now are removed unseen.
   // A guard reevaluation keeps them, since a guard may be showing one.
-  void _closePagelessRoutesOverTop({int? link}) {
+  //
+  // [over] is the page the navigation reached, when the closing waits for
+  // the guards of its nested router: it closes only the routes over that
+  // page, and none once another page is on top, such as one the app pushed
+  // while those guards decided, with a dialog of its own.
+  void _closePagelessRoutesOverTop({int? link, AutoRoutePage<Object?>? over}) {
     // A link that goes on into a nested router closes them once let in.
     if (link != null &&
-        root._deferToLinkAccepted(link, _closePagelessRoutesOverTop)) {
+        root._deferToLinkAccepted(
+          link,
+          () => _closePagelessRoutesOverTop(over: over),
+        )) {
       return;
     }
     final top = _pages.lastOrNull;
-    if (top == null) return;
+    if (top == null || (over != null && !identical(top, over))) return;
     final shownRoute = pagelessRoutesObserver.routeWhere(
       (route) =>
           route.settings is AutoRoutePage &&
