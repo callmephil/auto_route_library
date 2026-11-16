@@ -204,7 +204,10 @@ void main() {
   }
 
   // A shell whose only child is the guarded page has no first page to show
-  // after a "no": it is taken back too, so it is never left blank.
+  // after a "no": it is taken back too, when the navigation took no page off.
+  // After replace or replaceAll, whose pages left with their callers
+  // answered before the shell's router asked, it stays and shows its
+  // placeholder; see shell_placeholder_while_guard_decides_test.dart.
   for (final way in _Way.values) {
     testWidgets('A shell whose only child is the guarded page, ${way.name} '
         'to it, the slow guard says no', (tester) async {
