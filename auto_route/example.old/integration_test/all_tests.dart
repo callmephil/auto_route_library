@@ -295,6 +295,8 @@ import 'rejected_link_keeps_dialog_test.dart' as rejected_link_keeps_dialog;
 import 'rejected_link_keeps_earlier_link_test.dart'
     as rejected_link_keeps_earlier_link;
 import 'rejected_link_url_running_test.dart' as rejected_link_url_running;
+import 'rejected_nested_guard_keeps_pages_closing_test.dart'
+    as rejected_nested_guard_keeps_pages_closing;
 import 'rejected_nested_guard_takes_page_back_test.dart'
     as rejected_nested_guard_takes_page_back;
 import 'relative_path_colon_test.dart' as relative_path_colon;
@@ -688,6 +690,7 @@ void main() {
   rejected_link_keeps_dialog.main();
   rejected_link_keeps_earlier_link.main();
   rejected_link_url_running.main();
+  rejected_nested_guard_keeps_pages_closing.main();
   rejected_nested_guard_takes_page_back.main();
   relative_path_colon.main();
   reload_guard.main();
