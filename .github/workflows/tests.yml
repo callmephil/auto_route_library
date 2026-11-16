@@ -4,10 +4,12 @@
 # example app's integration tests (auto_route/example.old/integration_test) on an
 # Android emulator, an iOS simulator, web through `flutter drive`, and macOS
 # desktop.
-# Every job's work stops within 15 minutes, so the headless tests, Android
-# and iOS each run their suite in parts, one job each. The macOS jobs run on arm64
-# runners; Intel macOS isn't supported. Those runners are often short, so the
-# macOS jobs may wait up to 30 minutes for one (see the ios job).
+# Every job's work stops within 15 minutes, except iOS's within 21, so the
+# headless tests, Android, iOS and macOS each run their suite in parts, one
+# job each. The macOS jobs run on arm64 runners; Intel macOS isn't supported.
+# At most five of them run at once, and GitHub counts the time a job waits for
+# a runner against its time limit, so the macOS jobs have 45 minutes: the
+# wait plus the work (see the ios job).
 name: tests
 
 on:
@@ -197,20 +199,23 @@ jobs:
   ios:
     name: Integration tests on iOS (part ${{ matrix.part }} of 4)
     runs-on: macos-26
-    # GitHub seems to stop looking for a runner when the job's time limit runs out:
+    # GitHub counts the time a job waits for a runner against its time limit:
     # in 40 runs, every macOS job that never got one was canceled 900 to 902 s
     # after it was queued, while those that got one waited up to 602 s. A
-    # canceled job fails the run despite continue-on-error. So these jobs may
-    # wait 30 minutes, and their steps keep the work itself within 15.
-    timeout-minutes: 30
-    # Four jobs, each running a quarter of the suite in one launch of the app.
-    # With 271 tests, half of them took 451 s to build and run on one runner,
-    # while on a slower one, whose Xcode build took 266 s instead of 99 s and
-    # whose simulator took 244 s to boot, half ran out of time after 13 tests.
-    # A third took 426 to 614 s of test time, and on a slow runner its step ran
-    # out of its limit (the step stops 14 minutes after the job started). A
-    # quarter takes about 320 to 460 s. Four iOS jobs and the macOS job are the
-    # five macOS jobs that can run at once.
+    # canceled job fails the run despite continue-on-error. Four iOS jobs and
+    # two macOS halves are six jobs for the five macOS runners that can run at
+    # once, so one waits for another to end, up to about 21 minutes. The limit
+    # is that wait plus the job's own work.
+    timeout-minutes: 45
+    # Four jobs, each running a quarter of the suite (about 120 of 480 tests)
+    # in one launch of the app. Before its first test a part spent 417 to
+    # 676 s on Flutter, the simulator's boot, the Dart compile, the Xcode build
+    # (88 to 186 s) and the install; its tests then took 1.7 to 1.9 s each,
+    # 205 to 232 s for a quarter (run 43776054211). The slowest runner seen,
+    # whose Xcode build took 266 s and whose simulator took 244 s to boot,
+    # needs about 792 s before its first test: no split leaves it enough of 14
+    # minutes, while a quarter ends at about 1024 s, 17 minutes. So the tests
+    # stop 20 minutes after the job started.
     strategy:
       fail-fast: false
       matrix:
@@ -248,10 +253,10 @@ jobs:
           (cd auto_route/example.old && flutter pub get)
           xcrun simctl bootstatus "$udid"
           echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
-          # The tests stop 14 minutes after the job started on its runner, so a
+          # The tests stop 20 minutes after the job started on its runner, so a
           # run that doesn't fit fails, and the next step names how far it got,
-          # with the cleanup steps, about 40 s, still inside 15 minutes.
-          minutes=$(( (JOB_STARTED + 14 * 60 - $(date +%s)) / 60 ))
+          # with the cleanup steps, about 40 s, still inside 21 minutes.
+          minutes=$(( (JOB_STARTED + 20 * 60 - $(date +%s)) / 60 ))
           echo "TEST_MINUTES=$(( minutes > 1 ? minutes : 1 ))" >> "$GITHUB_ENV"
       - name: Integration tests on the iOS simulator
         working-directory: auto_route/example.old
@@ -305,10 +310,23 @@ jobs:
         run: python3 ../../.github/scripts/report_failed_tests.py "$RUNNER_TEMP/test-results.json" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/test-output.txt"
 
   macos:
-    name: Integration tests on macOS
+    name: Integration tests on macOS (half ${{ matrix.half }} of 2)
     runs-on: macos-26
-    # May wait 30 minutes for a runner, as the ios job explains.
-    timeout-minutes: 30
+    # The wait for a runner plus the work, as the ios job explains.
+    timeout-minutes: 45
+    # Two jobs, each running half of the suite in one launch of the app, as
+    # the android job does. The whole suite, about 480 tests, outgrew the
+    # step's 13 minutes: 420 tests passed in 725 s, 1.73 s each, after 65 s
+    # for the packages, the build and the launch (run 43776054211). A half,
+    # about 240 tests, takes about 480 s, and 528 s at 1.93 s a test.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - half: 1
+            shard-index: 0
+          - half: 2
+            shard-index: 1
     # GitHub never picked up an arm64 macOS runner in five runs; the maintainer's Mac runs iOS and macOS before every merge.
     continue-on-error: true
     steps:
@@ -318,12 +336,13 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      # The work stops within 15 minutes, as in every job.
+      # The step stops after 13 minutes, so a half that doesn't fit fails, and
+      # the next step names the test it was on.
       - name: Integration tests on macOS desktop
         working-directory: auto_route/example.old
         timeout-minutes: 13
         shell: bash
-        run: flutter test --reporter github --file-reporter "json:$RUNNER_TEMP/test-results.json" integration_test/all_tests.dart -d macos 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+        run: flutter test --reporter github --file-reporter "json:$RUNNER_TEMP/test-results.json" integration_test/all_tests.dart --total-shards 2 --shard-index ${{ matrix.shard-index }} -d macos 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
       # The job logs need a sign-in; annotations and the summary don't.
       - name: Name each failed test
         if: failure()
