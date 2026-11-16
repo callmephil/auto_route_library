@@ -411,6 +411,30 @@ void main() {
     expect(router.currentUrl, '/feed');
   });
 
+  // replacePath puts a new tabs page in the place of the one on screen,
+  // which takes over its screen and its tabs: the caller's onFailure hears
+  // what those tabs turn down, as it does for pushPath and navigatePath.
+  testWidgets('replacePath to the removed tab keeps the tab and reports it', (
+    tester,
+  ) async {
+    final router = await _openOnSettings(
+      tester,
+      .indexedStack,
+      list,
+      removedLater: true,
+    );
+    final failures = <NavigationFailure>[];
+
+    unawaited(router.replacePath<Object?>('/profile', onFailure: failures.add));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(_state(router), _onSettings);
+    expect(failures.map((failure) => failure.runtimeType), [
+      RouteNotFoundFailure,
+    ]);
+  });
+
   testWidgets('A path to a tab still in the list shows it', (tester) async {
     final router = await _openOnSettings(
       tester,

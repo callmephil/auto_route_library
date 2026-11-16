@@ -4976,7 +4976,12 @@ abstract class StackRouter extends RoutingController {
         return null;
       }
       final popped = root._showingLink(
-        () => _addNewPage<T>(match, notify: notify, index: lastPageAt?.call()),
+        () => _addNewPage<T>(
+          match,
+          notify: notify,
+          index: lastPageAt?.call(),
+          onFailure: onFailure,
+        ),
         isLink: ofLink != null,
       );
       openChildrenOfTakeovers();
