@@ -11,6 +11,8 @@ typedef OnNavigation = FutureOr<void> Function(
 ///
 /// A guard of a route inside a nested router is asked by that router, once
 /// the router above has let the route that holds it through. When that
+/// router is built, as for an open page, the dialogs over the page stay until
+/// it answers; the pages pushed over that page close first, though. When that
 /// router isn't built yet, as for a page that isn't open or a tab never
 /// opened, it asks its guards only once its page or tab is in, a frame later:
 /// a rejection then leaves that page or tab open, on its first page. A link
