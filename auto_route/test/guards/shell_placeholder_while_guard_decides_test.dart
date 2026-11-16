@@ -16,9 +16,10 @@ import '../router_test_utils.dart';
 // Steps: the app calls navigatePath to message 20, which names Message
 // alone for the router of the shell. Then the guard says yes or no.
 // Native behavior this holds to: Android's conditional navigation shows the
-// destination first and runs its check there, popping back when it fails.
-// Flutter's Navigator shows the pages its list holds, and the shell shows
-// its own placeholder while it holds none.
+// destination first and runs its check there, popping back to the start
+// destination when it fails. Flutter's Navigator shows the pages its list
+// holds and takes no empty list, so the shell shows its own placeholder
+// while its router holds none.
 RootStackRouter _router(Completer<bool> answer, {required bool hasInbox}) =>
     .build(
       routes: [
@@ -66,8 +67,9 @@ void main() {
   // opened them, once the guards of the router above let the shell in,
   // before its own router is built and asks its guard. Those pages can't
   // come back, so a "no" there keeps the shell: on its first page when it
-  // has one, else on its placeholder, as Flutter's Navigator shows nothing
-  // for an empty list of pages and the shell's placeholder stands in.
+  // has one, else on its placeholder. Flutter's Navigator reports an error
+  // for an empty list of pages, so auto_route builds the router's
+  // placeholder in its place.
   for (final way in ['replace', 'replaceAll']) {
     testWidgets('$way into a shell whose only child the guard turns down '
         'shows its placeholder', (tester) async {

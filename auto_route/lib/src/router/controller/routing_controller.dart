@@ -4009,7 +4009,11 @@ abstract class StackRouter extends RoutingController {
   /// if last entry == [route] page will just be updated
   ///
   /// The last entry is removed only once the guards of [route] let it
-  /// through; a rejected [route] leaves the stack as it was.
+  /// through; a rejected [route] leaves the stack as it was. A guard inside
+  /// the nested router of [route]'s page, built only once the page is in,
+  /// answers after the last entry has left: its "no" leaves the page, on its
+  /// first page, or on the router's placeholder when the guarded page is its
+  /// only child.
   ///
   /// The code that opened the last entry gets `null` as it leaves. When
   /// [route] is that entry's own route, with other params or args, the screen
@@ -4143,7 +4147,11 @@ abstract class StackRouter extends RoutingController {
   /// The pages are replaced in one step, once the guards of every one of
   /// [routes] have let it through. While a guard decides the stack stays as
   /// it is, and a guard that rejects one of [routes] rejects them all: the
-  /// stack stays as it was. A page that a guard shows before it answers,
+  /// stack stays as it was. A guard inside the nested router of a new page,
+  /// built only once the page is in, answers after the old pages have left:
+  /// its "no" leaves that page, on its first page, or on the router's
+  /// placeholder when the guarded page is its only child. A page that a
+  /// guard shows before it answers,
   /// such as a login with [NavigationResolver.redirectUntil], takes the place
   /// of the pages as it goes on, and so does a page that goes on once the
   /// guard has returned without an answer, such as a login the app shows
@@ -6122,7 +6130,11 @@ abstract class StackRouter extends RoutingController {
   /// observers hear [NavigatorObserver.didRemove] for them, their PopScope
   /// is not asked, and their push futures complete with null. They are
   /// removed only once the guards of [route] let it through; a rejected
-  /// [route] leaves the stack as it was.
+  /// [route] leaves the stack as it was. A guard inside the nested router of
+  /// [route]'s page, built only once the page is in, answers after that: its
+  /// "no" takes the page back when no route was removed, as for [push], and
+  /// otherwise leaves the page, on its first page or the router's
+  /// placeholder, and the caller waits for the page's result.
   ///
   /// if [scopedPopUntil] is false the [predicate] visits all StackRouters
   /// in hierarchy starting from the top-most one until satisfied. The routes

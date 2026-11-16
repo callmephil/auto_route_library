@@ -22,6 +22,10 @@ typedef OnNavigation = FutureOr<void> Function(
 /// dialogs are as before, and the page's caller gets null; the dialogs of a
 /// link stay open while the guard decides. A page that is the only page of
 /// its router, as when the app starts at the link, stays, on its first page.
+/// So does a page whose navigation took pages off on its way in, as
+/// [StackRouter.replace] and [StackRouter.replaceAll] do, which can't come
+/// back: on its first page, or on the router's placeholder when the guarded
+/// page is its only child.
 /// A link or the app's own navigation into a tab never opened, to pages a
 /// guard is asked about, builds the tab off the screen first instead, and a
 /// rejection keeps the tab the user is on.
