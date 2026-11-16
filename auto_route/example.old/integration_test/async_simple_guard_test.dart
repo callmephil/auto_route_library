@@ -18,7 +18,12 @@ void main() {
     // Steps: open the app with reevaluateListenable set on '/profile', guarded
     // by an async simple guard that waits before it calls resolver.next(). Fire
     // the listenable while the guard waits, then let the guard go on.
-    // Should: the guard ran once, nothing failed and ProfileRoute is on top.
+    // Should: the re-check waits for the running callback and starts no
+    // second call beside it, nothing failed and ProfileRoute is on top. The
+    // change came while the guard ran its check, so once that call has
+    // answered the guard is asked once more before its page goes in
+    // (a05b2755): two calls, one after the other. See
+    // change_during_navigation_guard_test.dart.
     testWidgets(
       'a guard re-check waits for an async simple guard still running',
       (tester) async {
@@ -61,7 +66,7 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(tester.takeException(), isNull);
-        expect(guardCalls, 1);
+        expect(guardCalls, 2);
         expect(router.topRoute.name, 'ProfileRoute');
         expect(find.text('ProfileRoute'), findsOneWidget);
         await expectBrowserUrl('/profile');
