@@ -5212,7 +5212,8 @@ abstract class StackRouter extends RoutingController {
   // [_pushAllGuarded], as a reevaluation puts on a page whose guards let it
   // through, there on top of the stack as it then is, and the guards of the
   // routes after it, of the pages that were above it, are asked there. A no
-  // leaves them off, and so does a yes for a page the app took off
+  // leaves them off, also those a redirect of the guard put back meanwhile,
+  // see [_takeOffAfterLetGo], and so does a yes for a page the app took off
   // meanwhile, as replaceAll does. The callers of the pages that stay off
   // hear null; the others go on waiting.
   Future<void> _awaitLetGoAnswer(
@@ -5225,11 +5226,12 @@ abstract class StackRouter extends RoutingController {
     try {
       final result = await answer;
       final match = result.route;
-      if (_isDisposed ||
-          !result.continueNavigation ||
-          match is! ReevaluatableRouteMatch<Object?, Object?>) {
+      if (_isDisposed) return;
+      if (!result.continueNavigation) {
+        _takeOffAfterLetGo(routes);
         return;
       }
+      if (match is! ReevaluatableRouteMatch<Object?, Object?>) return;
       // Its guards have answered: none is asked again for it.
       final answered = match.copyWith(
         evaluatedGuards: [...root.guards, ...match.guards],
@@ -5254,6 +5256,25 @@ abstract class StackRouter extends RoutingController {
         notifyAll();
       }
     }
+  }
+
+  // After a no from the guard that let go of the page of the first of
+  // [routes], takes off the pages of [routes] that are on the stack again,
+  // as the page a guard's redirectUntil keeps under its redirect is: they
+  // close as a page its guard rejects in a reevaluation does, leaving their
+  // history entry to the page below.
+  void _takeOffAfterLetGo(List<RouteMatch<Object?>> routes) {
+    final leaving = {
+      for (final route in routes)
+        if (route is ReevaluatableRouteMatch) route.currentPage.routeData,
+    };
+    final onStack = _pages
+        .where((page) => leaving.contains(page.routeData))
+        .toList();
+    if (onStack.isEmpty) return;
+    _markLeaving(onStack, .removed);
+    _pages.removeWhere(onStack.contains);
+    markUrlStateForReplace();
   }
 
   // Runs [step], which takes pages off for a new page: the top page that

@@ -55,7 +55,7 @@ void main() {
     builder: (_, _) => Scaffold(body: Text(name)),
   );
 
-  const pageNames = ['HomeRoute', 'AccountRoute'];
+  const pageNames = ['HomeRoute', 'AccountRoute', 'SignInRoute'];
 
   // The root's pages, the pages a tap reaches, the url, and what the code
   // that opened Account heard.
@@ -77,6 +77,7 @@ void main() {
       routes: [
         page('HomeRoute', '/'),
         page('AccountRoute', '/account', guard: accountGuard),
+        page('SignInRoute', '/sign-in'),
       ],
     );
     await pumpRouterApp(tester, router, reevaluationNotifier: session);
@@ -153,6 +154,87 @@ void main() {
       session.set(signedIn: true);
       await tester.pump();
       request.complete();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        state(router, answers),
+        'HomeRoute AccountRoute | shown: AccountRoute | /account | caller: []',
+      );
+    });
+  });
+
+  // Finding 2. Steps: the user signs out on Account. Its guard returns, and
+  // later, from a callback (as a guard that asks a session service does),
+  // calls redirectUntil(SignInRoute()). The user closes the sign-in page
+  // without signing in, or signs in.
+  // Was: a cancel showed Account again, at /account, with its caller still
+  // waiting. redirectUntil put the let-go page back under the sign-in page,
+  // as it keeps a page it redirects from; the rejection that followed the
+  // cancel left it there, since the let-go wait did not take a page off on
+  // a no.
+  // Should: a cancel leaves Account off and its caller hears null, as a
+  // rejection closes a page for good; a sign-in shows Account once.
+  // Native behavior this holds to: Flutter's Navigator shows only the pages
+  // it is given; the README: a rejection closes the page for good.
+  group('A guard that let go, then redirects from a callback', () {
+    late Completer<void> later;
+
+    setUp(() {
+      accountBehavior = (resolver, _) {
+        accountAsks.add(resolver);
+        if (session.isSignedIn) return resolver.next();
+        unawaited(
+          later.future.then(
+            (_) => resolver.redirectUntil(const NamedRoute('SignInRoute')),
+          ),
+        );
+      };
+    });
+
+    Future<String> signInShown(
+      WidgetTester tester,
+      RootStackRouter router,
+      List<String?> answers,
+    ) async {
+      // Made in the test's zone, so its callbacks run in the test's frames.
+      later = Completer();
+      session.set(signedIn: false);
+      await tester.pumpAndSettle();
+      later.complete();
+      await tester.pumpAndSettle();
+      return state(router, answers);
+    }
+
+    testWidgets('leaves its page off when the user cancels the sign-in', (
+      tester,
+    ) async {
+      final (router, answers) = await onAccount(tester);
+      final whileSignIn = await signInShown(tester, router, answers);
+
+      await router.maybePop();
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        whileSignIn,
+        'HomeRoute AccountRoute SignInRoute | shown: SignInRoute | '
+        '/sign-in | caller: []',
+      );
+      expect(
+        state(router, answers),
+        'HomeRoute | shown: HomeRoute | / | '
+        'caller: [null]',
+      );
+    });
+
+    // Passes before the fix too.
+    testWidgets('shows its page once when the user signs in', (tester) async {
+      final (router, answers) = await onAccount(tester);
+      await signInShown(tester, router, answers);
+
+      session.isSignedIn = true;
+      accountAsks.lastOrNull?.next();
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
