@@ -4771,6 +4771,7 @@ abstract class StackRouter extends RoutingController {
                 pagesBefore: pagesBefore,
                 link: ofLink,
                 linkStep: onLinkAccepted,
+                onFailure: onFailure,
                 // Pages this step took off can't come back.
                 canTakeBack:
                     replacement == null && pagesBefore.every(_pages.contains),
@@ -4824,7 +4825,8 @@ abstract class StackRouter extends RoutingController {
   // which is built only with the page and asks its guards then, with its own
   // context. Until they let the navigation in, the step of its [link]
   // ([linkStep]) waits, so a link's dialog stays open, and so does what the
-  // routers above do once let in; see [_NestedLetIn]. A "no" there takes the
+  // routers above do once let in; see [_NestedLetIn]. A guard's rejection
+  // there reaches [onFailure], the caller's. A "no" there takes the
   // pages this step put on back, when [canTakeBack] and a page this router
   // had before stays under them: the root is never left empty, and a router
   // the navigation opened with this page alone keeps it, on its first page.
@@ -4833,6 +4835,7 @@ abstract class StackRouter extends RoutingController {
     required int? link,
     required VoidCallback? linkStep,
     required bool canTakeBack,
+    OnNavigationFailure? onFailure,
   }) {
     final data = _pages.lastOrNull?.routeData;
     if (data == null ||
@@ -4846,6 +4849,7 @@ abstract class StackRouter extends RoutingController {
       root,
       link: link,
       linkStep: linkStep,
+      onFailure: onFailure,
       takeBack: canTakeBack && pagesBefore.isNotEmpty
           ? () => _takeBack(added)
           : null,
@@ -5923,6 +5927,7 @@ class NestedStackRouter extends StackRouter {
     await _pushAllGuarded(
       routes,
       returnLastRouteCompleter: false,
+      onFailure: letIn?.onFailure,
       onLastRouteAdded: (_) {
         isLastPageOn = true;
         _reportPagesUnderFirstPages(routes.length);
@@ -6011,7 +6016,7 @@ class NestedStackRouter extends StackRouter {
 // fails, and as on the web a canceled navigation leaves the document on
 // screen.
 class _NestedLetIn {
-  new(this._root, {this.link, this.linkStep, this.takeBack});
+  new(this._root, {this.link, this.linkStep, this.takeBack, this.onFailure});
 
   // The navigation waiting on the nested router of the page of a route data,
   // until that router claims it.
@@ -6028,6 +6033,9 @@ class _NestedLetIn {
 
   // Takes the page back after a "no"; answers whether it did.
   bool Function()? takeBack;
+
+  // The caller's, which hears a guard's rejection there.
+  OnNavigationFailure? onFailure;
 
   // The navigation waiting on the nested router of the page of [data], not
   // claimed yet.
@@ -6107,6 +6115,7 @@ class _NestedLetIn {
   void handOnTo(_NestedLetIn inner) {
     inner
       ..link ??= link
+      ..onFailure ??= onFailure
       ..takeBack = takeBack ?? inner.takeBack;
     final step = linkStep;
     if (step != null) {
