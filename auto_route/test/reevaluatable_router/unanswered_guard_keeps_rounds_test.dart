@@ -157,4 +157,77 @@ void main() {
       expect(find.text('AccountRoute'), findsOneWidget);
     });
   }
+
+  // Finding B of the second review. Steps: on Home, Secret (its guard
+  // rejects a signed-out user), the app calls push, replace, pushAll or
+  // navigate to Pushed, whose guard returns and answers later from a
+  // callback. The user signs out. Then the callback says yes, or no.
+  // Was: the sign-out asked the guard again on the same resolver, and the
+  // callback's yes, from before the sign-out, opened Pushed for the
+  // signed-out user.
+  // Should: that yes is from before the last change: it opens nothing, and
+  // the guard is asked again before Pushed goes in, as a guard that awaits
+  // inside its call already is (_canNavigate); a no stands.
+  // Native behavior this holds to: Flutter's Router drops an older route
+  // transaction's result once newer route information has arrived
+  // (_processParsedRouteInformation, router.dart).
+  for (final op in ['push', 'replace', 'pushAll', 'navigate']) {
+    for (final isYes in [true, false]) {
+      testWidgets('A $op whose guard answers from a callback: its '
+          '${isYes ? 'yes' : 'no'} from before a sign-out opens nothing', (
+        tester,
+      ) async {
+        final router = RootStackRouter.build(
+          routes: [
+            page('HomeRoute', '/'),
+            page('OtherRoute', '/other'),
+            page(
+              'SecretRoute',
+              '/secret',
+              guard: AutoRouteGuard.simple(
+                (resolver, _) =>
+                    session.isSignedIn ? resolver.next() : resolver.reject(),
+              ),
+            ),
+            page(
+              'PushedRoute',
+              '/pushed',
+              guard: AutoRouteGuard.simple(
+                (resolver, _) => settingsAsks.add(resolver),
+              ),
+            ),
+          ],
+        );
+        await pumpRouterApp(tester, router, reevaluationNotifier: session);
+        unawaited(router.push(const NamedRoute('SecretRoute')));
+        await tester.pumpAndSettle();
+        const target = NamedRoute('PushedRoute');
+        switch (op) {
+          case 'push':
+            unawaited(router.push(target));
+          case 'replace':
+            unawaited(router.replace(target));
+          case 'pushAll':
+            unawaited(router.pushAll(const [NamedRoute('OtherRoute'), target]));
+          case _:
+            unawaited(router.navigate(target));
+        }
+        await tester.pumpAndSettle();
+        final firstAsk = settingsAsks.firstOrNull;
+
+        session.set(signedIn: false);
+        await tester.pumpAndSettle();
+        final afterSignOut = names(router);
+        isYes ? firstAsk?.next() : firstAsk?.reject();
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(afterSignOut, isNot(contains('SecretRoute')));
+        expect(names(router), isNot(contains('PushedRoute')));
+        expect(names(router), isNotEmpty);
+        // A yes is followed by an ask from after the sign-out; a no stands.
+        expect(settingsAsks.toSet(), hasLength(isYes ? 2 : 1));
+      });
+    }
+  }
 }

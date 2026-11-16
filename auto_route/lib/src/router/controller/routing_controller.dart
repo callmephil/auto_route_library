@@ -3079,7 +3079,7 @@ abstract class StackRouter extends RoutingController {
           );
         } else if (!resolver._isOwnCodeRunning && !resolver._isWaitingOnUser) {
           // Of a navigation: it is asked again before its page goes in.
-          resolver._isAnswerStale = true;
+          resolver._markAnswersStale();
         }
       }
       resolver._isReevaluating = true;
@@ -3098,7 +3098,12 @@ abstract class StackRouter extends RoutingController {
         // which shows nothing, waits for something outside its call, as one
         // that answers from a callback does: it is asked again, but no round
         // waits for it, or it would ask no page until then. Nor for that
-        // ask, which another round may have started in this turn.
+        // ask, which another round may have started in this turn. The
+        // answer of an earlier call, as from that callback, is from before
+        // this change: a yes from it is dropped and the guard asked anew
+        // before its page goes in, see [_canNavigate]; the answer of this
+        // new call is not.
+        if (!resolver._isOwnCodeRunning) resolver._markAnswersStale();
         resolver._isAskedAgainApart = true;
         unawaited(resolver.checkGuard(entry.guard, this));
         continue;
@@ -3123,7 +3128,7 @@ abstract class StackRouter extends RoutingController {
       if (resolver._waitingCompleter != null &&
           !resolver._isOwnCodeRunning &&
           !resolver._isWaitingOnUser) {
-        resolver._isAnswerStale = true;
+        resolver._markAnswersStale();
       }
       unawaited(resolver.checkGuard(entry.guard, this));
       // A page kept on the stack for its let-go guard, as a router's last

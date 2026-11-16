@@ -314,6 +314,7 @@ class NavigationResolver {
   ResolverResult? _result;
 
   void _complete(ResolverResult result) {
+    _isAnswerStale = _isAnswerFromBeforeChange;
     _result = result;
     _completer.complete(result);
   }
@@ -531,14 +532,43 @@ class NavigationResolver {
   // the guards are asked again for, see [_isOwnCodeRunning].
   static final _askedZone = Object();
 
+  // Holds, in the zone of each call of the guard, that call's number, see
+  // [_calls]: the answer a call's code gives is known as that call's.
+  static final _askedCallZone = Object();
+
+  // How many times the guard was called with this resolver: once when it is
+  // asked, then once each time a reevaluation asks it again, see
+  // [_checkGuard].
+  var _calls = 0;
+
+  // The last call before the latest change of the state the guards are asked
+  // again for, see [_markAnswersStale]: an answer from it or an earlier call
+  // is from before that change.
+  int? _staleUpTo;
+
+  // Called when that state changes while the guard decides, not by its own
+  // code: the answers of the calls made so far are from before the change.
+  // An answer of a later call, made after the change, is not.
+  void _markAnswersStale() => _staleUpTo = _calls;
+
+  // Whether the answer given now is from before the latest change: one from a
+  // call up to [_staleUpTo], or from code outside every call of the guard,
+  // which can't be told from a call made before the change.
+  bool get _isAnswerFromBeforeChange {
+    final upTo = _staleUpTo;
+    if (upTo == null) return false;
+    final call = _isOwnCodeRunning ? Zone.current[_askedCallZone] : null;
+    return call is! int || call <= upTo;
+  }
+
   // Whether the code that runs now is the guard's that was given this
   // resolver.
   bool get _isOwnCodeRunning => identical(Zone.current[_askedZone], this);
 
-  // Whether the state the guards are asked again for changed while this
-  // guard, asked for a navigation or asked again for a page it let go of,
-  // ran its check, and the change was not the guard's own: its answer is
-  // from before the change, see [StackRouter._canNavigate].
+  // Whether the guard's answer is from before a change of the state the
+  // guards are asked again for, a change not its own, see
+  // [_markAnswersStale]: a yes is then dropped and the guard asked anew, see
+  // [StackRouter._canNavigate]. Known once the guard has answered.
   bool _isAnswerStale = false;
 
   // Whether the guard let go of the page it was asked about, see
@@ -613,10 +643,11 @@ class NavigationResolver {
     final waiting = _waitingCompleter = Completer<void>();
     // Kept for a later call of this guard too, as a reevaluation makes.
     _onShowsPage = onShowsPage ?? _onShowsPage;
+    final call = ++_calls;
     try {
       await runZoned(
         () => guard.onNavigation(this, router),
-        zoneValues: {_askedZone: this},
+        zoneValues: {_askedZone: this, _askedCallZone: call},
       );
     } finally {
       // Not when a redirect ended this check and a later one began meanwhile.

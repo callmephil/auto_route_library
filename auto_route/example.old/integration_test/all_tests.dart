@@ -42,6 +42,7 @@ import 'batch_rejected_keeps_caller_test.dart' as batch_rejected_keeps_caller;
 import 'batch_rejected_keeps_stack_test.dart' as batch_rejected_keeps_stack;
 import 'batch_slow_guard_test.dart' as batch_slow_guard;
 import 'bool_query_param_test.dart' as bool_query_param;
+import 'callback_guard_stale_yes_test.dart' as callback_guard_stale_yes;
 import 'camel_case_path_test.dart' as camel_case_path;
 import 'change_during_guard_check_test.dart' as change_during_guard_check;
 import 'change_during_navigation_guard_test.dart'
@@ -485,6 +486,7 @@ void main() {
   batch_rejected_keeps_stack.main();
   batch_slow_guard.main();
   bool_query_param.main();
+  callback_guard_stale_yes.main();
   camel_case_path.main();
   change_during_guard_check.main();
   change_during_navigation_guard.main();
