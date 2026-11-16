@@ -3130,7 +3130,7 @@ abstract class StackRouter extends RoutingController {
   // navigator rebuilt with the frame that follows.
   var _notifications = 0;
 
-  // Whether [_leftSinceBuild] is to be emptied after the next frame.
+  // Whether [_forgetLeftAfterFrame] already waits for the next frame.
   var _isForgettingLeftAfterFrame = false;
 
   void _noteLeft(AutoRoutePage<Object?> page) {
@@ -3146,12 +3146,25 @@ abstract class StackRouter extends RoutingController {
   // Called as this router tells its listeners of a change.
   void _noteListenersTold() {
     _notifications++;
-    if (_leftSinceBuild.isEmpty || _isForgettingLeftAfterFrame) return;
+    _forgetLeftAfterFrame();
+  }
+
+  // Drops, after the next frame, the notes of the pages the navigator no
+  // longer shows then. That frame rebuilds the navigator without the pages
+  // the listeners were told of. A page taken off after that build, as from
+  // another callback at the frame's end, is still shown: its note stays for
+  // the frame after.
+  void _forgetLeftAfterFrame() {
+    final isRebuildOnItsWay = _leftSinceBuild.values.any(
+      (left) => left.notifications < _notifications,
+    );
+    if (!isRebuildOnItsWay || _isForgettingLeftAfterFrame) return;
     _isForgettingLeftAfterFrame = true;
-    // The frame that follows rebuilds the navigator without them.
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _isForgettingLeftAfterFrame = false;
-      _leftSinceBuild.clear();
+      final shown = _navigatorKey.currentState?.widget.pages ?? const [];
+      _leftSinceBuild.removeWhere((page, _) => !shown.contains(page));
+      _forgetLeftAfterFrame();
     });
   }
 
