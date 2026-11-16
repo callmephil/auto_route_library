@@ -30,8 +30,10 @@ abstract interface class HistoryBrowser {
   /// entry.
   void go(int delta);
 
-  /// Whether the browser has an entry ahead of the one it stands on, as the
-  /// Navigation API's canGoForward tells; true when the browser can't tell.
+  /// Whether the browser has an entry of the app's own origin ahead of the
+  /// one it stands on, as the Navigation API's canGoForward tells; true when
+  /// the browser can't tell. An entry of another site ahead counts as none,
+  /// since the Navigation API lists only the entries of its own origin.
   bool get canGoForward;
 
   /// Whether the app keeps the url of [entry] out of the address bar, so
@@ -403,13 +405,20 @@ class HistoryWriter {
             } else {
               _tellTop(wanted, isReplace: isReplace);
             }
-          case _Step(:final delta):
-            // With no entries kept there is none to step to. A step forward
-            // with no entry ahead does nothing, as history.forward() does
-            // there: waiting for its landing would hold the work behind it.
-            if (_browser.keepsEntries && (delta < 0 || _browser.canGoForward)) {
+          case _Step(:final delta) when _browser.keepsEntries:
+            if (delta < 0 || _browser.canGoForward) {
               await _stepFor(app: true, delta);
+            } else {
+              // No entry of the app's own origin ahead, the only ones the
+              // browser lists. Another site's entry may still be there, so
+              // the step is asked as history.forward() asks it: the browser
+              // goes to that site or, with nothing ahead, does nothing.
+              // Either way no landing reaches the app, and waiting for one
+              // would hold the work behind it.
+              _browser.go(delta);
             }
+          case _Step():
+          // With no entries kept there is none to step to.
         }
       }
     } finally {

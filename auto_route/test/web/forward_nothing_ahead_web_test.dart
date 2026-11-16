@@ -4,6 +4,8 @@
 library;
 
 import 'dart:async';
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -44,6 +46,23 @@ RootStackRouter _router() => .build(
 
 String _stack(RootStackRouter router) =>
     router.stack.map((page) => page.name?.replaceAll('Route', '')).join(' ');
+
+// Records each history.go the page asks for, and still asks it, until the
+// test ends.
+List<int> _recordHistoryGo() {
+  final history = window.history;
+  final go = history.getProperty<JSFunction>('go'.toJS);
+  final asked = <int>[];
+  history.setProperty(
+    'go'.toJS,
+    (JSNumber delta) {
+      asked.add(delta.toDartInt);
+      go.callAsFunction(history, delta);
+    }.toJS,
+  );
+  addTearDown(() => history.delete('go'.toJS));
+  return asked;
+}
 
 void main() {
   useRealBrowserHistory();
@@ -119,6 +138,34 @@ void main() {
     readings.add(reading());
     debugPrint('forward, push B, back: before and settled $readings');
     expect(readings.lastOrNull, '(1, /a, Home A)');
+  });
+
+  // No entry of the app ahead, as with another site's entry there, which
+  // the Navigation API leaves out: forward() still asks the browser for the
+  // step, as history.forward() goes to that site, and B, pushed right after
+  // it, is in the address bar at once. Here nothing is ahead, so the browser
+  // stays.
+  //
+  // Native behavior this holds to: history.forward(), which goes to the
+  // entry ahead whatever its site; the Navigation API, whose canGoForward
+  // counts only entries of the page's own origin (the HTML standard,
+  // "getting the navigation API entries").
+  testWidgets('forward() with no entry of the app ahead still asks the '
+      'browser, and a push of B is in the address bar at once', (tester) async {
+    final (router, home) = await openOnA(tester);
+    final asked = _recordHistoryGo();
+    router.navigationHistory.forward();
+    unawaited(router.push(const NamedRoute('BRoute')));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    final early = '(${browserSerialCount - home}, $browserPath)';
+    await settleBrowser(tester);
+    debugPrint('forward with nothing ahead: asked $asked, early $early');
+    expect(
+      (asked.join(' '), early, _stack(router)),
+      ('1', '(2, /b)', 'Home A B'),
+    );
   });
 
   // An entry ahead: forward() still steps the browser to it, and the app

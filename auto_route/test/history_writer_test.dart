@@ -383,6 +383,31 @@ void main() {
     expect(web.browser.held, '/ >/a /b');
   });
 
+  // Steps: on A over Home, with no entry of the app ahead, as when the
+  // entry ahead is another site's, which the Navigation API leaves out; a
+  // step forward, as navigationHistory.forward() asks, then B.
+  //
+  // Native behavior this holds to: the HTML History API, where
+  // history.forward() goes to the entry ahead whatever its site, and does
+  // nothing with none ahead; and the Navigation API, whose canGoForward
+  // counts only the entries of the page's own origin (the HTML standard,
+  // "getting the navigation API entries" stops at another origin's entry).
+  test('A step forward with no entry of the app ahead is still asked, as '
+      'the browser may hold another site there, and nothing waits for '
+      'it', () async {
+    final web = _Web()..show('/ /a');
+    await web.finish();
+    web.browser.asked.clear();
+    web.writer.step(1);
+    web.show('/ /a /b');
+    await web.settle();
+    expect(
+      (web.browser.asked.join(', '), web.writer.isIdle),
+      ('go 1, push /b', true),
+    );
+    expect(web.browser.held, '/ /a >/b');
+  });
+
   // Steps: on B over A over Home, show Home; the platform's report of the
   // landing comes before the browser's event, then the other way round.
   // While the second step is on its way, and once the writer is done, the
