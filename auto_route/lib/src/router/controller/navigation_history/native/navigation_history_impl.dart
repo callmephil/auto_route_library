@@ -8,7 +8,7 @@ import 'package:auto_route/src/router/controller/navigation_history/browser/hist
     show isSameHistoryUrl;
 import 'package:auto_route/src/router/controller/navigation_history/navigation_history.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' hide mergeSort;
 
 /// An implementation of [NavigationHistory]
 /// That's used for native platforms
@@ -42,6 +42,12 @@ class NavigationHistoryImpl extends NavigationHistory {
   // its page: the entry of a link whose page a guard has yet to let in holds
   // a page that is not open yet.
   final _wasOpen = Set<_HistoryEntry>.identity();
+
+  // For each entry whose page no stack has held yet, as that of a navigation
+  // a guard still decides, how many pages of the way to it stacks have
+  // held at most. When fewer are held again, a page on that way left, as
+  // the page a guard's no takes back, so the navigation can't land any more.
+  final _heldDepths = Map<_HistoryEntry, int>.identity();
 
   // The pages that share the entry of a page over them, as the pages a link
   // opened under its page, each with the id of the page whose entry it
@@ -153,6 +159,7 @@ class NavigationHistoryImpl extends NavigationHistory {
       (pageId) => controllerOfPage(pageId) == null && !_hasEntry(pageId),
     );
     if (_isNavigatingBack) return;
+    _orderAsWayBack(wayBack);
     final isLink = router.root.isShowingLink;
     final topId = top.topMatch?.id;
     if (topId != null) {
@@ -189,6 +196,37 @@ class NavigationHistoryImpl extends NavigationHistory {
     if (_entries.length > _maxEntries) {
       _entries.removeRange(0, _entries.length - _maxEntries);
     }
+  }
+
+  // Puts the entries of the pages on [wayBack] in its order, in the places
+  // those entries hold, as back() closes the pages in the order of the
+  // stacks. A page whose entry was made before the page under it went in,
+  // as one a guard let in after a push made meanwhile, would be skipped.
+  // The entries of other pages, as of a tab not shown, keep their places.
+  void _orderAsWayBack(List<UrlState> wayBack) {
+    final places = <LocalKey, int>{
+      for (final (place, page) in wayBack.indexed) ?page.topMatch?.id: place,
+    };
+    bool isOnWayBack(_HistoryEntry entry) => places.containsKey(entry.pageId);
+    final onWayBack = _entries.where(isOnWayBack).toList();
+    mergeSort(
+      onWayBack,
+      compare: (a, b) => places[a.pageId]!.compareTo(places[b.pageId]!),
+    );
+    final inOrder = onWayBack.iterator;
+    final ordered = [
+      for (final entry in _entries)
+        if (isOnWayBack(entry) && inOrder.moveNext())
+          inOrder.current
+        else
+          entry,
+    ];
+    _entries
+      ..clear()
+      ..addAll(ordered);
+    // A page let in after its entry was made, as after a guard's sign-in
+    // page, may also have reported its url anew: its two entries now meet.
+    _mergeRepeatedEntries();
   }
 
   // Hands the entry of each page that has left from under the entry of
@@ -245,13 +283,15 @@ class NavigationHistoryImpl extends NavigationHistory {
     _entries.removeWhere((entry) {
       if (_isOpen(entry)) {
         _markIfHeld(entry);
-        return false;
+      } else if (_wasOpen.contains(entry)) {
+        return true;
       }
-      return _wasOpen.contains(entry);
+      return !_wasOpen.contains(entry) && _isRefused(entry);
     });
-    _wasOpen.retainWhere(
-      (entry) => _entries.any((kept) => identical(kept, entry)),
-    );
+    bool isKept(_HistoryEntry entry) =>
+        _entries.any((kept) => identical(kept, entry));
+    _wasOpen.retainWhere(isKept);
+    _heldDepths.removeWhere((entry, _) => !isKept(entry));
     return last != null && !identical(_entries.lastOrNull, last);
   }
 
@@ -277,6 +317,37 @@ class NavigationHistoryImpl extends NavigationHistory {
       );
     }
     return true;
+  }
+
+  // Whether the navigation that [entry], whose page no stack has held yet,
+  // stands for can no longer land: a page on the way to it that a stack held
+  // has left, as the page a guard's no takes back: a Navigator's history
+  // holds only the pages it was given.
+  bool _isRefused(_HistoryEntry entry) {
+    final depth = _heldDepthOf(entry);
+    final most = _heldDepths[entry] ?? 0;
+    if (depth < most) return true;
+    _heldDepths[entry] = depth;
+    return false;
+  }
+
+  // How many pages of the way to [entry], from the root router down, stacks
+  // hold.
+  int _heldDepthOf(_HistoryEntry entry) {
+    var depth = 0;
+    RoutingController? controller = router;
+    for (final match in entry.route.flattened) {
+      if (controller == null ||
+          !controller.stackData.any((data) => data.route.id == match.id)) {
+        break;
+      }
+      depth++;
+      if (match.id == entry.pageId) break;
+      controller = controller.childControllers.lastWhereOrNull(
+        (child) => child.matchId == match.id,
+      );
+    }
+    return depth;
   }
 
   // Counts [entry] as once open when a stack holds its page. Not while the
