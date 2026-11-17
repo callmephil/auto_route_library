@@ -1,4 +1,6 @@
 ## Unreleased
+- **BEHAVIOR CHANGE**: `auto_route` requires Flutter 3.50.0 (it allowed 3.47 and later). The package is tested and
+  proven on 3.50.0 only, so an app on an older Flutter gets a pub error naming auto_route instead of untested code.
 - **FIX**, **BEHAVIOR CHANGE**: a guard's "no" inside a page that was not open no longer moves the user. A link,
   `navigatePath`, `navigate`, `pushPath` or `push` into such a page, whose nested router's guard rejects, takes the page
   back off: the stack, the url and the open dialogs are as before, the page's caller gets `null`, and a link's dialog
