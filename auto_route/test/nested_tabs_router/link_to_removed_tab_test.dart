@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -123,6 +124,14 @@ String _state(RootStackRouter router) {
   ].join(', ');
 }
 
+// The urls the walk below shows for [appHistory], the app's own history
+// off the web. On the web back() is the browser's back, which this
+// headless runner does not connect, so the walk takes no step:
+// test/web/link_to_removed_tab_web_test.dart walks the browser's back and
+// forward after a turned-down link, in Chrome.
+List<String> _walkOf(List<String> appHistory) =>
+    kIsWeb ? appHistory.take(1).toList() : appHistory;
+
 // Steps back until the app's own history can't; the urls it shows, the
 // current one first.
 Future<List<String>> _walkBack(
@@ -221,7 +230,10 @@ void main() {
             way == .link ? isEmpty : [RouteNotFoundFailure],
           );
           // The removed tab's entry left with its tab: back goes to Feed.
-          expect(await _walkBack(tester, router), ['/settings', '/feed']);
+          expect(
+            await _walkBack(tester, router),
+            _walkOf(['/settings', '/feed']),
+          );
         });
       }
     }
@@ -237,8 +249,18 @@ void main() {
       );
       await pumpRouterConfigApp(tester, router.config());
 
+      // On the web a link brings no pages below its own (the parser's
+      // includePrefixMatches is !kIsWeb): Home is the only page, so it stays,
+      // on its first tab, as the app opened at the removed tab of its first
+      // page does below.
       expect(tester.takeException(), isNull);
-      expect(_state(router), 'shown LandingRoute, root LandingRoute, url /');
+      expect(
+        _state(router),
+        kIsWeb
+            ? 'shown FeedTab, tab 0 FeedTab, tabs FeedTab SettingsTab, '
+                  'root HomeRoute, url /home/feed'
+            : 'shown LandingRoute, root LandingRoute, url /',
+      );
       expect(router.navigationHistory.length, 1);
     });
 
@@ -393,7 +415,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(_state(router), _onSettings);
       guard.answerYes();
-      expect(await _walkBack(tester, router), ['/settings', '/feed']);
+      expect(await _walkBack(tester, router), _walkOf(['/settings', '/feed']));
     });
   }
 

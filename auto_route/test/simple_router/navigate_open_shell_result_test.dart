@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -233,7 +234,14 @@ void main() {
     await tester.pumpAndSettle();
     final heard = ['$caller ${router.currentUrl}'];
 
-    router.back();
+    // Settings closes by back() off the web. On the web back() is the
+    // browser's back, which this headless runner does not connect, so
+    // Settings closes by the pop of the shell's router there.
+    if (kIsWeb) {
+      router.innerRouterOf<StackRouter>('AppShellRoute')!.pop();
+    } else {
+      router.back();
+    }
     await tester.pumpAndSettle();
     heard.add('$caller ${router.currentUrl}');
 
