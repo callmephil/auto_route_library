@@ -62,32 +62,18 @@ class AutoRouteInformationProvider extends RouteInformationProvider
     RouteInformation routeInformation, {
     RouteInformationReportingType type = .none,
   }) {
-    // On web DefaultRouteParser hands over the uri escaped for the engine.
-    // Compare and keep the app's own uri, and escape one that skipped it.
-    final appRouteInformation =
-        routeInformation is AutoRouteInformation &&
-            routeInformation.appUri != null
-        ? RouteInformation(
-            uri: routeInformation.appUri,
-            state: routeInformation.state,
-          )
-        : routeInformation;
     // neglectWhen gets the location the address bar shows, the same on every
-    // platform, not the string escaped once more for the web engine.
-    if (neglectIf?.call(appRouteInformation.uri.toString()) ?? false) {
+    // platform.
+    if (neglectIf?.call(routeInformation.uri.toString()) ?? false) {
       return;
     }
-    final reportedUri =
-        identical(appRouteInformation, routeInformation) && kIsWeb
-        ? escapeForWebEngine(routeInformation.uri)
-        : routeInformation.uri;
 
     // The routes saved for state restoration stay with the Router.
     final state = UrlState.platformState(routeInformation.state);
     var shouldReplace =
         type == .neglect ||
         (type == .none &&
-            _valueInEngine.uri == appRouteInformation.uri &&
+            _valueInEngine.uri == routeInformation.uri &&
             UrlState.platformState(_valueInEngine.state) == state);
 
     if (!shouldReplace && routeInformation is AutoRouteInformation) {
@@ -96,13 +82,13 @@ class AutoRouteInformationProvider extends RouteInformationProvider
     unawaited(SystemNavigator.selectMultiEntryHistory());
     unawaited(
       SystemNavigator.routeInformationUpdated(
-        uri: reportedUri,
+        uri: routeInformation.uri,
         state: state,
         replace: shouldReplace,
       ),
     );
-    _value = appRouteInformation;
-    _valueInEngine = appRouteInformation;
+    _value = routeInformation;
+    _valueInEngine = routeInformation;
   }
 
   @override

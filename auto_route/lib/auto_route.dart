@@ -14,7 +14,7 @@ export 'src/router/controller/navigation_history/navigation_history.dart';
 export 'src/router/controller/pageless_routes_observer.dart';
 export 'src/router/controller/router_scope.dart';
 export 'src/router/controller/routing_controller.dart';
-export 'src/router/parser/default_route_parser.dart' hide escapeForWebEngine;
+export 'src/router/parser/default_route_parser.dart';
 export 'src/router/provider/auto_route_information_provider.dart';
 export 'src/router/widgets/auto_leading_button.dart';
 export 'src/router/widgets/auto_page_view.dart';

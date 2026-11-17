@@ -437,6 +437,7 @@ import 'unmatched_deep_link_test.dart' as unmatched_deep_link;
 import 'unopened_tab_children_after_reevaluation_test.dart'
     as unopened_tab_children_after_reevaluation;
 import 'url_after_tab_switch_test.dart' as url_after_tab_switch;
+import 'url_encoded_once_test.dart' as url_encoded_once;
 import 'url_on_pop_test.dart' as url_on_pop;
 import 'url_on_push_in_shell_test.dart' as url_on_push_in_shell;
 import 'url_path_separator_test.dart' as url_path_separator;
@@ -808,6 +809,7 @@ void main() {
   unmatched_deep_link.main();
   unopened_tab_children_after_reevaluation.main();
   url_after_tab_switch.main();
+  url_encoded_once.main();
   url_on_pop.main();
   url_on_push_in_shell.main();
   url_path_separator.main();
