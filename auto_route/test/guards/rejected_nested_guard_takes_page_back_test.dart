@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -252,7 +253,9 @@ void main() {
   // brings below its own, as off the web, Home is under it and shows.
   // Without them, a link handed over while the launch page is all the app
   // shows, as iOS hands over the link of a cold start, takes that page's
-  // place: the app is started at the link the same way.
+  // place: the app is started at the link the same way. On the web a
+  // browser opens the app at its url, so no later link takes the launch
+  // page's place: Mail opens over Home, and the no takes it back.
   testWidgets("A link that takes the launch page's place, rejected", (
     tester,
   ) async {
@@ -266,6 +269,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+    if (kIsWeb) {
+      expect(_names(router), ['HomeRoute']);
+      expect(find.text('HomeRoute'), findsOneWidget);
+      expect(router.currentUrl, '/');
+      return;
+    }
     expect(_names(router), ['MailRoute']);
     expect(find.text('Inbox'), findsOneWidget);
     expect(router.currentUrl, '/mail');

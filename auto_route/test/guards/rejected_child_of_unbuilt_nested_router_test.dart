@@ -188,8 +188,12 @@ void main() {
     expect(router.currentUrl, '/tabs/mail');
   });
 
-  // As on the web, where a link brings only its own page, so the nested
-  // router is named the rejected page alone.
+  // A link that brings only its own page names the nested router the
+  // rejected page alone. Handed over while the launch page is all the app
+  // shows, it takes that page's place, so Mail is the only page and stays,
+  // on its first page. On the web, where links bring only their own page,
+  // a browser opens the app at its url, so no later link takes the launch
+  // page's place: Mail opens over Home, and the no takes it back.
   testWidgets('A link that brings no page below its own shows the first '
       'page of the shell when its page is rejected', (tester) async {
     final router = buildRouter();
@@ -201,6 +205,12 @@ void main() {
     await tester.binding.handlePushRoute('/mail/13');
     await tester.pumpAndSettle();
 
+    if (kIsWeb) {
+      expect(stackNames(router), ['HomeRoute']);
+      expect(find.text('HomeRoute'), findsOneWidget);
+      expect(router.currentUrl, '/');
+      return;
+    }
     expect(find.text('InboxRoute'), findsOneWidget);
     expect(router.currentUrl, '/mail');
   });
