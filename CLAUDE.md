@@ -61,7 +61,7 @@ Exceptions, Phil's. Since 2026-11-06, `prefer-boolean-prefixes` and `prefer-corr
    And on web, in headless Chrome through ChromeDriver (see Devices). Start ChromeDriver, run the tests, then stop it:
 
    ```bash
-   ~/.cache/chromedriver/156.0.8078.80/chromedriver-mac-arm64/chromedriver --port=4444 &
+   ~/.cache/chromedriver/157.0.8103.78/chromedriver-mac-arm64/chromedriver --port=4444 &
    ```
 
    ```bash
@@ -93,7 +93,7 @@ A `flutter_canary_*` test pins a Flutter bug or fix that auto_route depends on. 
   ```
 
 - iOS: use the simulator that is already booted (`xcrun simctl list devices booted`) and leave it running. Never create one.
-- Web: ChromeDriver 156.0.8078.80 for mac-arm64, from Google's Chrome for Testing, is at `~/.cache/chromedriver/156.0.8078.80/chromedriver-mac-arm64/chromedriver`. Its version must match the installed Chrome's; when Chrome updates itself, the matching ChromeDriver is a new download, which needs Phil's OK. Before starting it, check nothing else uses port 4444: `pgrep -f "chromedriver --port=4444"` prints nothing. Stop it when done.
+- Web: ChromeDriver 157.0.8103.78 for mac-arm64, from Google's Chrome for Testing, is at `~/.cache/chromedriver/157.0.8103.78/chromedriver-mac-arm64/chromedriver`. Its version must match the installed Chrome's; when Chrome updates itself, the matching ChromeDriver is a new download, which needs Phil's OK. Before starting it, check nothing else uses port 4444: `pgrep -f "chromedriver --port=4444"` prints nothing. Stop it when done.
 
 ## Traps
 - Run `integration_test/all_tests.dart`, not the folder. On macOS the second file fails to relaunch the app, and `flutter drive` on web takes one target.
