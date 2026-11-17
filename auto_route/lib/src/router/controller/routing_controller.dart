@@ -2171,14 +2171,19 @@ class TabsRouter extends RoutingController {
 
       if (pageToUpdateIndex != -1) {
         if (!isReevaluating && _activeIndex != pageToUpdateIndex) {
-          _changeTab(
-            pageToUpdateIndex,
-            route: mayUpdateRoute,
-            onFailure: onFailure,
-            keepsUnnamedPages: keepsUnnamedPages,
-            link: ofLink,
-            onLetIn: onLetIn,
-          );
+          // The change waits on the tab's guards when it has any; nothing
+          // here waits for it, as in setActiveIndex.
+          if (_changeTab(
+                pageToUpdateIndex,
+                route: mayUpdateRoute,
+                onFailure: onFailure,
+                keepsUnnamedPages: keepsUnnamedPages,
+                link: ofLink,
+                onLetIn: onLetIn,
+              )
+              case final Future<_TabChange> change) {
+            unawaited(change);
+          }
         } else {
           // A navigation to the tab on screen is the latest choice: it calls
           // off a change to another tab still waiting for its guards. A
