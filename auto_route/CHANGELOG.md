@@ -1,6 +1,9 @@
 ## Unreleased
 - **BEHAVIOR CHANGE**: `auto_route` requires Flutter 3.50.0 (it allowed 3.47 and later). The package is tested and
   proven on 3.50.0 only, so an app on an older Flutter gets a pub error naming auto_route instead of untested code.
+- **FIX**: on the web, the address bar shows each url encoded once on Flutter 3.50.0, such as `/caf%C3%A9` for
+  `/café`, not `/caf%25C3%25A9`, so a refresh or a shared link opens the right page. Flutter 3.50.0's web engine no
+  longer decodes the url it writes, so auto_route no longer escapes it a second time.
 - **FIX**, **BEHAVIOR CHANGE**: a guard's "no" inside a page that was not open no longer moves the user. A link,
   `navigatePath`, `navigate`, `pushPath` or `push` into such a page, whose nested router's guard rejects, takes the page
   back off: the stack, the url and the open dialogs are as before, the page's caller gets `null`, and a link's dialog
