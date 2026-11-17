@@ -78,9 +78,13 @@ void main() {
           await pumpRouterApp(tester, router);
 
           // setActiveIndex returns nothing, so the guard's error is uncaught.
+          // It is called here, not from a tap: since Flutter 3.50.0 the test
+          // binding runs a tap's handler in the test's own zone, which reports
+          // an uncaught error as a failed test, so a zone around the tap no
+          // longer sees it. An app's taps never run in a test zone.
           final errors = <Object>[];
           await runZonedGuarded(() async {
-            await tester.tap(find.text('Open tab B').hitTestable());
+            tester.element(find.text('TabA')).tabsRouter.setActiveIndex(1);
             await tester.pumpAndSettle();
           }, (error, _) => errors.add(error));
           expect(errors, [isStateError]);
