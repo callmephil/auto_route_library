@@ -149,11 +149,12 @@ void main() {
   // leaves them open"), the link into the shell holds A open under the
   // shell until the guard answers, and a refused link changes nothing, so
   // the user is on A again; these cases expected H when the link closed A
-  // at once. The link into the tab's router still closes A at once and
-  // leaves Tabs on its first tab after a no.
+  // at once. Since callmephil/auto_route_library#6, the link into the tab's
+  // router does the same: it expected H, and Tabs on its first tab after a
+  // no.
   for (final (host, link, refusedLeaves, walkAfterNo) in [
     ('shell', '/shell/gx', ['H', 'A'], ['/a', '/']),
-    ("tab's router", '/tabs/one/gx', ['H'], ['/tabs/one', '/']),
+    ("tab's router", '/tabs/one/gx', ['H', 'A'], ['/a', '/']),
   ]) {
     group('A link to $link on H, A whose guard waits in the $host,', () {
       for (final MapEntry(key: meanwhile, value: wait) in waits.entries) {

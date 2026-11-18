@@ -104,6 +104,15 @@ class RouteData<R> {
   /// These are consumed by the sub-router once it's created
   List<RouteMatch<Object?>> get pendingChildren => _pendingChildren;
 
+  /// Tells the router that this page builds its nested router only once
+  /// [loading] ends, as a [DeferredWidget] does while its library loads.
+  ///
+  /// A navigation that put this page on with pages for that router waits as
+  /// long for its guards to let it in, so a "no" there takes the page back.
+  @internal
+  void holdNestedNavigationUntil(Future<void> loading) =>
+      _NestedLetIn.holdUntil(this, loading);
+
   /// Looks up and returns the scoped instance
   ///
   /// throws an error if it does not find it

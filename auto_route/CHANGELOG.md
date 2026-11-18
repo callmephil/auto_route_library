@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: a guard's "no" inside a new page that holds an `AutoTabsRouter`, or that builds its
+  nested router in a `DeferredWidget`, takes that page back, as for a page with a plain nested `AutoRouter`. This
+  holds for the tab's own guard and for a guard in the tab's nested router, after `navigate`, `navigatePath` or a link:
+  the stack, the url and the open dialogs are as before, and `onFailure` hears the rejection. Before, the page stayed
+  on its first tab or first page, a link closed the pages it would close once let in, and the dialogs closed.
 - **FIX**: after a link, `navigate` or `navigatePath` into the nested router or tabs of an open page is turned down,
   as by a guard's "no" there or a tab the app removed, the route data of that page keeps its route, query, fragment
   and children. Before, `router.current.queryParams` and the page's `route.children` named the refused navigation,

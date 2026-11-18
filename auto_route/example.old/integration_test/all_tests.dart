@@ -323,6 +323,8 @@ import 'rejected_nested_guard_keeps_pages_closing_test.dart'
     as rejected_nested_guard_keeps_pages_closing;
 import 'rejected_nested_guard_takes_page_back_test.dart'
     as rejected_nested_guard_takes_page_back;
+import 'rejected_nested_guard_takes_tabs_or_deferred_page_back_test.dart'
+    as rejected_nested_guard_takes_tabs_or_deferred_page_back;
 import 'rejected_nested_navigation_keeps_route_data_test.dart'
     as rejected_nested_navigation_keeps_route_data;
 import 'relative_path_colon_test.dart' as relative_path_colon;
@@ -741,6 +743,7 @@ void main() {
   rejected_link_url_running.main();
   rejected_nested_guard_keeps_pages_closing.main();
   rejected_nested_guard_takes_page_back.main();
+  rejected_nested_guard_takes_tabs_or_deferred_page_back.main();
   rejected_nested_navigation_keeps_route_data.main();
   relative_path_colon.main();
   reload_guard.main();

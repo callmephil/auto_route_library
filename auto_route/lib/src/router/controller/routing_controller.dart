@@ -1984,6 +1984,15 @@ class TabsRouter extends RoutingController {
             _listedTabOf(routesToPush, preMatchedRoute) == -1
         ? preMatchedRoute
         : null;
+    // The navigation that put this router's page on, with the tab it named,
+    // waits for the guards of that tab, and of the tab's nested router, to
+    // let it in, as it waits for those of a nested stack router, see
+    // [_NestedLetIn]. A route that is not one of the tabs is turned down in
+    // [_turnDownPendingRoute].
+    final letIn = notListed == null && pendingChildren.isNotEmpty
+        ? _NestedLetIn.claim(_routeData)
+        : null;
+    var isRejectedAtOnce = false;
     if (preMatchedRoute != null) {
       final correspondingRouteIndex = _listedTabOf(
         routesToPush,
@@ -1996,7 +2005,13 @@ class TabsRouter extends RoutingController {
       final checked =
           correspondingRouteIndex <= 0 || !_routeData.hasPendingChildren
           ? null
-          : _checkTabGuards(preMatchedRoute, change: change);
+          : _checkTabGuards(
+              preMatchedRoute,
+              change: change,
+              onFailure: letIn?.onFailure,
+            );
+      isRejectedAtOnce =
+          checked is ResolverResult && !checked.continueNavigation;
       if (checked is Future<ResolverResult>) {
         guardedIndex = correspondingRouteIndex;
         guarding = checked;
@@ -2032,17 +2047,36 @@ class TabsRouter extends RoutingController {
             markUrlStateForReplace();
           }
           // The tabs may have changed meanwhile: replaceAll moves the tab.
-          return _endTabChange(
+          final outcome = _endTabChange(
             change,
             _pendingTab ?? index,
             match,
             result,
             update: true,
           );
+          switch (outcome) {
+            case .done:
+              _letInOrHandOn(letIn);
+            case .rejected:
+              letIn?.turnDown();
+            // A later choice of a tab reached the page: it stays.
+            case .replaced:
+              letIn?.turnDown(canTakeBack: false);
+          }
+          return outcome;
         },
-        onError: (Object error, StackTrace stackTrace) =>
-            _failTabChange(change, error, stackTrace),
+        onError: (Object error, StackTrace stackTrace) {
+          letIn?.turnDown(canTakeBack: false);
+          return _failTabChange(change, error, stackTrace);
+        },
       );
+    } else if (isRejectedAtOnce) {
+      // Not while the tabs build: the page goes back off after the frame.
+      SchedulerBinding.instance
+        ..addPostFrameCallback((_) => letIn?.turnDown())
+        ..ensureVisualUpdate();
+    } else {
+      _letInOrHandOn(letIn);
     }
     // A host opened by a url that names no tab, such as '/tabs' when no tab is
     // initial, shows its first tab. The url names that tab too, in place of
@@ -2098,6 +2132,15 @@ class TabsRouter extends RoutingController {
         waiting.turnDown(isNotListed: true, error: error);
       })
       ..ensureVisualUpdate();
+  }
+
+  // The tab named for these tabs is on: [letIn] waits for the nested router
+  // of the active tab instead, when that tab went on with pages of its own
+  // for a router not built yet; otherwise it is let in, after the frame, as
+  // this may run while widgets build. See [NestedStackRouter._letInOrHandOn].
+  void _letInOrHandOn(_NestedLetIn? letIn) {
+    if (letIn == null) return;
+    letIn.letInOrWaitOn(this, _activePage?.routeData);
   }
 
   // When a widget above AutoTabsRouter rebuilds it from scratch, the new
@@ -7026,16 +7069,7 @@ class NestedStackRouter extends StackRouter {
   // in, after the frame, as this may run while widgets build.
   void _letInOrHandOn(_NestedLetIn? letIn) {
     if (letIn == null) return;
-    final inner = _NestedLetIn.waitingOn(_pages.lastOrNull?.routeData);
-    if (inner != null) {
-      letIn.handOnTo(inner);
-    } else if (_pages.lastOrNull?.routeData case final last?
-        when last.hasPendingChildren &&
-            _innerControllerOfMatch(last.matchId) == null) {
-      letIn.waitOn(last);
-    } else {
-      SchedulerBinding.instance.addPostFrameCallback((_) => letIn.letIn());
-    }
+    letIn.letInOrWaitOn(this, _pages.lastOrNull?.routeData);
   }
 
   // The first [count] pages of this router went on together, after the url
@@ -7250,13 +7284,25 @@ class _NestedLetIn {
 
   // Waits on the nested router of the page of [data]. A page whose nested
   // router doesn't claim it by the end of the frame that builds the page,
-  // such as one that holds tabs or no router, lets the navigation in then,
-  // when there is something to let in.
+  // such as one that holds no router, lets the navigation in then, when
+  // there is something to let in; a page that loads a library first, by the
+  // end of the frame after the load.
   void waitOn(RouteData<Object?> data) {
     _ofPage[data] = this;
     final binding = SchedulerBinding.instance;
     void letInUnclaimed(Duration _) {
       if (!identical(_ofPage[data], this)) return;
+      // A page that loads a library before it builds its router, as a
+      // DeferredWidget does, builds it in the frame after the load.
+      if (_loadingOf[data] case final loading?) {
+        void afterLoad() => binding
+          ..addPostFrameCallback(letInUnclaimed)
+          ..ensureVisualUpdate();
+        unawaited(
+          loading.then((_) => afterLoad(), onError: (_) => afterLoad()),
+        );
+        return;
+      }
       // With nothing to let in, as for a page a batch put under its last
       // one, which may build only frames later, it waits for its router.
       // The call that waits for it to be taken up goes on, as for tabs that
@@ -7285,6 +7331,39 @@ class _NestedLetIn {
       case .idle || .transientCallbacks || .postFrameCallbacks:
         binding.addPostFrameCallback(letInUnclaimed);
     }
+  }
+
+  // The pages named for [router] are on, the page of [last] on top or
+  // active: this waits for the nested router of that page instead, when it
+  // went on with pages of its own for a router not built yet; otherwise it
+  // is let in, after the frame, as this may run while widgets build.
+  void letInOrWaitOn(RoutingController router, RouteData<Object?>? last) {
+    final inner = waitingOn(last);
+    if (inner != null) {
+      handOnTo(inner);
+    } else if (last != null &&
+        last.hasPendingChildren &&
+        router._innerControllerOfMatch(last.matchId) == null) {
+      waitOn(last);
+    } else {
+      SchedulerBinding.instance
+        ..addPostFrameCallback((_) => letIn())
+        ..ensureVisualUpdate();
+    }
+  }
+
+  // The library a page loads before it builds its nested router, by page,
+  // while it loads, see [RouteData.holdNestedNavigationUntil].
+  static final _loadingOf = Expando<Future<void>>();
+
+  // The page of [data] builds its nested router only once [loading] ends,
+  // as a DeferredWidget does: a navigation waiting on that router waits as
+  // long.
+  static void holdUntil(RouteData<Object?> data, Future<void> loading) {
+    _loadingOf[data] = loading;
+    loading.whenComplete(() {
+      if (identical(_loadingOf[data], loading)) _loadingOf[data] = null;
+    }).ignore();
   }
 
   // Adds [step] to what is done once the navigation is let in.

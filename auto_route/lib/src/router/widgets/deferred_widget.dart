@@ -76,8 +76,15 @@ class _DeferredWidgetState extends State<DeferredWidget> {
     if (DeferredWidget._loadedModules.contains(widget.libraryLoader)) {
       _createLoadedChild();
     } else {
+      final loading = DeferredWidget._preload(widget.libraryLoader);
+      // A navigation that waits for the nested router this page builds once
+      // loaded waits for the load too.
+      context
+          .getInheritedWidgetOfExactType<RouteDataScope>()
+          ?.routeData
+          .holdNestedNavigationUntil(loading);
       unawaited(
-        DeferredWidget._preload(widget.libraryLoader).then(
+        loading.then(
           (_) {
             // The page can leave the tree before its library loads.
             if (mounted) setState(_createLoadedChild);
