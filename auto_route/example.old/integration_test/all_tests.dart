@@ -183,6 +183,8 @@ import 'navigate_to_unlisted_page_in_unopened_tab_test.dart'
 import 'navigate_to_unshown_tab_keeps_children_test.dart'
     as navigate_to_unshown_tab_keeps_children;
 import 'navigation_closes_held_page_test.dart' as navigation_closes_held_page;
+import 'navigation_into_tab_waits_for_nested_guards_test.dart'
+    as navigation_into_tab_waits_for_nested_guards;
 import 'navigations_in_one_turn_test.dart' as navigations_in_one_turn;
 import 'nested_absolute_redirect_test.dart' as nested_absolute_redirect;
 import 'nested_back_test.dart' as nested_back;
@@ -625,6 +627,7 @@ void main() {
   navigate_to_unlisted_page_in_unopened_tab.main();
   navigate_to_unshown_tab_keeps_children.main();
   navigation_closes_held_page.main();
+  navigation_into_tab_waits_for_nested_guards.main();
   navigations_in_one_turn.main();
   nested_absolute_redirect.main();
   nested_back.main();

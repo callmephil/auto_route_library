@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: `navigate` and `navigatePath` into the nested router of a tab answer as the page they
+  reach there does, as into the nested router of a stack page: after a guard's "no" there, once it has answered; after a
+  "yes", once that page closes. Before, they answered as the tab changed, while the guard still decided. Code after an
+  `await` of such a call now runs only then; call it without `await` to go on at once. A tab whose own guard makes the
+  change wait still answers once the change has started.
 - **FIX**, **BEHAVIOR CHANGE**: off the web, while the guard of a link decides, `currentUrl`, `urlState` and the url
   reported to the platform name the page on screen, not the link's page. The link's url comes in with its page, and
   after a "no" it never changed. Before, they named the link from the start, and went back after a "no".

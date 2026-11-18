@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -40,7 +42,9 @@ void main() {
   Future<void> openDetails(WidgetTester tester) async {
     await pumpRouterApp(tester, router, initialLink: '/shop?search=shoes');
     expect(router.urlState.url, '/shop?search=shoes');
-    await router.navigatePath('/shop/details?id=7');
+    // Answers once ShopDetails closes, as a navigation into a tab's stack
+    // does (callmephil/auto_route_library#7).
+    unawaited(router.navigatePath('/shop/details?id=7'));
     await tester.pumpAndSettle();
     expect(router.topRoute.name, 'ShopDetails');
     expect(router.urlState.url, '/shop/details?id=7');
