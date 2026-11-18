@@ -5715,9 +5715,14 @@ abstract class StackRouter extends RoutingController {
   // guard of a nested router turned that navigation down: the stack and the
   // url are as before it, in the same history entry, and their callers get
   // null. Returns false, and takes nothing, when none of them is on the
-  // stack any longer, or when no page would be left.
+  // stack any longer, or when no page would be left. A page is known by its
+  // match id: a later navigation to it that its guards turned down too may
+  // have put it on again, as a new page with the same match id.
   bool _takeBack(List<AutoRoutePage<Object?>> pages) {
-    final onStack = pages.where(_pages.contains).toList();
+    final ids = {for (final page in pages) page.routeData.matchId};
+    final onStack = _pages
+        .where((page) => ids.contains(page.routeData.matchId))
+        .toList();
     if (_isDisposed || onStack.isEmpty || onStack.length == _pages.length) {
       return false;
     }
@@ -6300,6 +6305,37 @@ abstract class StackRouter extends RoutingController {
     return _navigateAll(routes, onFailure: onFailure);
   }
 
+  // The navigations into this router that its guards have not let in or
+  // turned down yet, and how many they have let in, see
+  // [NestedStackRouter._openPendingRoutes]: a page put on with pages for
+  // this router, which its guards turn down, stays when a later navigation
+  // into this router was let in meanwhile, and waits for one still deciding.
+  int _navigationsDeciding = 0;
+  int _navigationsLetIn = 0;
+  Completer<void>? _allNavigationsDecided;
+
+  // Completes once no navigation into this router is deciding.
+  Future<void> _untilNavigationsDecided() {
+    if (_navigationsDeciding == 0) return SynchronousFuture(null);
+    return (_allNavigationsDecided ??= Completer<void>()).future;
+  }
+
+  // Counts a navigation into this router as deciding, and answers what ends
+  // it: let in or not. Only the first call of what it answers counts.
+  void Function({required bool isLetIn}) _startDecidingNavigation() {
+    _navigationsDeciding++;
+    var isDecided = false;
+    return ({required isLetIn}) {
+      if (isDecided) return;
+      isDecided = true;
+      if (isLetIn) _navigationsLetIn++;
+      if (--_navigationsDeciding > 0) return;
+      final decided = _allNavigationsDecided;
+      _allNavigationsDecided = null;
+      decided?.complete();
+    };
+  }
+
   /// [navigateAll] for a step back the app's own history takes off the web:
   /// [onLetIn] runs once the guards of [routes], and those of the nested
   /// routers and tabs they reach, let the navigation in. That may be after
@@ -6362,6 +6398,8 @@ abstract class StackRouter extends RoutingController {
     // Here alone, so a navigation reports once however it reaches this router.
     if (managedByWidget) _onNavigate(routes);
     Future<T?>? popped;
+    // A navigation that names no page here asks no guard here.
+    if (routes.isEmpty && !isReevaluating) _navigationsLetIn++;
     if (routes.isNotEmpty) {
       // What the navigation does once the guards of this router, and of the
       // nested router of the page it reaches, have let it in: [onLetIn], what
@@ -6380,6 +6418,9 @@ abstract class StackRouter extends RoutingController {
       // again, by page, see [_putBackRouteDataIfTurnedDown].
       var dataBefore = const <LocalKey, RouteData<Object?>>{};
       if (!managedByWidget) {
+        // Ends the count of this navigation as deciding: let in, turned
+        // down, or once its page closes at the latest.
+        final decide = isReevaluating ? null : _startDecidingNavigation();
         dataBefore = {
           for (final page in _pages) page.routeData.matchId: page.routeData,
         };
@@ -6419,6 +6460,7 @@ abstract class StackRouter extends RoutingController {
           await Future.any([pushed.future, popped]);
         }
         if (!isReevaluating && !isLastRouteAdded) {
+          decide?.call(isLetIn: false);
           // A guard rejected the routes, or a later link took over: the
           // nested router of a page they reach again keeps its children.
           return await popped;
@@ -6444,7 +6486,14 @@ abstract class StackRouter extends RoutingController {
               : _pages.lastWhereOrNull(
                   (page) => page.routeData.matchId == mayUpdateRoute.id,
                 );
+          popped
+              .then(
+                (_) => decide?.call(isLetIn: false),
+                onError: (Object _) => decide?.call(isLetIn: false),
+              )
+              .ignore();
           lettingIn = () {
+            decide?.call(isLetIn: true);
             takeOff?.call();
             _closePagelessRoutesOverTop(link: ofLink, over: reached);
             onLetIn?.call();
@@ -7117,7 +7166,7 @@ class NestedStackRouter extends StackRouter {
       );
     }
     var isLastPageOn = false;
-    final dataBefore = _routeData;
+    final letInBefore = _navigationsLetIn;
     await _pushAllGuarded(
       routes,
       returnLastRouteCompleter: false,
@@ -7139,11 +7188,14 @@ class NestedStackRouter extends StackRouter {
       return;
     }
     if (_isDisposed) return;
-    // A later navigation that reached this router's page, or put a page of
-    // its own here, keeps the page.
+    // A later navigation into this router decides first: one let in, as
+    // one that put a page of its own here, keeps the page; one turned down
+    // keeps nothing, as when two equal links are both refused.
+    await _untilNavigationsDecided();
+    if (_isDisposed) return;
     final ownIds = {for (final route in routes) route.id};
     final isReachedSince =
-        !identical(_routeData, dataBefore) ||
+        _navigationsLetIn != letInBefore ||
         _pages.any((page) => !ownIds.contains(page.routeData.matchId));
     if (letIn?.turnDown(canTakeBack: !isReachedSince) ?? false) return;
     // The pages kept out are the ones this router opens with, as when its

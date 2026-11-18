@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**: two links that bring only their own page (on the web by default, and off the web with
+  `includePrefixMatches: false`) into a page that is not open, whose nested guard is slow and turns both down, leave
+  the user where they were. Before, the page stayed open on its first nested page, at its own url.
 - **FIX**, **BEHAVIOR CHANGE**: a guard's "no" inside a new page that holds an `AutoTabsRouter`, or that builds its
   nested router in a `DeferredWidget`, takes that page back, as for a page with a plain nested `AutoRouter`. This
   holds for the tab's own guard and for a guard in the tab's nested router, after `navigate`, `navigatePath` or a link:

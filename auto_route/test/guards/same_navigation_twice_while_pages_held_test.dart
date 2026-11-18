@@ -121,11 +121,8 @@ void main() {
         expect(tester.takeException(), isNull);
         final isLinkOnWeb = way == .link && kIsWeb;
         if (answers == .bothNo) {
-          // Bug, on the web only here: two links that bring no pages below
-          // their own, both refused, leave Mail on, on its inbox, at /mail.
-          // dev's library does the same; off the web it shows with
-          // includePrefixMatches: false.
-          if (isLinkOnWeb) return;
+          // On the web too, where the links bring no pages below their own
+          // (callmephil/auto_route_library#11).
           expect(_names(router), ['HomeRoute', 'ARoute']);
           expect(router.currentUrl, '/a');
           expect(gotA, #waiting);
