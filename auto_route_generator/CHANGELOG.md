@@ -1,3 +1,8 @@
+## Unreleased
+- **FIX**: a router for pages that import Flutter's built-in `package:flutter/material.dart` or `cupertino.dart`
+  imports `package:flutter/widgets.dart` instead, so apps on Flutter 3.50.0, which deprecates those libraries, get
+  no deprecation warning from generated code. A page on `material_ui` still gets `material_ui` (#2345).
+
 ## 11.6.0
 - **CHORE**: depends on auto_route 12.6.0, the version its tests run against.
 - **FIX**: a `Point` parameter, such as `List<Point<int>>`, is imported from `dart:math`, which declares it, no longer
