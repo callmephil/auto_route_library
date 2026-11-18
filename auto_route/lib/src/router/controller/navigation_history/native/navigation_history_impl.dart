@@ -520,6 +520,13 @@ class NavigationHistoryImpl extends NavigationHistory {
       final backCount = ++_backCount;
       _backTargetUrl = last.url;
       _removePagesAboveWayTo(last);
+      // The pages above are gone and the page of the entry shows: it is open,
+      // so no guard is asked, as Navigator.pop, Android's back and iOS's
+      // popViewController ask no check of the page that shows again.
+      if (_isShownNow(last)) {
+        _stopNavigatingBack();
+        return;
+      }
       // Whether the guards on the way let the step in before the navigation
       // completed.
       var isLetIn = false;
@@ -569,6 +576,12 @@ class NavigationHistoryImpl extends NavigationHistory {
               entry.url == _backTargetUrl &&
               controllerOfPage(entry.pageId) != null,
         );
+  }
+
+  // Whether the stacks show the page of [entry], at its url, right now.
+  bool _isShownNow(_HistoryEntry entry) {
+    final shown = UrlState.fromSegments(router.currentSegments);
+    return shown.url == entry.url && shown.topMatch?.id == entry.pageId;
   }
 
   // Whether the page of [entry] is the page shown, at its url.

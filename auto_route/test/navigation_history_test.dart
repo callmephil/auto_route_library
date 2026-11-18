@@ -400,27 +400,22 @@ void main() {
       expect(() => history.length, returnsNormally);
     });
 
-    test('Should prevent race condition - rapid back calls', () async {
+    test('Two back calls in one turn take two steps', () async {
       await router.push(const FirstRoute());
       await router.push(const SecondRoute());
       await router.push(const ThirdRoute());
 
-      final lengthBefore = history.length;
-      expect(lengthBefore, 3);
+      expect(history.length, 3);
 
-      // Call back twice rapidly without waiting
-      history.back();
-
-      // Second back should be blocked because canNavigateBack is false during
-      // navigation
-      final canNavigateDuringBack = history.canNavigateBack;
-      history.back(); // This should be blocked
+      // The page back() goes to is open, so the step is done as the call
+      // returns, as two calls of Navigator.pop in one turn close two routes.
+      for (var step = 0; step < 2; step++) {
+        history.back();
+      }
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      // Should only go back once, not twice
-      expect(history.length, 2);
-      expect(canNavigateDuringBack, false); // Was blocked during navigation
+      expect(history.length, 1);
     }, skip: _kWebBackMovesBrowser);
 
     test(
