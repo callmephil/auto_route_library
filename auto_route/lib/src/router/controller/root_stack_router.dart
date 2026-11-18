@@ -29,6 +29,22 @@ abstract class RootStackRouter extends StackRouter {
   // The count of the link whose navigation is starting, while it starts.
   int? _startingLink;
 
+  // While the link the app launched at opens, the names of the routes whose
+  // guards were asked, redirect targets included, and whether a guard
+  // reported a redirect loop; null otherwise. The first page a launch the
+  // guards turned down opens asks its guards only when this launch has not
+  // asked them, see [StackRouter._openInitialRoutesOfEmptiedRoot].
+  _LaunchAsks? _launchAsks;
+
+  // Starts the record of [_launchAsks] for the launch link opening now.
+  _LaunchAsks _startLaunchAsks() => _launchAsks = _LaunchAsks();
+
+  // Ends [asks], the record of a launch, unless a later launch started its
+  // own.
+  void _endLaunchAsks(_LaunchAsks asks) {
+    if (identical(_launchAsks, asks)) _launchAsks = null;
+  }
+
   // Whether the link whose navigation is starting is an entry of the
   // browser's own history, as its back and forward buttons open: the user's
   // own step, which the browser has already taken.
@@ -362,4 +378,15 @@ class _RootRouteMatcher extends RouteMatcher {
   // replaces it.
   // ignore: avoid-suspicious-super-overrides
   RouteCollection get collection => _router.routeCollection;
+}
+
+// What the guards were asked while the link the app launched at opened, see
+// [RootStackRouter._launchAsks].
+class _LaunchAsks {
+  // The names of the routes whose guards were asked.
+  final routeNames = <String>{};
+
+  // Whether a guard reported a redirect loop, which already says why no
+  // page is in.
+  bool hasReportedLoop = false;
 }

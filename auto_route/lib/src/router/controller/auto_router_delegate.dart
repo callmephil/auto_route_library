@@ -205,29 +205,66 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   // page a link brings below its own, or '/' with none; a later link reports
   // its own url.
   Future<void> _openLaunchLink(DeepLink link, {required int handover}) async {
-    var isAccepted = false;
-    final opening = _handleDeepLink(
-      link,
-      handover: handover,
-      onAccepted: () => isAccepted = true,
+    final root = controller.root;
+    final asks = root._startLaunchAsks();
+    try {
+      var isAccepted = false;
+      final opening = _handleDeepLink(
+        link,
+        handover: handover,
+        onAccepted: () => isAccepted = true,
+      );
+      final count = root._linkCount;
+      await opening;
+      if (!isAccepted &&
+          !_isDisposed &&
+          controller.hasEntries &&
+          count == root._linkCount) {
+        return _reportTurnedDownLink(link);
+      }
+      // No page came in and no later link took over: the first page of the
+      // app shows rather than an empty screen, see [_reportRejectedLaunch].
+      if (!isAccepted &&
+          !_isDisposed &&
+          !controller.hasEntries &&
+          count == root._linkCount) {
+        await root._openInitialRoutesOfEmptiedRoot(asks);
+        if (!_isDisposed &&
+            !controller.hasEntries &&
+            count == root._linkCount &&
+            !asks.hasReportedLoop) {
+          _reportNoPageAtLaunch();
+        }
+      }
+      _reportRejectedLaunch();
+    } finally {
+      root._endLaunchAsks(asks);
+    }
+  }
+
+  // The guards turned down the link the app launched at and its first page
+  // too, and no page is left to show. Flutter's Navigator refuses an empty
+  // list of pages the same way, with an error in place of a blank screen.
+  void _reportNoPageAtLaunch() {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: FlutterError.fromParts([
+          ErrorSummary('The app launched with no page to show.'),
+          ErrorDescription(
+            'The guards turned down the link the app launched at, and the '
+            'first page of the app, the route marked initial or at /, too. '
+            'No page of the app is below them, so the screen is empty.',
+          ),
+          ErrorHint(
+            'A guard that turns down the first page of the app should '
+            'redirect to a page the user may see, e.g. call '
+            'resolver.redirectUntil(LoginRoute()) in place of '
+            'resolver.next(false).',
+          ),
+        ]),
+        library: 'auto_route',
+      ),
     );
-    final count = controller.root._linkCount;
-    await opening;
-    if (!isAccepted &&
-        !_isDisposed &&
-        controller.hasEntries &&
-        count == controller.root._linkCount) {
-      return _reportTurnedDownLink(link);
-    }
-    // No page came in and no later link took over: the first page of the app
-    // shows rather than an empty screen, see [_reportRejectedLaunch].
-    if (!isAccepted &&
-        !_isDisposed &&
-        !controller.hasEntries &&
-        count == controller.root._linkCount) {
-      await controller.root._openInitialRoutesOfEmptiedRoot();
-    }
-    _reportRejectedLaunch();
   }
 
   // Whether a link handed over after the link numbered [handover] started

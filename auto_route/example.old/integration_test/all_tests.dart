@@ -296,6 +296,8 @@ import 'reject_go_back_link_keeps_stack_test.dart'
 import 'rejected_child_of_unbuilt_nested_router_test.dart'
     as rejected_child_of_unbuilt_nested_router;
 import 'rejected_initial_link_url_test.dart' as rejected_initial_link_url;
+import 'rejected_launch_guarded_first_page_test.dart'
+    as rejected_launch_guarded_first_page;
 import 'rejected_launch_shows_first_page_test.dart'
     as rejected_launch_shows_first_page;
 import 'rejected_link_into_other_tab_test.dart' as rejected_link_into_other_tab;
@@ -701,6 +703,7 @@ void main() {
   reject_go_back_link_keeps_stack.main();
   rejected_child_of_unbuilt_nested_router.main();
   rejected_initial_link_url.main();
+  rejected_launch_guarded_first_page.main();
   rejected_launch_shows_first_page.main();
   rejected_link_into_other_tab.main();
   rejected_link_keeps_dialog.main();

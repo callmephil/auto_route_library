@@ -5782,6 +5782,7 @@ abstract class StackRouter extends RoutingController {
     ValueChanged<StackRouter>? onShowsPage,
   }) {
     // Moves on as each guard is asked, at once or later.
+    root._launchAsks?.routeNames.add(route.name);
     final guards = [...root.guards, ...route.guards].iterator;
     var routeToCheck = route;
     var shouldReevaluateNext = true;
@@ -6163,19 +6164,25 @@ abstract class StackRouter extends RoutingController {
 
   // The root a launch link's guards left without a page shows its first page,
   // as a nested router does (see above) and as Flutter's Navigator opens its
-  // default route when it has none.
-  Future<void> _openInitialRoutesOfEmptiedRoot() async {
+  // default route when it has none. Its guards, global ones included, are
+  // asked as for any other navigation: a guard that turns it down may
+  // redirect to a page of its own, such as a login page. Not when [asks]
+  // shows the launch asked them for that page already, as when the app
+  // launched at it, or a guard reported a redirect loop: their answer
+  // stands, and asking again would repeat the redirects of a guard that
+  // turns down everything.
+  Future<void> _openInitialRoutesOfEmptiedRoot(_LaunchAsks asks) async {
     if (_pages.isNotEmpty || !isRoot || _isDisposed || managedByWidget) return;
     final initialRoutes =
         matcher.match('') ?? matcher.match(Navigator.defaultRouteName);
-    // A first page that asks a guard may be the very page that said no, and
-    // asking again would repeat the redirects of a guard that turns down
-    // everything, so it stays closed: such a guard shows a page of its own.
-    bool asksGuard(List<RouteMatch<Object?>> routes) => routes.any(
-      (route) => route.guards.isNotEmpty || asksGuard(route.children ?? []),
+    if (initialRoutes == null) return;
+    bool wasAsked(List<RouteMatch<Object?>> routes) => routes.any(
+      (route) =>
+          asks.routeNames.contains(route.name) ||
+          wasAsked(route.children ?? const []),
     );
-    if (initialRoutes == null || root.guards.isNotEmpty) return;
-    if (asksGuard(initialRoutes)) return;
+    // A redirect loop already reported would come back the same way.
+    if (asks.hasReportedLoop || wasAsked(initialRoutes)) return;
     await _pushAllGuarded(initialRoutes, returnLastRouteCompleter: false);
   }
 

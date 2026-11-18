@@ -473,6 +473,7 @@ class NavigationResolver {
   void _reportLoop(List<RouteMatch<Object?>> loop) {
     final name = route.name;
     final names = loop.map((match) => match.name).join(' → ');
+    _router.root._launchAsks?.hasReportedLoop = true;
     FlutterError.reportError(
       FlutterErrorDetails(
         exception: FlutterError.fromParts([

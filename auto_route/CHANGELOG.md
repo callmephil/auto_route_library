@@ -5,8 +5,12 @@
   auto_route's default page transitions instead of its theme's (support added for #2340). Move the app to `material_ui`.
 - **FIX**, **BEHAVIOR CHANGE**: an app that starts at a link its guard turns down, with no page of the app below it (as
   on the web, where a link opens alone), shows its first page, the one marked `initial` or at `/`, and its url, not an
-  empty screen. A push meanwhile no longer becomes the only page. Before, the root had no page. When the app has global
-  guards, or the first page asks a guard, the root stays empty: such a guard shows a page of its own.
+  empty screen. A push meanwhile no longer becomes the only page. Before, the root had no page.
+- **FIX**, **BEHAVIOR CHANGE**: the same holds when the app has global guards (`RootStackRouter.guards`) or its first
+  page has a guard of its own. The guards of the first page are asked once, as for any navigation, and the app shows
+  what they decide: the first page, or the page a guard redirects to, such as a login page. When they turn the first
+  page down too and open no page, auto_route reports the error "The app launched with no page to show." in place of a
+  silent empty screen. Before, such an app showed an empty screen.
 - **BEHAVIOR CHANGE**: `auto_route` requires Flutter 3.50.0 (it allowed 3.47 and later). The package is tested and
   proven on 3.50.0 only, so an app on an older Flutter gets a pub error naming auto_route instead of untested code.
 - **FIX**: on the web, the address bar shows each url encoded once on Flutter 3.50.0, such as `/caf%C3%A9` for
