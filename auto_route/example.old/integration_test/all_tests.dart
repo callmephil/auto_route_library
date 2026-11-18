@@ -112,6 +112,8 @@ import 'encoded_link_back_test.dart' as encoded_link_back;
 import 'encoded_path_params_test.dart' as encoded_path_params;
 import 'encoded_url_test.dart' as encoded_url;
 import 'enum_query_param_test.dart' as enum_query_param;
+import 'forward_after_tabs_page_closes_test.dart'
+    as forward_after_tabs_page_closes;
 import 'fragment_question_mark_url_test.dart' as fragment_question_mark_url;
 import 'full_url_nested_path_test.dart' as full_url_nested_path;
 import 'generic_page_test.dart' as generic_page;
@@ -580,6 +582,7 @@ void main() {
   encoded_path_params.main();
   encoded_url.main();
   enum_query_param.main();
+  forward_after_tabs_page_closes.main();
   fragment_question_mark_url.main();
   full_url_nested_path.main();
   generic_page.main();

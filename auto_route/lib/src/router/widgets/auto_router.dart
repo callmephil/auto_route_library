@@ -199,11 +199,7 @@ class AutoRouterState extends State<AutoRouter>
         ),
       );
       _parentController.attachChildController(_controller!);
-      if (_controller!.setupInitialRoutesSynchronously()) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _controller?.notifyAll();
-        });
-      } else {
+      if (!_controller!.setupInitialRoutesSynchronously()) {
         // defer the setup of initial routes to the next frame
         // so that we can have access to the context inside guards. The router
         // may have left the tree in the frame that built it, as a child laid

@@ -188,6 +188,37 @@ abstract class RoutingController with ChangeNotifier {
     }
   }
 
+  // Notifies as [notifyAll] does, of the first pages a nested router sets up
+  // as it is built, when no page has left it. In a tab that is not shown, as
+  // the router of a tab built before the tab shows, it reports no url: the
+  // url names only the pages on screen, which did not change. It would
+  // report their url, which can be behind the url of a link whose pages are
+  // still to go on, as the browser's forward button opens one, and the web
+  // history would take the link's entry for one whose page left. The tab's
+  // pages are reported once it shows.
+  void _notifyFirstPages() {
+    if (_isOnWayBack) return notifyAll();
+    notifyListeners();
+    root.notifyListeners();
+  }
+
+  // Whether the back button can reach the pages of this router: no tabs
+  // router above it shows another tab. A page that another page covers in a
+  // stack is on the way back, and so are the pages of its nested router, as
+  // pagesUnderTop counts them.
+  bool get _isOnWayBack {
+    var child = this;
+    for (var above = _parent; above != null; above = above._parent) {
+      final shownTab = above is TabsRouter ? above.currentChild : null;
+      if (shownTab != null &&
+          !identical(above._innerControllerOfPage(shownTab), child)) {
+        return false;
+      }
+      child = above;
+    }
+    return true;
+  }
+
   /// Builds a simplified hierarchy of current stacks
   ///
   /// This is meant to be used in testing to verify
@@ -1381,7 +1412,12 @@ class TabsRouter extends RoutingController {
           result.route,
           link: link,
           onLinkAccepted: onLinkAccepted,
-          show: () => _showTab(index, notify: notify, remember: remember),
+          show: () => _showTab(
+            index,
+            notify: notify,
+            remember: remember,
+            isLinkStep: true,
+          ),
           then: onLetIn,
           onFailure: onFailure,
         ),
@@ -1573,8 +1609,18 @@ class TabsRouter extends RoutingController {
     unawaited(inside);
   }
 
-  // Makes the tab at [index] the active one.
-  void _showTab(int index, {required bool notify, required bool remember}) {
+  // Makes the tab at [index] the active one. With [isLinkStep], as when a
+  // link goes on into the tab's nested router, its pages there go on right
+  // after, so the url is rebuilt a microtask later, once they are on: now it
+  // would name the page on top of the tab before them, which shows for no
+  // frame, and the web history would give that page an entry of its own in
+  // place of the link's.
+  void _showTab(
+    int index, {
+    required bool notify,
+    required bool remember,
+    bool isLinkStep = false,
+  }) {
     // Preloads while the old tab is still active, whether or not this notifies.
     final shouldWaitForFrame =
         preload(index) &&
@@ -1592,6 +1638,14 @@ class TabsRouter extends RoutingController {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         // The tabs may be disposed by the end of the frame.
         if (!_isDisposed) notifyAll();
+      });
+    } else if (notify && isLinkStep) {
+      notifyListeners();
+      root.notifyListeners();
+      scheduleMicrotask(() {
+        if (!_isDisposed && !isRouteDataActive(current)) {
+          navigationHistory.rebuildUrl();
+        }
       });
     } else if (notify) {
       notifyAll();
@@ -6038,7 +6092,9 @@ abstract class StackRouter extends RoutingController {
     // The pages taken off for this page answer their callers, except one
     // whose screen and wait this page took over.
     _endWaitOfTakenOff(_takenOffForNewPage);
-    if (notify) {
+    if (notify && identical(Zone.current[_firstPagesZone], this)) {
+      _notifyFirstPages();
+    } else if (notify) {
       notifyAll();
     }
     // After the notification, so the url this page makes keeps its own replace
@@ -7078,7 +7134,8 @@ class NestedStackRouter extends StackRouter {
   }
 
   /// Adds the initial routes to the stack right away, so the first page of
-  /// this router is part of the frame that builds it.
+  /// this router is part of the frame that builds it. Its listeners, and the
+  /// url when this router is on screen, hear of them after that frame.
   ///
   /// This lets a [Hero] on the page that opened this router's page fly to a
   /// [Hero] on its first page: Flutter starts the flight right after the frame
@@ -7117,6 +7174,9 @@ class NestedStackRouter extends StackRouter {
     // No guard here can turn the navigation down; one of a router this
     // router's last page builds still can.
     _letInOrHandOn(_takeNestedLetIn());
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!_isDisposed) _notifyFirstPages();
+    });
     return true;
   }
 
@@ -7144,11 +7204,12 @@ class NestedStackRouter extends StackRouter {
   // that names the last of them was reported: the url itself is the same,
   // and nobody hears of the pages under it. A web history that writes the
   // browser gives each its entry from the url state of the pages on, once
-  // they are, so the url is reported again then.
+  // they are, so the url is reported again then. Not in a tab that is not
+  // shown, see [_notifyFirstPages].
   void _reportPagesUnderFirstPages(int count) {
     if (count < 2 || !navigationHistory.writesBrowser) return;
     scheduleMicrotask(() {
-      if (!_isDisposed) navigationHistory.rebuildUrl();
+      if (!_isDisposed && _isOnWayBack) navigationHistory.rebuildUrl();
     });
   }
 
@@ -7253,7 +7314,11 @@ class NestedStackRouter extends StackRouter {
         // The app's routes callback asks no guard.
         _letInOrHandOn(letIn);
       } else {
-        unawaited(_openPendingRoutes(initialRoutes, letIn: letIn));
+        unawaited(
+          _openFirstPages(
+            () => _openPendingRoutes(initialRoutes, letIn: letIn),
+          ),
+        );
       }
       _routeData.pendingChildren.clear();
     } else if (!managedByWidget) {
@@ -7261,14 +7326,21 @@ class NestedStackRouter extends StackRouter {
       final possibleInitialRoutes = matcher.match('');
       if (possibleInitialRoutes != null) {
         unawaited(
-          _pushAllGuarded(
-            possibleInitialRoutes,
-            returnLastRouteCompleter: false,
+          _openFirstPages(
+            () => _pushAllGuarded(
+              possibleInitialRoutes,
+              returnLastRouteCompleter: false,
+            ),
           ),
         );
       }
     }
   }
+
+  // Runs [open], which puts the first pages of this router on, in the zone
+  // that tells [_addNewPage] they are its first, see [_notifyFirstPages].
+  Future<void> _openFirstPages(Future<void> Function() open) =>
+      runZoned(open, zoneValues: {_firstPagesZone: this});
 }
 
 // What a navigation does once the guards of the nested router of a page it
@@ -7549,6 +7621,12 @@ const _kMaxAsksAgainInARow = 3;
 // pages already on the screen above, which a "no" takes back, see
 // [NavigationResolver._letsInNavigationAbove].
 final _letInAboveZone = Object();
+
+// Holds the nested router whose first pages go on in this zone, as it sets
+// them up after the frame that built it, see
+// [NestedStackRouter.setupInitialRoutes] and
+// [RoutingController._notifyFirstPages].
+final _firstPagesZone = Object();
 
 // What replaceAll does to the pages it replaces, as its guards answer.
 class _PagesReplacement {

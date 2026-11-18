@@ -1,4 +1,10 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, after the back button closed a tabs page, the browser's forward button walks the same entries back
+  up and changes none of them. Before, forward onto a page in a tab that the reopened tabs page had not built yet
+  stepped the browser back, then wrote the tab's first page and that page as two new entries, so the entries ahead were
+  lost. A forward press onto the first page of such a tab no longer moves the browser back and forward again. Off the
+  web, a link into a page of another tab's nested router adds one entry to the app's own history, so `back()` goes to
+  the page shown before the link. Before, the tab's first page got an entry of its own.
 - **FIX**: on the web, the browser's back button after `pushAll` in a tab not on screen shows each page once, the latest
   first, and never moves the browser forward. A jump back over several entries onto a page in another tab, under the
   page on top, or at an earlier url of that page keeps the entries ahead too. Before, the url the app reported while it

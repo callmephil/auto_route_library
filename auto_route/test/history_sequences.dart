@@ -493,6 +493,26 @@ final Map<String, HistoryRow> nativeSequences = {
     ],
     ['/', '/a', '/mail', '/mail/5'],
   ),
+  // The nested router of Mail sets up its two pages while A covers Mail:
+  // the back button still reaches each of them, as Navigator.pop does.
+  'pushAll [Mail [Inbox, message 5], A]': (
+    [],
+    [
+      (router) => unawaited(
+        router.pushAll(const [
+          NamedRoute(
+            'MailRoute',
+            children: [
+              NamedRoute('InboxRoute'),
+              NamedRoute('MessageRoute', params: {'id': '5'}),
+            ],
+          ),
+          NamedRoute('ARoute'),
+        ]),
+      ),
+    ],
+    ['/', '/mail', '/mail/5', '/a'],
+  ),
   'on A, B: replaceAll [Member], rejected': (
     _onAB,
     [_replaceAllRejected],
