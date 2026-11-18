@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: off the web, while the guard of a link decides, `currentUrl`, `urlState` and the url
+  reported to the platform name the page on screen, not the link's page. The link's url comes in with its page, and
+  after a "no" it never changed. Before, they named the link from the start, and went back after a "no".
 - **FIX**: when a guard rejects its page on `reevaluateGuards()`, the pages above that page, which leave with it,
   report `RouteLeaveKind.removed` to their `AutoRouteLeaveListener`, as the rejected page and a page held for its
   guard do. Before, the top page reported `popped`.

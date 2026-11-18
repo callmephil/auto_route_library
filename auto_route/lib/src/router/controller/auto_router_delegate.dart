@@ -124,8 +124,8 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     _handleRebuild();
   }
 
-  /// Helper to access current urlState
-  UrlState get urlState => controller.navigationHistory.urlState;
+  /// The url state of the pages on screen, see [RoutingController.urlState].
+  UrlState get urlState => controller.navigationHistory.shownUrlState;
 
   /// The current [urlState] with the pages of every router and the route the
   /// platform started the app at, which the [Router] reports to the platform
@@ -337,7 +337,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
     );
     // A url state the link left alone keeps its path state.
     if (!const ListEquality<Object?>().equals(
-      urlState.segments,
+      history.urlState.segments,
       shown.segments,
     )) {
       history.onNewUrlState(shown, notify: false);
@@ -697,7 +697,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   void _handleRebuild() {
     final context = controller.navigatorKey.currentContext;
     // On the web the history writes the url itself, and the Router none.
-    if (urlState.shouldReplace &&
+    if (controller.navigationHistory.urlState.shouldReplace &&
         context != null &&
         !controller.navigationHistory.writesBrowser) {
       // Flutter's default route information provider ignores

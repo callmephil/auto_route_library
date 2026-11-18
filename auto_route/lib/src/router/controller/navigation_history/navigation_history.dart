@@ -309,6 +309,17 @@ abstract class NavigationHistory with ChangeNotifier {
   /// Helper to access current [_urlState]
   UrlState get urlState => _urlState;
 
+  /// The url state of the pages on screen, which the app reads as its url.
+  ///
+  /// It is [urlState], except off the web while the guards of a link decide:
+  /// the link's url is in [urlState] from the start, for the history to give
+  /// the link its entry, but its page is not on screen yet. The url then
+  /// names the page on screen, until the link's page is on a stack. Android's
+  /// NavController names the destination on top of its back stack, and a
+  /// navigation that does not happen changes nothing.
+  @internal
+  UrlState get shownUrlState => urlState;
+
   /// The root router
   StackRouter get router;
 

@@ -160,8 +160,11 @@ abstract class RoutingController with ChangeNotifier {
     ];
   }
 
-  /// Helper to access [NavigationHistory.urlState]
-  UrlState get urlState => navigationHistory.urlState;
+  /// The url state of the pages on screen, from [NavigationHistory.urlState].
+  ///
+  /// Off the web, while the guards of a link decide, it names the page on
+  /// screen, not the link: the link's url comes in with its page.
+  UrlState get urlState => navigationHistory.shownUrlState;
 
   /// Helper to access `NavigationHistory.urlState.path`
   String get currentPath => urlState.path;

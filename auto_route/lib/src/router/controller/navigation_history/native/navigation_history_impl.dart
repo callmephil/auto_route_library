@@ -61,8 +61,35 @@ class NavigationHistoryImpl extends NavigationHistory {
   // shown, so a page the limit dropped never gets its entry again.
   var _wayBackIds = <LocalKey>{};
 
+  // The url state of the running app's link whose page no stack holds yet,
+  // as one whose guard decides, see [shownUrlState].
+  UrlState? _waitingLinkState;
+
+  @override
+  UrlState get shownUrlState {
+    final waiting = _waitingLinkState;
+    final pageId = waiting?.topMatch?.id;
+    if (waiting == null ||
+        pageId == null ||
+        !identical(waiting, urlState) ||
+        controllerOfPage(pageId) != null) {
+      _waitingLinkState = null;
+      return urlState;
+    }
+    return UrlState.fromSegments(router.currentSegments);
+  }
+
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
+    final linkPageId = newState.topMatch?.id;
+    // Not for the url the app opens at: no page is on screen before it.
+    _waitingLinkState =
+        router.root.isShowingLink &&
+            router.hasEntries &&
+            linkPageId != null &&
+            controllerOfPage(linkPageId) == null
+        ? newState
+        : null;
     super.onNewUrlState(newState, notify: notify);
     if (_isNavigatingBack && newState.url == _backTargetUrl) {
       // Ends after the current call, which may still report urls on its way.
