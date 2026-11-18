@@ -99,6 +99,10 @@ class BrowserNavigationHistory extends NavigationHistory {
   // last followed the browser, see [followBrowser].
   int? _topBeforeFollowing;
 
+  // The entry the browser landed on, while [routesOfBrowserEntry] takes the
+  // pages above its page off their stack; see [onNewUrlState].
+  UrlState? _landedEntry;
+
   // Whether the change being reported keeps the entries of closed pages
   // that are under the entry of an open one; see [rebuildUrlAfterPop].
   bool _keepsClosedUnder = false;
@@ -157,6 +161,16 @@ class BrowserNavigationHistory extends NavigationHistory {
 
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
+    final landed = _landedEntry;
+    if (landed != null && !HistoryEntryList.isEntryOf(landed, newState)) {
+      // The pages above the page of the entry the browser landed on leave
+      // before the app shows that entry. The url on the way names another
+      // page, as the tab on screen when they leave a tab not on screen. The
+      // browser holds its entries already: a new one would move it forward
+      // or drop the entries ahead. Only the url state changes.
+      super.onNewUrlState(newState, notify: notify);
+      return;
+    }
     final shown = _list.show(
       newState,
       keepsClosedUnder: _keepsClosedUnder,
@@ -294,7 +308,13 @@ class BrowserNavigationHistory extends NavigationHistory {
     // name, as when the same route was pushed twice, with the same params or
     // others; navigating to it alone would update the current page in place.
     if (pageId != null) {
-      removePagesAbove(pageId);
+      // The url the removal reports makes no entry, see [onNewUrlState].
+      _landedEntry = entry;
+      try {
+        removePagesAbove(pageId);
+      } finally {
+        _landedEntry = null;
+      }
       // The same page can show another url, as when its query params changed
       // in place; then the entry still needs to be shown.
       if (router.topMatch.id == pageId &&

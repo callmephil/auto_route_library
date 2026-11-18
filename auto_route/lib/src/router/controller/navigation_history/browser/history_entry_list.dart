@@ -247,7 +247,7 @@ class HistoryEntryList {
     final last = didDrop ? _entries.lastOrNull : topBefore;
     final entry = _withoutReplaceMark(state);
 
-    if (last != null && _isEntryOf(last, state)) {
+    if (last != null && isEntryOf(last, state)) {
       // The path state is the entry's own: a navigation never carries one.
       final shown = state.pathState == null
           ? _withPathState(entry, last.pathState)
@@ -325,9 +325,9 @@ class HistoryEntryList {
     return pageId != null && isPageOpen(pageId);
   }
 
-  // Whether [entry] is the entry of the page on top of [state], with the url
-  // [state] has.
-  static bool _isEntryOf(UrlState entry, UrlState state) =>
+  /// Whether [entry] is the entry of the page on top of [state], with the
+  /// url [state] has.
+  static bool isEntryOf(UrlState entry, UrlState state) =>
       entry.topMatch?.id == state.topMatch?.id &&
       isSameHistoryUrl(entry.url, state.url);
 

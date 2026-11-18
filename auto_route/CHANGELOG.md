@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, the browser's back button after `pushAll` in a tab not on screen shows each page once, the latest
+  first, and never moves the browser forward. A jump back over several entries onto a page in another tab, under the
+  page on top, or at an earlier url of that page keeps the entries ahead too. Before, the url the app reported while it
+  closed the pages above that page became a new entry: the browser moved forward, the entries ahead were lost, and the
+  forward button stopped early.
 - **FIX**: on the web, an app opened at a link into a tabs page with `includePrefixMatches: true` keeps the one browser
   entry the browser made for the link when the tabs show their first tab in its place: while the guard of the tab the
   link names decides, after that guard's "no", or when the link names no tab. Before, Home, which the prefix match
