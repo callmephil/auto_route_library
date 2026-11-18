@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/history_writer.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A browser history for tests of the web history on the VM: it holds
@@ -125,6 +127,32 @@ class TestHistoryBrowser implements HistoryBrowser {
     landUntold();
     _onLanding?.call();
     onLanded?.call();
+  }
+
+  /// Makes [onLanded] report each entry the browser lands on to the app that
+  /// [tester] runs, as the engine does for a popstate event: through
+  /// `pushRouteInformation` on the `flutter/navigation` channel, which
+  /// reaches the app's Router.
+  void reportLandingsTo(WidgetTester tester) {
+    onLanded = () => unawaited(
+      tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/navigation',
+        const JSONMethodCodec().encodeMethodCall(
+          MethodCall('pushRouteInformation', {'location': url, 'state': state}),
+        ),
+        null,
+      ),
+    );
+  }
+
+  /// Runs the frames of the app that [tester] runs and lands every step on
+  /// its way, until the browser holds what the app shows.
+  Future<void> settle(WidgetTester tester) async {
+    await tester.pumpAndSettle();
+    while (isStepping) {
+      land();
+      await tester.pumpAndSettle();
+    }
   }
 
   /// The browser lands the oldest step on its way; its event is still to

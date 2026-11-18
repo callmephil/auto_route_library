@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -37,18 +36,7 @@ class _App {
       ),
     );
     // The engine reports each entry the browser lands on to the Router.
-    browser.onLanded = () => unawaited(
-      tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'flutter/navigation',
-        const JSONMethodCodec().encodeMethodCall(
-          MethodCall('pushRouteInformation', {
-            'location': browser.url,
-            'state': browser.state,
-          }),
-        ),
-        null,
-      ),
-    );
+    browser.reportLandingsTo(tester);
   }
 
   final WidgetTester tester;
@@ -68,13 +56,7 @@ class _App {
 
   // Runs frames and lands every step until the browser holds what the app
   // shows.
-  Future<void> settle() async {
-    await tester.pumpAndSettle();
-    while (browser.isStepping) {
-      browser.land();
-      await tester.pumpAndSettle();
-    }
-  }
+  Future<void> settle() => browser.settle(tester);
 
   // Makes [calls], [gap] apart. With [landsLate] the browser lands no step
   // before the last call is made.

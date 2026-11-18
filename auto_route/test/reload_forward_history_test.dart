@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'history_sequences.dart';
@@ -49,26 +46,9 @@ void main() {
       ),
     );
     // The engine reports each entry the browser lands on to the Router.
-    browser.onLanded = () => unawaited(
-      tester.binding.defaultBinaryMessenger.handlePlatformMessage(
-        'flutter/navigation',
-        const JSONMethodCodec().encodeMethodCall(
-          MethodCall('pushRouteInformation', {
-            'location': browser.url,
-            'state': browser.state,
-          }),
-        ),
-        null,
-      ),
-    );
+    browser.reportLandingsTo(tester);
     addTearDown(router.navigationHistory.dispose);
-    Future<void> settle() async {
-      await tester.pumpAndSettle();
-      while (browser.isStepping) {
-        browser.land();
-        await tester.pumpAndSettle();
-      }
-    }
+    Future<void> settle() => browser.settle(tester);
 
     await pumpRouterConfigApp(
       tester,
