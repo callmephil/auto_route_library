@@ -19,9 +19,9 @@ import 'router_test_utils.dart';
 //
 // The steps: the browser holds /, /a and /b and stands on /b, as a reload
 // leaves it; the app starts on /b with B alone; back twice, forward three
-// times. What the app opens on the two back presses, A and Home over B, is
-// as before this fix and stays an open question; this pins only that the
-// forward walk keeps its entries and ends on B.
+// times, the third with nothing ahead. The back presses show A, then Home,
+// each alone (test/web/reload_back_web_test.dart pins them in Chrome); this
+// pins that the forward walk keeps its entries and ends on B.
 //
 // Native behavior this holds to: the HTML History API, where a reload
 // keeps the tab's entries and the forward button walks the ones ahead; only
@@ -86,9 +86,8 @@ void main() {
       forwardWalk.add('$stack ${browser.url}, ${browser.entries.length}');
     }
     expect(forwardWalk, [
-      'BRoute ARoute /a, 3',
-      'BRoute ARoute /a, 3',
-      'BRoute /b, 3',
+      'HomeRoute ARoute /a, 3',
+      'HomeRoute ARoute BRoute /b, 3',
     ]);
   });
 }

@@ -208,15 +208,22 @@ class BrowserNavigationHistory extends NavigationHistory {
   void returnBrowserToApp() => _writer.bringTo(_list.entries);
 
   @override
+  bool get isOnEntryBeforeApp => _isOnEntryBeforeApp;
+  bool _isOnEntryBeforeApp = false;
+
+  @override
   void followBrowser() {
     final at = _browser.index;
     final top = _topNumber;
     _topBeforeFollowing = top;
+    _isOnEntryBeforeApp = false;
     if (at == top) return;
     if (at < _writer.first) {
       // An entry from before the app started, as a reload leaves them under
       // the entry the app starts on: the app's entries start from it now.
-      // The pages open now have their entries ahead of it.
+      // The pages open now have their entries ahead of it, and its page
+      // takes their place.
+      _isOnEntryBeforeApp = true;
       _writer.first = at;
       _list.reset(
         [_browserEntry(at)],

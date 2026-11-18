@@ -545,7 +545,9 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
           resolvedLink,
           handover: handover,
           replacesLaunchPage: replacesLaunchPage,
-          rebuildsStack: rebuildStackOnDeepLink,
+          // An entry from before a reload opens as a link whose pages take
+          // the place of the app's, which have their entries ahead of it.
+          rebuildsStack: rebuildStackOnDeepLink || history.isOnEntryBeforeApp,
           closing: pageless,
           onAccepted: () => isAccepted = true,
         );

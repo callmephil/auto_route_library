@@ -158,6 +158,17 @@ abstract class NavigationHistory with ChangeNotifier {
     // Native platforms have no browser to follow.
   }
 
+  /// Whether [followBrowser] last followed the browser onto an entry from
+  /// before the app started, as its back button reaches after a reload.
+  ///
+  /// The app knows such an entry only by its url and the state saved in it,
+  /// so [AutoRouterDelegate.setNewRoutePath] opens it as a link to its url
+  /// whose pages take the place of the app's: those have their entries
+  /// ahead of it, where the forward button reaches them again. Always false
+  /// on native platforms.
+  @internal
+  bool get isOnEntryBeforeApp => false;
+
   /// Whether this history writes the app's urls to a browser itself, entry
   /// by entry, so that the Router must write none: its
   /// [AutoRouterDelegate.currentConfiguration] is then null. False on native
