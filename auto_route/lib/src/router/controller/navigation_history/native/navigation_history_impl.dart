@@ -124,8 +124,10 @@ class NavigationHistoryImpl extends NavigationHistory {
   // Adds the entry of the page on top of [newState], unless it has one.
   // [isTopFree] tells that the last entry just left with its page.
   void _addTopEntry(UrlState newState, {required bool isTopFree}) {
-    // Don't add entries during back navigation to prevent duplicates
-    if (_isNavigatingBack ||
+    // Don't add entries during back navigation to prevent duplicates, except
+    // for a page that took the place of the page back() goes to, at its url,
+    // as the new page a declarative router's list may show for that route.
+    if ((_isNavigatingBack && !_isNewPageAtBackTarget(newState)) ||
         _isLastEntry(newState) ||
         _isStillUnderWaitingLink(newState)) {
       return;
@@ -518,9 +520,16 @@ class NavigationHistoryImpl extends NavigationHistory {
       final backCount = ++_backCount;
       _backTargetUrl = last.url;
       _removePagesAboveWayTo(last);
-      final navigation = router.navigateAllBack([
-        last.route,
-      ], onLetIn: () => _takeStepBackLate(backCount, left, last));
+      // Whether the guards on the way let the step in before the navigation
+      // completed.
+      var isLetIn = false;
+      final navigation = router.navigateAllBack(
+        [last.route],
+        onLetIn: () {
+          isLetIn = true;
+          _takeStepBackLate(backCount, left, last);
+        },
+      );
       // The router shows the entry as the navigation returns, as it does when
       // no guard makes it wait, so this step back is done: a back() called
       // right after it takes the next step, as two calls of history.back() in
@@ -532,18 +541,53 @@ class NavigationHistoryImpl extends NavigationHistory {
       unawaited(
         navigation.whenComplete(() {
           if (backCount != _backCount) return;
-          // The router never reported the entry's url and still shows the
-          // page left, as when a guard rejects it: a refused navigation
-          // changes nothing, so that page keeps its entry.
-          if (_isNavigatingBack &&
-              urlState.url == left.url &&
-              urlState.topMatch?.id == left.pageId) {
-            _entries.add(left);
+          // A step let in whose page is still on screen waits for the frame:
+          // a declarative router hands it to the app's onNavigate, and the
+          // app's list shows it only once it rebuilds the router, as a
+          // Navigator's pages do.
+          if (isLetIn && _isNavigatingBack && _showsPageOf(left)) {
+            SchedulerBinding.instance
+              ..addPostFrameCallback((_) => _endStepBack(backCount, left))
+              ..ensureVisualUpdate();
+            return;
           }
-          _stopNavigatingBack();
+          _endStepBack(backCount, left);
         }),
       );
     }
+  }
+
+  // Whether [newState] shows, at the url back() goes to, a page with no
+  // entry, while the page of that entry has left.
+  bool _isNewPageAtBackTarget(UrlState newState) {
+    final pageId = newState.topMatch?.id;
+    return pageId != null &&
+        newState.url == _backTargetUrl &&
+        !_hasEntry(pageId) &&
+        !_entries.any(
+          (entry) =>
+              entry.url == _backTargetUrl &&
+              controllerOfPage(entry.pageId) != null,
+        );
+  }
+
+  // Whether the page of [entry] is the page shown, at its url.
+  bool _showsPageOf(_HistoryEntry entry) =>
+      urlState.url == entry.url && urlState.topMatch?.id == entry.pageId;
+
+  // Ends the step back numbered [backCount], from the page of [left], unless
+  // a later back() has started. When the router never reported the entry's
+  // url and still shows the page left, as when a guard rejects the step or
+  // the app keeps the page in a declarative router's list, a refused
+  // navigation changes nothing, so that page keeps its entry.
+  void _endStepBack(int backCount, _HistoryEntry left) {
+    if (backCount != _backCount) return;
+    if (_isNavigatingBack &&
+        _showsPageOf(left) &&
+        !_entries.any((entry) => identical(entry, left))) {
+      _entries.add(left);
+    }
+    _stopNavigatingBack();
   }
 
   // Takes off the pages above the page of [target], and when that page is

@@ -11,6 +11,9 @@
   them wrote over the browser's entries.
 - **FIX**: off the web, a link to another tab of the tabs page on screen adds one step to `back()`, not three, so
   `back()` walks the tabs the user saw instead of going between the last two again.
+- **FIX**: off the web, `back()` in an `AutoRouter.declarative` steps back through every page the app's list showed.
+  Before, it stopped after one step, and with an `onNavigate` that sets the list to the routes it is given, it went
+  back and forth between the last two pages.
 - **FIX**, **BEHAVIOR CHANGE**: a guard's "no" inside a page that was not open no longer moves the user. A link,
   `navigatePath`, `navigate`, `pushPath` or `push` into such a page, whose nested router's guard rejects, takes the page
   back off: the stack, the url and the open dialogs are as before, the page's caller gets `null`, and a link's dialog

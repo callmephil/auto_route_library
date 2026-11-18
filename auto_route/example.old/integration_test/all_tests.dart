@@ -29,6 +29,7 @@ import 'back_after_reload_test.dart' as back_after_reload;
 import 'back_after_removing_link_page_test.dart'
     as back_after_removing_link_page;
 import 'back_after_sign_in_test.dart' as back_after_sign_in;
+import 'back_in_declarative_router_test.dart' as back_in_declarative_router;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_into_waiting_tab_guard_test.dart' as back_into_waiting_tab_guard;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
@@ -477,6 +478,7 @@ void main() {
   back_after_reload.main();
   back_after_removing_link_page.main();
   back_after_sign_in.main();
+  back_in_declarative_router.main();
   back_in_tabs.main();
   back_into_waiting_tab_guard.main();
   back_rejected_by_guard.main();
