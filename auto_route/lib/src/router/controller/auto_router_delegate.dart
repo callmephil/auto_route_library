@@ -219,6 +219,14 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         count == controller.root._linkCount) {
       return _reportTurnedDownLink(link);
     }
+    // No page came in and no later link took over: the first page of the app
+    // shows rather than an empty screen, see [_reportRejectedLaunch].
+    if (!isAccepted &&
+        !_isDisposed &&
+        !controller.hasEntries &&
+        count == controller.root._linkCount) {
+      await controller.root._openInitialRoutesOfEmptiedRoot();
+    }
     _reportRejectedLaunch();
   }
 

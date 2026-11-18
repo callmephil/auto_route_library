@@ -9,13 +9,13 @@ import 'package:material_ui/material_ui.dart';
 
 import 'browser_history.dart';
 
-// On the web, an app opened at a link that a guard rejects shows no page,
-// and the address bar drops the link: it shows '/', on the entry the app
-// was opened on, so a reload doesn't open the rejected link again.
+// On the web, an app opened at a link that a guard rejects shows its first
+// page, and the address bar drops the link: it shows '/', on the entry the
+// app was opened on, so a reload doesn't open the rejected link again.
 //
 // While the web history was becoming the browser's one writer, it found
 // the Router through the app's navigator, which is not built while the app
-// shows no page, so it wrote nothing and the link stayed in the address
+// shows no page yet, so it wrote nothing and the link stayed in the address
 // bar.
 //
 // Native behavior this holds to: a browser can't cancel a load the app has
@@ -54,7 +54,7 @@ void main() {
     );
     await settleBrowser(tester);
 
-    expect(router.stack, isEmpty);
+    expect(router.stack.map((page) => page.name), ['HomeRoute']);
     expect(find.text('ProtectedRoute'), findsNothing);
     expect((browserSerialCount, browserPath), (0, '/'));
   });

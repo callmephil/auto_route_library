@@ -9,7 +9,7 @@ import '../named_page.dart';
 // flutter/flutter#189582: a guard that stopped the app's first navigation
 // crashed the app on start, in an assertion.
 // Open the app at /protected, whose guard rejects it: the app starts with no
-// error, on an empty stack. The same with a guard that rejects and opens
+// error, on its first page. The same with a guard that rejects and opens
 // /fallback instead, with replaceAll or push: the app shows FallbackRoute.
 void main() {
   RootStackRouter buildRouter(
@@ -46,7 +46,7 @@ void main() {
         shouldIncludePrefixMatches: false,
       );
       expect(tester.takeException(), isNull);
-      expect(router.stack, isEmpty);
+      expect(router.stack.map((page) => page.name), ['HomeRoute']);
       expect(find.text('ProtectedRoute'), findsNothing);
     },
   );

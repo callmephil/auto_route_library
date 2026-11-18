@@ -6161,6 +6161,24 @@ abstract class StackRouter extends RoutingController {
     await _pushAllGuarded(initialRoutes, returnLastRouteCompleter: false);
   }
 
+  // The root a launch link's guards left without a page shows its first page,
+  // as a nested router does (see above) and as Flutter's Navigator opens its
+  // default route when it has none.
+  Future<void> _openInitialRoutesOfEmptiedRoot() async {
+    if (_pages.isNotEmpty || !isRoot || _isDisposed || managedByWidget) return;
+    final initialRoutes =
+        matcher.match('') ?? matcher.match(Navigator.defaultRouteName);
+    // A first page that asks a guard may be the very page that said no, and
+    // asking again would repeat the redirects of a guard that turns down
+    // everything, so it stays closed: such a guard shows a page of its own.
+    bool asksGuard(List<RouteMatch<Object?>> routes) => routes.any(
+      (route) => route.guards.isNotEmpty || asksGuard(route.children ?? []),
+    );
+    if (initialRoutes == null || root.guards.isNotEmpty) return;
+    if (asksGuard(initialRoutes)) return;
+    await _pushAllGuarded(initialRoutes, returnLastRouteCompleter: false);
+  }
+
   void _reset() {
     _markLeaving(_pages, .removed);
     _pages.clear();

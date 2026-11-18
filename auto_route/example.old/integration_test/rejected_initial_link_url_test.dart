@@ -1,5 +1,4 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -20,10 +19,11 @@ void main() {
     // Steps: open the app, built from routerDelegate and
     // routeInformationParser, at '/protected', whose guard rejects it.
     // Should: 'Protected' is never shown and the address bar no longer holds
-    // '/protected'. On web the link opens alone, so the stack is empty; off
-    // the web the parser includes prefix matches, as Android's deep links put
-    // the start destination under the linked screen, so the batch
-    // [HomeRoute, ProtectedRoute] keeps the HomeRoute its guards let through.
+    // '/protected'. Home shows: off the web the parser includes prefix
+    // matches, as Android's deep links put the start destination under the
+    // linked screen, so the batch [HomeRoute, ProtectedRoute] keeps the
+    // HomeRoute its guards let through; on the web the link opens alone, and
+    // the first page opens when it is turned down.
     testWidgets('The url drops a link a guard rejected', (tester) async {
       final router = RootStackRouter.build(
         routes: [
@@ -48,10 +48,7 @@ void main() {
           routerDelegate: router.delegate(),
         ),
       );
-      expect(
-        router.stack.map((p) => p.name),
-        kIsWeb ? isEmpty : ['HomeRoute'],
-      );
+      expect(router.stack.map((p) => p.name), ['HomeRoute']);
       expect(find.text('Protected'), findsNothing);
       await expectBrowserUrl('/');
     });

@@ -36,7 +36,7 @@ void main() {
     dispatcher.defaultRouteNameTestValue = '/protected';
     final config = router.config(includePrefixMatches: false);
     await pumpRouterConfigApp(tester, config);
-    expect(router.stack, isEmpty);
+    expect(router.stack.map((page) => page.name), ['HomeRoute']);
     final reported = kIsWeb
         ? router.urlState
         : config.routerDelegate.currentConfiguration;
