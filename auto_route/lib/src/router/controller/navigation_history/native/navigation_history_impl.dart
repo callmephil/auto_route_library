@@ -125,7 +125,11 @@ class NavigationHistoryImpl extends NavigationHistory {
   // [isTopFree] tells that the last entry just left with its page.
   void _addTopEntry(UrlState newState, {required bool isTopFree}) {
     // Don't add entries during back navigation to prevent duplicates
-    if (_isNavigatingBack || _isLastEntry(newState)) return;
+    if (_isNavigatingBack ||
+        _isLastEntry(newState) ||
+        _isStillUnderWaitingLink(newState)) {
+      return;
+    }
     if (_isRebuildingAfterPop) {
       // The last entry belongs to the popped page; drop it so back() can't
       // return to it, unless it left with its page. If the page now on top is
@@ -137,6 +141,23 @@ class NavigationHistoryImpl extends NavigationHistory {
     // A replace takes the place of the entry before, unless that entry just
     // left with its page: the place is then free.
     _addEntry(isTopFree ? newState.copyWith(shouldReplace: false) : newState);
+  }
+
+  // Whether [newState] shows the page that was on top before the link whose
+  // entry is the last one, which no stack has held yet: the link is still on
+  // its way, as when the page that holds a tabs router goes in anew before
+  // its tab changes, and the screen shows nothing new. An entry here would
+  // stay under the link's page once it lands, and back() would show the
+  // page left twice.
+  bool _isStillUnderWaitingLink(UrlState newState) {
+    if (_entries case [..., final before, final last]
+        when _linkPages.contains(last.pageId) &&
+            !_wasOpen.contains(last) &&
+            !_isOpen(last)) {
+      return before.url == newState.url &&
+          before.pageId == newState.topMatch?.id;
+    }
+    return false;
   }
 
   // Gives each page new on the way back under the page on top an entry of

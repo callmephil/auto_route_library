@@ -13,6 +13,7 @@ import 'async_simple_guard_test.dart' as async_simple_guard;
 import 'back_after_closing_unbuilt_page_test.dart'
     as back_after_closing_unbuilt_page;
 import 'back_after_link_page_removed_test.dart' as back_after_link_page_removed;
+import 'back_after_link_to_other_tab_test.dart' as back_after_link_to_other_tab;
 import 'back_after_navigations_in_one_turn_test.dart'
     as back_after_navigations_in_one_turn;
 import 'back_after_opening_nested_pages_together_test.dart'
@@ -466,6 +467,7 @@ void main() {
   async_simple_guard.main();
   back_after_closing_unbuilt_page.main();
   back_after_link_page_removed.main();
+  back_after_link_to_other_tab.main();
   back_after_navigations_in_one_turn.main();
   back_after_opening_nested_pages_together.main();
   back_after_opening_pages_together_in_tabs.main();
