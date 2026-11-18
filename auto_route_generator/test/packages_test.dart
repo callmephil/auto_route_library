@@ -4,7 +4,7 @@ import 'support/generate.dart';
 
 const _kLoginPage = '''
 import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 @RoutePage()
 class LoginPage extends StatelessWidget {
