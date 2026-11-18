@@ -26,6 +26,9 @@
 - **FIX**: `replaceAll` ends the wait of a page held off the screen for its guard, as after a sign-out. The
   caller of that page's `push()` gets `null` at the `replaceAll`, no later change asks its guard again, and a
   later yes of the guard opens nothing. Before, the caller waited until the guard answered, maybe for good.
+- **FIX**, **BEHAVIOR CHANGE**: off the web, `router.back()` returns through every open page, down to the first one,
+  as the system back button does. The app's own history no longer keeps at most 21 entries: it keeps one entry for
+  each open page. Before, after 30 pushes `back()` stopped after 20 steps with 11 pages open.
 - **FIX**: off the web, `router.back()` to a page that is still open asks no guard of that page, as the system back
   button does. Before, a guard that took its time delayed `back()`, and a guard that asks the user asked again.
 - **BEHAVIOR CHANGE**: auto_route no longer reads the page transitions of an app's theme from Flutter's built-in

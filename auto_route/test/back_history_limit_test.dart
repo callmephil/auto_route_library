@@ -11,25 +11,24 @@ import 'package:material_ui/material_ui.dart';
 import 'named_page.dart';
 import 'router_test_utils.dart';
 
-// Off the web, the app's own history keeps at most 21 entries, the oldest
-// going first (NavigationHistoryImpl, "limit history registration to 20
-// entries"). Since pages opened together get an entry each, pushAll of 25
-// pages left 26 entries, and in a tab, pages the limit had dropped got their
-// entries again after a change to another tab and back: 25 pushes, then a
-// tab change and back, took the history from 21 to 28.
-// Found by the review of 616a67d8 (finding 3).
+// Off the web, the app's own history keeps one entry for each open page and
+// no more, and no limit drops the entry of an open page (issue
+// callmephil/auto_route_library#17). Since pages opened together get an
+// entry each, pushAll of 25 pages leaves 26 entries, and in a tab, a change
+// to another tab and back adds one entry for each change, not one for each
+// page the tab holds.
 //
-// Native behavior this holds to: none; the limit is the history's own, and
-// back() still closes one page per call within it, as Navigator.pop takes
-// the top-most route only (packages/flutter/lib/src/widgets/navigator.dart
-// 5617 and 5652, Flutter 3.47.9).
+// Native behavior this holds to: Flutter's Navigator keeps every route until
+// it is popped, and Android's back stack and iOS's UINavigationController
+// have no fixed length (packages/flutter/lib/src/widgets/navigator.dart,
+// Flutter 3.50.0). back() closes one page per call, as Navigator.pop takes
+// the top-most route only.
 //
 // Steps: open 25 pages in one call or one by one, in the root router or a
 // tab's router, change tabs and back where there are tabs, and read the
 // history's length; then walk back.
 
 const _count = 25;
-const _limit = 21;
 
 RootStackRouter _router() => .build(
   routes: [
@@ -99,7 +98,7 @@ Future<List<int>> _closedPerBack(
 }
 
 void main() {
-  testWidgets('pushAll of 25 pages keeps at most 21 entries, and back() '
+  testWidgets('pushAll of 25 pages keeps an entry for each page, and back() '
       'closes one page per call', (tester) async {
     final root = _router();
     await pumpRouterConfigApp(tester, root.config());
@@ -107,15 +106,15 @@ void main() {
       root.pushAll([for (var i = 1; i <= _count; i++) NamedRoute('P$i')]),
     );
     await tester.pumpAndSettle();
-    expect(root.navigationHistory.length, _limit);
+    expect(root.navigationHistory.length, _count + 1);
     final closed = await _closedPerBack(tester, root, root);
-    expect(closed, List.filled(_limit - 1, 1));
+    expect(closed, List.filled(_count, 1));
   });
 
   for (final isTogether in [false, true]) {
     final opening = isTogether ? 'pushAll of 25 pages' : '25 pushes';
     testWidgets('$opening in a tab, then a change to the other tab and back, '
-        'keeps at most 21 entries', (tester) async {
+        'adds one entry per change', (tester) async {
       final root = _router();
       await pumpRouterConfigApp(tester, root.config());
       unawaited(root.push(const NamedRoute('Tabs')));
@@ -133,14 +132,16 @@ void main() {
           await tester.pumpAndSettle();
         }
       }
-      final lengths = [root.navigationHistory.length];
+      final opened = root.navigationHistory.length;
+      final lengths = [opened];
       for (final index in [1, 0]) {
         tabs.setActiveIndex(index);
         await tester.pumpAndSettle();
         lengths.add(root.navigationHistory.length);
       }
-      expect(lengths, everyElement(lessThanOrEqualTo(_limit)));
-      expect(lengths.lastOrNull, _limit);
+      // Each tab change is one navigation: one entry, not an entry for each
+      // page the tab holds.
+      expect(lengths, [opened, opened + 1, opened + 2]);
     });
   }
 }

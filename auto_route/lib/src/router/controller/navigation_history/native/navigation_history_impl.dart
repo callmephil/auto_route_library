@@ -25,9 +25,6 @@ class NavigationHistoryImpl extends NavigationHistory {
   @override
   final StackRouter router;
 
-  // The most entries the history keeps; the oldest go first.
-  static const _maxEntries = 21;
-
   final _entries = <_HistoryEntry>[];
   bool _isNavigatingBack = false;
   // The url back() navigates to, until the router reports it.
@@ -224,10 +221,6 @@ class NavigationHistoryImpl extends NavigationHistory {
       final entry = _entryOf(page);
       _entries.insert(at, entry);
       _markIfHeld(entry);
-    }
-    // The oldest entries go first, as when entries are added one by one.
-    if (_entries.length > _maxEntries) {
-      _entries.removeRange(0, _entries.length - _maxEntries);
     }
   }
 
@@ -486,10 +479,6 @@ class NavigationHistoryImpl extends NavigationHistory {
       _entries.removeLast();
     }
 
-    // Keeps room for the new entry within the limit.
-    if (_entries.length >= _maxEntries) {
-      _entries.removeRange(0, _entries.length - _maxEntries + 1);
-    }
     if (urlState.shouldReplace && length > 0) {
       _entries.removeLast();
       // The entry before may already hold this url, e.g. the page a redirect

@@ -36,6 +36,7 @@ import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
 import 'back_same_url_test.dart' as back_same_url;
 import 'back_skips_removed_page_test.dart' as back_skips_removed_page;
+import 'back_through_every_open_page_test.dart' as back_through_every_open_page;
 import 'back_to_open_page_asks_no_guard_test.dart'
     as back_to_open_page_asks_no_guard;
 import 'back_to_shell_home_test.dart' as back_to_shell_home;
@@ -500,6 +501,7 @@ void main() {
   back_same_route_params.main();
   back_same_url.main();
   back_skips_removed_page.main();
+  back_through_every_open_page.main();
   back_to_open_page_asks_no_guard.main();
   back_to_shell_home.main();
   back_twice_in_one_turn.main();

@@ -113,8 +113,7 @@ void main() {
       expect(() => history.back(), returnsNormally);
     });
 
-    test('Should limit history to 20 entries', () async {
-      // Push 25 routes
+    test('Should keep an entry for each open page', () async {
       for (var i = 0; i < 25; i++) {
         // Alternate between routes to avoid duplicate prevention
         if (i % 3 == 0) {
@@ -126,9 +125,8 @@ void main() {
         }
       }
 
-      // Should be limited to 20 + 1 (current)
-      expect(history.length, lessThanOrEqualTo(21));
-    });
+      expect(history.length, 25);
+    }, skip: _kWebCountsBrowserEntries);
 
     test('Should notify listeners on URL state change', () async {
       var wasNotified = false;
