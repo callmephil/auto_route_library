@@ -14,6 +14,8 @@ This repository is its own product: a maintained fork of the auto_route package.
 
 Also: never push (the maintainer merges into `dev` and pushes), run `dart format` on every file you change, American English, made-up names in code and fixtures.
 
+Write every message to Phil, and every issue in the fork's GitHub, in ASD-STE100 Simplified Technical English: short sentences, one idea each, active voice, simple tenses, approved words, and each technical term the same every time. Phil's rule, since 2026-11-18.
+
 The old example app lives in `auto_route/example.old/` until the new one in `auto_route/example/` takes over its tests.
 
 ## Branches
