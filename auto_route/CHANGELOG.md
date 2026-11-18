@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**: when a guard rejects its page on `reevaluateGuards()`, the pages above that page, which leave with it,
+  report `RouteLeaveKind.removed` to their `AutoRouteLeaveListener`, as the rejected page and a page held for its
+  guard do. Before, the top page reported `popped`.
 - **FIX**: `await reevaluateGuards()` completes with the error that the guard of a page held off the screen for it
   throws when asked again, as it already did for the guard of a page on the stack. The error no longer also reaches
   the zone as an uncaught error, and the router works on after it. Before, the app's `catch` got nothing.

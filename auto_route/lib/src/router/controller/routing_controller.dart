@@ -5417,9 +5417,15 @@ abstract class StackRouter extends RoutingController {
           // A page its guard now closes leaves its history entry to the page
           // below, as a pop does; a new entry would lead back to the guard.
           if (match is ReevaluatableRouteMatch<Object?, Object?>) {
-            _markLeaving([match.currentPage], .removed);
             final wasOnStack = _pages.remove(match.currentPage);
-            takeOffPagesFrom(i + 1);
+            // The pages above it leave with it, as Android's popBackStack
+            // with inclusive takes the destinations above the one it names.
+            // No pop took any of them off: they all hear they were removed,
+            // as the pages of a guard that lets go of its page do.
+            _markLeaving([
+              match.currentPage,
+              ...takeOffPagesFrom(i + 1),
+            ], .removed);
             if (wasOnStack) markUrlStateForReplace();
           } else if (replacement != null) {
             replacement.onRejected();
