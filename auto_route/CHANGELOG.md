@@ -31,6 +31,11 @@
   each open page. Before, after 30 pushes `back()` stopped after 20 steps with 11 pages open.
 - **FIX**: off the web, `router.back()` to a page that is still open asks no guard of that page, as the system back
   button does. Before, a guard that took its time delayed `back()`, and a guard that asks the user asked again.
+- **FIX**, **BEHAVIOR CHANGE**: `replace`, `replacePath` and `replaceAll` to a tabs page that is not open, with a tab that
+  its `AutoTabsRouter` does not list, change nothing, as `push` does: the stack, the screen and the url stay as they
+  were, and `onFailure` gets a `RouteNotFoundFailure`, or the call throws a `FlutterError` without it. Before, the page
+  on top was gone, the tabs page showed its first tab, and without `onFailure` nothing was reported. The callers of the
+  pages that left heard `null` already.
 - **FIX**, **BEHAVIOR CHANGE**: `navigate` or `navigatePath` to a page that the tabs list of a nested `AutoTabsRouter`
   does not hold, into a tab never opened, ends with the tab that was on screen, its url and its history as before.
   `onFailure` gets a `RouteNotFoundFailure`; without it, the error is reported as an uncaught `FlutterError`, as the same

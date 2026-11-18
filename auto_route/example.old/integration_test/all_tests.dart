@@ -363,6 +363,7 @@ import 'replace_same_route_children_test.dart' as replace_same_route_children;
 import 'replace_then_pop_test.dart' as replace_then_pop;
 import 'replace_while_animating_out_test.dart' as replace_while_animating_out;
 import 'replace_with_new_children_test.dart' as replace_with_new_children;
+import 'replace_with_unlisted_tab_test.dart' as replace_with_unlisted_tab;
 import 'replaced_change_skips_later_guards_test.dart'
     as replaced_change_skips_later_guards;
 import 'replaced_push_future_test.dart' as replaced_push_future;
@@ -766,6 +767,7 @@ void main() {
   replace_then_pop.main();
   replace_while_animating_out.main();
   replace_with_new_children.main();
+  replace_with_unlisted_tab.main();
   replaced_change_skips_later_guards.main();
   replaced_push_future.main();
   required_args.main();

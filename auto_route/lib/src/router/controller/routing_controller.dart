@@ -2047,7 +2047,7 @@ class TabsRouter extends RoutingController {
         final error =
             onFailure == null &&
                 waiting.link == null &&
-                waiting.takeBack != null
+                (waiting.takeBack != null || waiting.putBack != null)
             ? _notListedError(route)
             : null;
         onFailure?.call(RouteNotFoundFailure(route.name));
@@ -2060,7 +2060,7 @@ class TabsRouter extends RoutingController {
             ?..future.ignore()
             ..completeError(error, .current);
         }
-        waiting.turnDown(error: error);
+        waiting.turnDown(isNotListed: true, error: error);
       })
       ..ensureVisualUpdate();
   }
@@ -5461,8 +5461,9 @@ abstract class StackRouter extends RoutingController {
             final isWaitingBelow = going
                 .take(going.length - 1)
                 .any((route) => route.children?.isNotEmpty ?? false);
+            // With [replacement], the pages it took off are among them.
             final pagesBefore = waitsForNewRouter || isWaitingBelow
-                ? List.of(_pages)
+                ? {...replaced, ..._pages}.toList()
                 : null;
             going.take(going.length - 1).forEachIndexed(putOn);
             final popped = putOnLast(going.lastOrNull ?? match);
@@ -5576,6 +5577,11 @@ abstract class StackRouter extends RoutingController {
       takeBack: canTakeBack && pagesBefore.isNotEmpty
           ? () => _takeBack(added)
           : null,
+      // Pages this step took off, as replace does, come back only when the
+      // nested router can not show the page at all, see [_putBack].
+      putBack: !canTakeBack && pagesBefore.isNotEmpty
+          ? () => _putBack(pagesBefore, added)
+          : null,
     ).waitOn(data);
   }
 
@@ -5620,6 +5626,35 @@ abstract class StackRouter extends RoutingController {
     for (final page in onStack.reversed) {
       removeRoute(page.routeData, notify: false);
     }
+    notifyAll(forceUrlRebuild: true);
+    return true;
+  }
+
+  // Puts [pagesBefore], which a replace took off the stack, back, and takes
+  // [added], which it put on, off, once the nested router of the new page
+  // could not show the route named for it, see [_turnDownPendingRoute]: the
+  // stack, the screen and the url are as before the call. The callers of the
+  // pages that left heard null already, as for any page that leaves. Returns
+  // false, and changes nothing, when none of [added] is on the stack any
+  // longer.
+  bool _putBack(
+    List<AutoRoutePage<Object?>> pagesBefore,
+    List<AutoRoutePage<Object?>> added,
+  ) {
+    final onStack = added.where(_pages.contains).toList();
+    if (_isDisposed || onStack.isEmpty) return false;
+    markUrlStateForReplace();
+    for (final page in onStack.reversed) {
+      _pages.remove(page);
+      _noteLeft(page);
+      page.routeData.onPopInvoked(null);
+    }
+    for (final page in pagesBefore.whereNot(_pages.contains)) {
+      page.routeData._isReplaced = false;
+      _leaveKinds.remove(page.routeData);
+      _pages.add(page);
+    }
+    _shareTopPathData();
     notifyAll(forceUrlRebuild: true);
     return true;
   }
@@ -6992,6 +7027,7 @@ class _NestedLetIn {
     this.link,
     this.linkStep,
     this.takeBack,
+    this.putBack,
     this.uncaughtZone,
     this.onFailure,
   });
@@ -7011,6 +7047,11 @@ class _NestedLetIn {
 
   // Takes the page back after a "no"; answers whether it did.
   bool Function()? takeBack;
+
+  // Puts the pages the navigation took off back, and takes the pages it put
+  // on off, when the nested router can not show the route at all; answers
+  // whether it did. A guard's "no" does not call it: the new page stays then.
+  bool Function()? putBack;
 
   // The zone an error the app's own call has no future for is reported in,
   // as an uncaught one, see [TabsRouter._waitForTabsOfNewTab].
@@ -7112,6 +7153,7 @@ class _NestedLetIn {
     linkStep = null;
     _onLetIn = null;
     takeBack = null;
+    putBack = null;
     final link = this.link;
     if (link == null || !_root._isLinkOvertaken(link)) step?.call();
     onLetIn?.call();
@@ -7123,11 +7165,18 @@ class _NestedLetIn {
   //
   // [error] is what the app's own call that has no onFailure hears, see
   // [taken].
-  bool turnDown({bool canTakeBack = true, Object? error}) {
-    final toTakeBack = canTakeBack ? takeBack : null;
+  bool turnDown({
+    bool canTakeBack = true,
+    bool isNotListed = false,
+    Object? error,
+  }) {
+    final toTakeBack = canTakeBack
+        ? (takeBack ?? (isNotListed ? putBack : null))
+        : null;
     linkStep = null;
     _onLetIn = null;
     takeBack = null;
+    putBack = null;
     final isTakenBack = toTakeBack?.call() ?? false;
     _markTaken(error);
     return isTakenBack;
@@ -7141,7 +7190,8 @@ class _NestedLetIn {
     inner
       ..link ??= link
       ..onFailure ??= onFailure
-      ..takeBack = takeBack ?? inner.takeBack;
+      ..takeBack = takeBack ?? inner.takeBack
+      ..putBack = putBack ?? inner.putBack;
     // Taken up once the router there has taken it up.
     unawaited(inner.taken.then((_) => _markTaken(), onError: _markTaken));
     final step = linkStep;
@@ -7159,6 +7209,7 @@ class _NestedLetIn {
     linkStep = null;
     _onLetIn = null;
     takeBack = null;
+    putBack = null;
   }
 }
 
