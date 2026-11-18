@@ -1,4 +1,8 @@
 ## 13.0.0-rc.1
+- **FIX**: after a link, `navigate` or `navigatePath` into the nested router or tabs of an open page is turned down,
+  as by a guard's "no" there or a tab the app removed, the route data of that page keeps its route, query, fragment
+  and children. Before, `router.current.queryParams` and the page's `route.children` named the refused navigation,
+  also after the user selected another tab.
 - **FIX**, **BEHAVIOR CHANGE**: `navigate` and `navigatePath` into the nested router of a tab answer as the page they
   reach there does, as into the nested router of a stack page: after a guard's "no" there, once it has answered; after a
   "yes", once that page closes. Before, they answered as the tab changed, while the guard still decided. Code after an

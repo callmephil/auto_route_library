@@ -249,6 +249,16 @@ class RouteData<R> {
   // casts the route's page to.
   X _withResultType<X>(X Function<S>(RouteData<S> data) create) => create(this);
 
+  // Takes the route, query, fragment and pending children of [before], the
+  // data of this page before a navigation that was turned down in its
+  // nested router, see [StackRouter._putBackRouteDataIfTurnedDown].
+  void _putBackRouteOf(RouteData<Object?> before) {
+    _route = before._route;
+    _ownQueryParams = before._ownQueryParams;
+    _ownFragment = before._ownFragment;
+    _pendingChildren = List.of(before._pendingChildren);
+  }
+
   void _onStartReevaluating(RouteMatch<Object?> newMatch) {
     _updateRoute(newMatch);
     _ownQueryParams = newMatch.queryParams;

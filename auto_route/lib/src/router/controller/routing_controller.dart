@@ -4563,6 +4563,7 @@ abstract class StackRouter extends RoutingController {
     required bool updateExistingRoutes,
     OnNavigationFailure? onFailure,
     bool isLink = false,
+    VoidCallback? onLetIn,
   }) {
     // Let go once replaceAll has its answer, so the call that waits on the
     // last new page doesn't hold the pages that left.
@@ -4617,6 +4618,7 @@ abstract class StackRouter extends RoutingController {
     return _navigateAll(
       matches,
       onFailure: onFailure,
+      onLetIn: onLetIn,
       replacement: _PagesReplacement(
         onGuardShowsPage: (router) {
           // A page on another router is not in their place.
@@ -5976,7 +5978,11 @@ abstract class StackRouter extends RoutingController {
     // mark and the nested router's url gets one of its own.
     if (takenOver != null) {
       if (takeovers == null) {
-        _openChildrenInTakenOverRouter(data, onFailure: onFailure);
+        _openChildrenInTakenOverRouter(
+          data,
+          onFailure: onFailure,
+          before: takenOver,
+        );
       } else {
         takeovers.add(data);
       }
@@ -6034,9 +6040,14 @@ abstract class StackRouter extends RoutingController {
   // sent to the new ones, as if built anew. A route given no children comes
   // with its initial child, as with navigate; with no initial child either,
   // the router keeps the children it shows.
+  //
+  // A navigation the guards there turn down gives the page back the route
+  // data of [before], the page whose screen it took over, see
+  // [_putBackRouteDataIfTurnedDown].
   void _openChildrenInTakenOverRouter(
     RouteData<Object?> data, {
     OnNavigationFailure? onFailure,
+    RouteData<Object?>? before,
   }) {
     final inner = _innerControllerOfMatch(data.matchId);
     if (inner == null || !data.hasPendingChildren) return;
@@ -6044,17 +6055,28 @@ abstract class StackRouter extends RoutingController {
       data.pendingChildren,
     );
     data.pendingChildren.clear();
-    if (inner is StackRouter && !inner.managedByWidget) {
-      unawaited(
-        inner._replaceAllMatches(
-          children,
-          updateExistingRoutes: true,
-          onFailure: onFailure,
-        ),
-      );
-    } else {
-      unawaited(inner._navigateAll(children, onFailure: onFailure));
-    }
+    var isLetIn = false;
+    void onLetIn() => isLetIn = true;
+    final opening = inner is StackRouter && !inner.managedByWidget
+        ? inner._replaceAllMatches(
+            children,
+            updateExistingRoutes: true,
+            onFailure: onFailure,
+            onLetIn: onLetIn,
+          )
+        : inner._navigateAll(children, onFailure: onFailure, onLetIn: onLetIn);
+    if (before == null) return unawaited(opening);
+    unawaited(
+      opening.whenComplete(() {
+        if (isLetIn) return;
+        _putBackRouteDataIfTurnedDown(
+          data,
+          before: before,
+          inside: inner,
+          isLetIn: () => isLetIn,
+        );
+      }),
+    );
   }
 
   // The match ids of [routes] that keep a screen replaceAll keeps below the
@@ -6311,7 +6333,13 @@ abstract class StackRouter extends RoutingController {
       final ofLink = isReevaluating ? null : (link ?? root._startingLink);
       var mayUpdateRoute = routes.last;
       var keptScreens = _takeScreensKeptByReplaceAll(routes);
+      // The route data of the open pages before this navigation puts any on
+      // again, by page, see [_putBackRouteDataIfTurnedDown].
+      var dataBefore = const <LocalKey, RouteData<Object?>>{};
       if (!managedByWidget) {
+        dataBefore = {
+          for (final page in _pages) page.routeData.matchId: page.routeData,
+        };
         // The future of a pushed page completes when the page is popped, so
         // wait only until the page is added, to keep updating nested routers
         // right away.
@@ -6439,15 +6467,49 @@ abstract class StackRouter extends RoutingController {
       // navigation changes nothing; a link's do already. A nested router not
       // built yet asks its guards only once its page is in.
       if (mayUpdateController != null && newChildren.isNotEmpty) {
-        return await mayUpdateController._navigateAll(
+        final reached = _pages
+            .lastWhereOrNull(
+              (page) => page.routeData.matchId == mayUpdateRoute.id,
+            )
+            ?.routeData;
+        final before = dataBefore[mayUpdateRoute.id];
+        final letIn = lettingIn;
+        if (reached == null ||
+            before == null ||
+            identical(reached, before) ||
+            letIn == null) {
+          return await mayUpdateController._navigateAll(
+            newChildren,
+            onFailure: onFailure,
+            keepsUnnamedPages: keepsUnnamedPages,
+            link: ofLink,
+            onLetIn: lettingIn,
+            onGuardShowsPage: onNestedGuardShowsPage,
+            waitsInsideTabs: waitsInsideTabs,
+          );
+        }
+        var isLetIn = false;
+        final result = await mayUpdateController._navigateAll<T>(
           newChildren,
           onFailure: onFailure,
           keepsUnnamedPages: keepsUnnamedPages,
           link: ofLink,
-          onLetIn: lettingIn,
+          onLetIn: () {
+            isLetIn = true;
+            letIn();
+          },
           onGuardShowsPage: onNestedGuardShowsPage,
           waitsInsideTabs: waitsInsideTabs,
         );
+        if (!isLetIn) {
+          _putBackRouteDataIfTurnedDown(
+            reached,
+            before: before,
+            inside: mayUpdateController,
+            isLetIn: () => isLetIn,
+          );
+        }
+        return result;
       }
       if (waiting != null && lettingIn != null) {
         waiting.addLetIn(lettingIn);
@@ -6476,6 +6538,40 @@ abstract class StackRouter extends RoutingController {
       if (hadPages && !isReevaluating) notifyAll(forceUrlRebuild: true);
     }
     return await popped;
+  }
+
+  // The navigation went on into [inside], the nested router of the page
+  // [reached], and answered without being let in there: a guard there said
+  // no, the route is not one of its tabs, or a later navigation took over.
+  // The page went on again with the navigation's route before [inside]
+  // asked its guards; it gets back the route, query and fragment of
+  // [before], its data before the navigation, so code that reads it, such
+  // as router.current.queryParams, finds no route that never opened. Not
+  // when the page has left, or a later navigation put a new page of it on.
+  // Tabs that answered while their own guard still decides the change wait
+  // for that change: only a change that does not happen puts the data back.
+  void _putBackRouteDataIfTurnedDown(
+    RouteData<Object?> reached, {
+    required RouteData<Object?> before,
+    required RoutingController inside,
+    required bool Function() isLetIn,
+  }) {
+    void putBack() {
+      if (_isDisposed ||
+          isLetIn() ||
+          !_pages.any((page) => identical(page.routeData, reached))) {
+        return;
+      }
+      reached._putBackRouteOf(before);
+    }
+
+    final pending = inside is TabsRouter ? inside._pendingChange : null;
+    if (pending == null) return putBack();
+    unawaited(
+      pending.then((change) {
+        if (change != .done) putBack();
+      }, onError: (Object _) => putBack()),
+    );
   }
 
   // Asks the guards of the pages in the nested router of the page [route]
