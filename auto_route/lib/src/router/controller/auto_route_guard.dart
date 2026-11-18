@@ -576,6 +576,11 @@ class NavigationResolver {
   // [StackRouter._letGoOfGuard].
   bool _hasLetGo = false;
 
+  // Whether the page or tab this guard let go of left for good, as one that
+  // replaceAll replaced: no change asks the guard again, and a stale yes of
+  // its is not asked again, see [StackRouter._dropLetGoGuards].
+  bool _isDropped = false;
+
   // Whether a reevaluation asked this navigation's guard again without
   // waiting for its answer, since its call had returned without one: no
   // later reevaluation waits for that ask either, see

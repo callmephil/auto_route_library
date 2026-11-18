@@ -1635,6 +1635,7 @@ class TabsRouter extends RoutingController {
       final isAskedAgain =
           result.continueNavigation &&
           resolver._isAnswerStale &&
+          !resolver._isDropped &&
           timesLeft > 0 &&
           !_isDisposed &&
           change == _tabChanges;
@@ -2610,6 +2611,9 @@ abstract class StackRouter extends RoutingController {
   @override
   void dispose() {
     _isDisposed = true;
+    // No guard of a held page is asked again, and the waits for their
+    // answers end.
+    _endLetGoWaits((_) => true);
     super.dispose();
     pagelessRoutesObserver.dispose();
     activeGuardObserver.dispose();
@@ -2701,7 +2705,41 @@ abstract class StackRouter extends RoutingController {
   // latest of those waits that took it on, the token here: a page above the
   // let-go page whose own guard lets go once asked after the first guard's
   // yes waits for its own guard.
-  final _waitingForLetGoGuards = <AutoRoutePage<Object?>, Object>{};
+  final _waitingForLetGoGuards = <AutoRoutePage<Object?>, _LetGoWait>{};
+
+  // Ends for good the waits of [_awaitLetGoAnswer] that hold a page [test]
+  // picks, as for a page that left for good while its guard decides: the
+  // pages of each such wait stay off, their callers get null, and no change
+  // asks their guards again. A later answer of those guards opens nothing,
+  // see [NavigationResolver._isDropped].
+  void _endLetGoWaits(bool Function(AutoRoutePage<Object?> page) test) {
+    final pages = _waitingForLetGoGuards.keys.where(test).toSet();
+    if (pages.isEmpty) return;
+    for (final page in pages) {
+      _waitingForLetGoGuards[page]?.end();
+    }
+    _dropLetGoGuards(
+      (resolver) => switch (resolver.route) {
+        final ReevaluatableRouteMatch<Object?, Object?> route => pages.contains(
+          route.currentPage,
+        ),
+        _ => false,
+      },
+    );
+  }
+
+  // Takes the entries of [_guardsLettingGo] whose resolver [test] picks out
+  // of it for good: no change asks their guards again, and a later answer of
+  // theirs is not asked again when stale, see [NavigationResolver._isDropped].
+  void _dropLetGoGuards(bool Function(NavigationResolver resolver) test) {
+    final dropped = _guardsLettingGo
+        .where((entry) => test(entry._resolver))
+        .toList();
+    for (final entry in dropped) {
+      entry._resolver._isDropped = true;
+    }
+    _guardsLettingGo.removeWhere(dropped.contains);
+  }
 
   // The guards asked again that returned without an answer and let go of
   // their page or tab, until they answer. Nothing on screen waits for them,
@@ -5417,14 +5455,18 @@ abstract class StackRouter extends RoutingController {
           route.currentPage,
     ];
     // This wait's token: it holds [pages] until a later wait takes them on.
-    final wait = Object();
+    final wait = _LetGoWait();
     for (final page in pages) {
       _waitingForLetGoGuards[page] = wait;
     }
     try {
-      final result = await answer;
+      // Null once the wait ends for good, see [_endLetGoWaits].
+      final result = await Future.any<ResolverResult?>([
+        Future.value(answer),
+        wait.ended,
+      ]);
+      if (_isDisposed || result == null) return;
       final match = result.route;
-      if (_isDisposed) return;
       if (!result.continueNavigation) {
         _takeOffAfterLetGo(routes);
         // As after a no in a reevaluation: a nested router its guard emptied,
@@ -5852,6 +5894,7 @@ abstract class StackRouter extends RoutingController {
               final isAskedAgain =
                   result.continueNavigation &&
                   resolver._isAnswerStale &&
+                  !resolver._isDropped &&
                   timesLeft > 0 &&
                   !_isDisposed;
               return isAskedAgain
@@ -7037,6 +7080,20 @@ class ActiveGuardObserver extends ValueNotifier<List<GuardEntry>> {
   /// returns a list of active guards
   List<AutoRouteGuard> get activeGuards =>
       .unmodifiable(value.map((e) => e.guard));
+}
+
+// The token of a wait of [StackRouter._awaitLetGoAnswer]: it holds the pages
+// of that wait, and [end] ends the wait for good, see
+// [StackRouter._endLetGoWaits].
+class _LetGoWait {
+  final _ended = Completer<ResolverResult?>();
+
+  // Completes with null once [end] is called.
+  Future<ResolverResult?> get ended => _ended.future;
+
+  void end() {
+    if (!_ended.isCompleted) _ended.complete(null);
+  }
 }
 
 /// A class that holds a guard and it's corresponding resolver
