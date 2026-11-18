@@ -3206,6 +3206,20 @@ abstract class StackRouter extends RoutingController {
         resolver._isAskedAgainApart = true;
         unawaited(resolver.checkGuard(entry.guard, this));
         continue;
+      } else if (resolver._waitingCompleter != null &&
+          !resolver._isRedirecting &&
+          !resolver._letsInNavigationAbove &&
+          resolver.route is! ReevaluatableRouteMatch) {
+        // A navigation's guard at its check, as one that awaits a request
+        // inside its call: no round waits for it, or a sign-out would close
+        // no page until the request ends, as Flutter's Router never holds a
+        // newer route transaction for an older one. Its answer is from
+        // before this change, see above: a yes from it is dropped and the
+        // guard asked anew before its page goes in, see [_canNavigate]. Not
+        // one that decides about a page already on the screen above, which
+        // its "no" takes back: the round waits for it, as for the guard of
+        // a page on the stack.
+        continue;
       } else {
         result = await resolver.checkGuard(entry.guard, this);
       }
@@ -5912,7 +5926,7 @@ abstract class StackRouter extends RoutingController {
         routeToCheck,
         pendingRoutes: pendingRoutes,
         isReevaluating: isReevaluating,
-      );
+      ).._letsInNavigationAbove = Zone.current[_letInAboveZone] == true;
       final guardEntry = GuardEntry(guard, resolver);
       if (wasLetGo) {
         _holdLettingGo([guardEntry]);
@@ -6026,6 +6040,22 @@ abstract class StackRouter extends RoutingController {
       return await _holdingLeaveReports(
         () =>
             _navigateAll<T>(routes, onFailure: onFailure, isReevaluating: true),
+      );
+    }
+    if (onLetIn != null &&
+        !isReevaluating &&
+        Zone.current[_letInAboveZone] != true) {
+      return await runZoned(
+        () => _navigateAll<T>(
+          routes,
+          onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
+          replacement: replacement,
+          link: link,
+          onLetIn: onLetIn,
+          onGuardShowsPage: onGuardShowsPage,
+        ),
+        zoneValues: {_letInAboveZone: true},
       );
     }
     // pages pushed after the stack was composed for reevaluation are not in
@@ -6721,6 +6751,12 @@ class NestedStackRouter extends StackRouter {
     List<RouteMatch<Object?>> routes, {
     _NestedLetIn? letIn,
   }) async {
+    if (letIn != null && Zone.current[_letInAboveZone] != true) {
+      return await runZoned(
+        () => _openPendingRoutes(routes, letIn: letIn),
+        zoneValues: {_letInAboveZone: true},
+      );
+    }
     var isLastPageOn = false;
     final dataBefore = _routeData;
     await _pushAllGuarded(
@@ -7002,6 +7038,15 @@ typedef _GuardHoldsCallback = bool Function({required bool isWaitingOnUser});
 // own check changes that state through code of the app, as one that
 // refreshes a session the app listens to, would be asked without end.
 const _kMaxAsksAgainInARow = 3;
+
+// Holds true in the zone of a navigation of a nested router that a router
+// above waits on: one that goes on into the nested router of a page it
+// reached or put on ([StackRouter._navigateAll]'s onLetIn), or the first
+// pages a nested router opens for such a navigation
+// ([NestedStackRouter._openPendingRoutes]). The guards it asks decide about
+// pages already on the screen above, which a "no" takes back, see
+// [NavigationResolver._letsInNavigationAbove].
+final _letInAboveZone = Object();
 
 // What replaceAll does to the pages it replaces, as its guards answer.
 class _PagesReplacement {

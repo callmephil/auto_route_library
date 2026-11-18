@@ -576,6 +576,10 @@ class NavigationResolver {
   // [StackRouter._letGoOfGuard].
   bool _hasLetGo = false;
 
+  // Whether this guard decides about a navigation that a router above waits
+  // on, see [_letInAboveZone]: a reevaluation waits for its check.
+  bool _letsInNavigationAbove = false;
+
   // Whether the page or tab this guard let go of left for good, as one that
   // replaceAll replaced: no change asks the guard again, and a stale yes of
   // its is not asked again, see [StackRouter._dropLetGoGuards].

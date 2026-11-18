@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: a sign-out closes the pages that need a session at once, also while the guard of a `push`, `replace`,
+  `pushAll` or `navigate` awaits a request inside its call, and `reevaluateGuards()` no longer waits for that guard.
+  The guard's yes from before the sign-out still opens nothing: it is asked again. A guard in a nested router that
+  decides whether a page already on the screen above stays is still awaited. Before, the pages stayed on the screen,
+  and `reevaluateGuards()` waited, until the request ended.
 - **FIX**, **BEHAVIOR CHANGE**: a navigation that closes the pages over an open page, such as `navigatePath` into
   that page's nested router, also closes for good a page among them that is held off the screen for its guard, as
   after a sign-out. A later sign-in no longer opens that page again, and its caller gets `null` at the close. A held
