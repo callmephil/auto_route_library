@@ -77,6 +77,14 @@ class HistoryEntryList {
   /// The entries, the app's first one first.
   List<UrlState> get entries => .unmodifiable(_entries);
 
+  /// Puts the entries back as [snapshot], a copy of [entries] taken before,
+  /// when the app took back the change that made the ones since.
+  void restore(List<UrlState> snapshot) {
+    _entries
+      ..clear()
+      ..addAll(snapshot);
+  }
+
   /// The app now shows [state], and returns the entry that holds it.
   ///
   /// The returned entry is [state], or the entry the page on top already had

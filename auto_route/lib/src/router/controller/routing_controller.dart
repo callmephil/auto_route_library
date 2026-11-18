@@ -1434,6 +1434,29 @@ class TabsRouter extends RoutingController {
             keepsUnnamedPages: keepsUnnamedPages,
           )
         : null;
+    if (updated != null && goesInside && tabRouter == null) {
+      // The browser's history is not written until the nested router of the
+      // tab, never opened, has answered, see [_waitForTabsOfNewTab].
+      final previous = _activeIndex;
+      final releaseBrowser = navigationHistory.holdBrowserWrites();
+      _showTab(index, notify: notify, remember: remember);
+      _waitForTabsOfNewTab(
+        index,
+        previous,
+        releaseBrowser: releaseBrowser,
+        onFailure: onFailure,
+      );
+      unawaited(
+        _navigateInsideTab(
+          updated,
+          onFailure: onFailure,
+          keepsUnnamedPages: keepsUnnamedPages,
+          link: link,
+          onLetIn: onLetIn,
+        ),
+      );
+      return .done;
+    }
     _showTab(index, notify: notify, remember: remember);
     if (updated == null) {
       onLetIn?.call();
@@ -1449,6 +1472,67 @@ class TabsRouter extends RoutingController {
       );
     }
     return .done;
+  }
+
+  // The tab at [index] just showed with pages named for its nested router,
+  // which is built only with the tab, so it can turn the route down only
+  // once the tab is on screen, see [_turnDownPendingRoute]: when that router
+  // is a tabs router that does not list the route, the tab before it, at
+  // [previous], shows again, as it does when the app's call changes the tab
+  // back. The tab shows meanwhile, as the call returns. A call that gave no
+  // [onFailure] reports its error as an uncaught one in the zone it was made
+  // in: nothing awaits the nested router.
+  //
+  // A browser's history gets no entry for the tab that goes: [releaseBrowser]
+  // lets its writes through once the tab or the tab before it is on screen,
+  // and they are merged into the last, since an entry once written can only
+  // be stepped back over.
+  void _waitForTabsOfNewTab(
+    int index,
+    int previous, {
+    required void Function({bool dropsChanges}) releaseBrowser,
+    OnNavigationFailure? onFailure,
+  }) {
+    final data = _pages.elementAtOrNull(index)?.routeData;
+    if (data == null || !data.hasPendingChildren) {
+      releaseBrowser();
+      return;
+    }
+    final binding = SchedulerBinding.instance;
+    var isTurnedDown = false;
+    final waiting = _NestedLetIn(
+      root,
+      onFailure: onFailure,
+      uncaughtZone: onFailure == null ? .current : null,
+      takeBack: () {
+        if (_isDisposed || _activeIndex != index || previous == index) {
+          return false;
+        }
+        isTurnedDown = true;
+        markUrlStateForReplace();
+        _showTab(previous, notify: true, remember: false);
+        // The url of the tab before it is reported in the frame that follows.
+        binding
+          ..addPostFrameCallback((_) => releaseBrowser(dropsChanges: true))
+          ..ensureVisualUpdate();
+        return true;
+      },
+    )..waitOn(data);
+    // A tab whose nested router did not claim it by the end of the frame
+    // that builds the tab has a router that shows any route: nothing is left
+    // to turn down.
+    binding
+      ..addPostFrameCallback(
+        (_) => binding.addPostFrameCallback((_) {
+          if (identical(_NestedLetIn.waitingOn(data), waiting)) {
+            _NestedLetIn.claimToTurnDown(data);
+          }
+          // A tab turned down releases the browser itself, once its
+          // previous tab's url is reported.
+          if (!isTurnedDown) releaseBrowser();
+        }),
+      )
+      ..ensureVisualUpdate();
   }
 
   // Makes the tab at [index] the active one.
@@ -1967,6 +2051,10 @@ class TabsRouter extends RoutingController {
             ? _notListedError(route)
             : null;
         onFailure?.call(RouteNotFoundFailure(route.name));
+        waiting.uncaughtZone?.handleUncaughtError(
+          _notListedError(route),
+          .current,
+        );
         if (error != null && !ignorePopCompleters) {
           page._pendingPopCompleter
             ?..future.ignore()
@@ -6899,7 +6987,14 @@ class NestedStackRouter extends StackRouter {
 // fails, and as on the web a canceled navigation leaves the document on
 // screen.
 class _NestedLetIn {
-  new(this._root, {this.link, this.linkStep, this.takeBack, this.onFailure});
+  new(
+    this._root, {
+    this.link,
+    this.linkStep,
+    this.takeBack,
+    this.uncaughtZone,
+    this.onFailure,
+  });
 
   // The navigation waiting on the nested router of the page of a route data,
   // until that router claims it.
@@ -6916,6 +7011,10 @@ class _NestedLetIn {
 
   // Takes the page back after a "no"; answers whether it did.
   bool Function()? takeBack;
+
+  // The zone an error the app's own call has no future for is reported in,
+  // as an uncaught one, see [TabsRouter._waitForTabsOfNewTab].
+  Zone? uncaughtZone;
 
   // The caller's, which hears a guard's rejection there.
   OnNavigationFailure? onFailure;

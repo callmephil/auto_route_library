@@ -143,6 +143,19 @@ class BrowserNavigationHistory extends NavigationHistory {
   }
 
   @override
+  void Function({bool dropsChanges}) holdBrowserWrites() {
+    final entriesBefore = _list.entries;
+    _writer.hold();
+    var isReleased = false;
+    return ({bool dropsChanges = false}) {
+      if (isReleased) return;
+      isReleased = true;
+      if (dropsChanges && !_isDisposed) _list.restore(entriesBefore);
+      _writer.release(dropsChanges: dropsChanges);
+    };
+  }
+
+  @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
     final shown = _list.show(
       newState,

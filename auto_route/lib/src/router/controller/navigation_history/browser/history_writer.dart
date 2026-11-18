@@ -174,7 +174,8 @@ class HistoryWriter {
 
   /// Whether the writer has nothing left to do, or can do nothing for now,
   /// see [pause].
-  bool get isIdle => !_isRunning && (_queue.isEmpty || _isPaused);
+  bool get isIdle =>
+      !_isRunning && (_queue.isEmpty || _isPaused || _writeHolds > 0);
 
   /// Whether [entry], the one at [place] in a list of the app's entries,
   /// has a browser entry.
@@ -201,6 +202,47 @@ class HistoryWriter {
     if (isIdle) return Future.value();
     return (_idle ??= Completer<void>()).future;
   }
+
+  /// Holds the work back until [release], for a change the app may take back
+  /// before it is written. Calls nest.
+  void hold() {
+    if (_writeHolds++ == 0) {
+      _queuedAtHold = _queue.length;
+      _wantedAtHold = _lastWanted;
+    }
+  }
+
+  /// Ends one [hold]. Once none is left, the entries wanted meanwhile are
+  /// merged into the last of them, so the browser gets only where the app
+  /// ended, and the work goes on. With [dropsChanges] they are dropped
+  /// instead: the app took the change back, and the browser holds what it
+  /// should.
+  void release({bool dropsChanges = false}) {
+    if (_writeHolds == 0) return;
+    if (dropsChanges) _dropsChangesHeld = true;
+    if (--_writeHolds > 0) return;
+    final kept = <_Work>[];
+    for (final (place, work) in _queue.indexed) {
+      if (_dropsChangesHeld && place >= _queuedAtHold) break;
+      if (work is _Entries && kept.lastOrNull is _Entries) kept.removeLast();
+      kept.add(work);
+    }
+    if (_dropsChangesHeld) _lastWanted = _wantedAtHold;
+    _dropsChangesHeld = false;
+    _queue
+      ..clear()
+      ..addAll(kept);
+    if (isIdle) _completeIdle();
+    _run();
+  }
+
+  // The holds not released yet, see [hold].
+  int _writeHolds = 0;
+  bool _dropsChangesHeld = false;
+
+  // What the queue held, and what was wanted last, when the first hold began.
+  int _queuedAtHold = 0;
+  _Entries? _wantedAtHold;
 
   /// Holds the work back until [resume], as while no Router shows the app
   /// and nothing can be written.
@@ -384,7 +426,7 @@ class HistoryWriter {
   }
 
   void _run() {
-    if (_isRunning || _isPaused || _isDisposed) return;
+    if (_isRunning || _isPaused || _isDisposed || _writeHolds > 0) return;
     _isRunning = true;
     unawaited(_work());
   }
@@ -393,7 +435,10 @@ class HistoryWriter {
     try {
       // After the turn, so the changes made in it are all in the queue.
       await Future<void>.value();
-      while (_queue.isNotEmpty && !_isPaused && !_isDisposed) {
+      while (_queue.isNotEmpty &&
+          !_isPaused &&
+          !_isDisposed &&
+          _writeHolds == 0) {
         switch (_nextWork()) {
           case _Entries(:final entries, :final isReplace):
             final wanted = [

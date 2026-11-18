@@ -146,6 +146,22 @@ abstract class NavigationHistory with ChangeNotifier {
     // Native platforms have no browser to move.
   }
 
+  /// Holds back what this history writes to the browser until the returned
+  /// function is called, and then writes only where the app's entries ended.
+  /// Called with `dropsChanges`, it writes nothing of what was held, and the
+  /// entries are as they were: the app took the change back.
+  ///
+  /// For a change the app may take back in the frame that follows: a browser
+  /// entry, once written, can only be stepped back over, so a change taken
+  /// back leaves one behind unless it was never written. Does nothing on
+  /// native platforms.
+  @internal
+  void Function({bool dropsChanges}) holdBrowserWrites() => _doNothing;
+
+  // Native platforms have no browser to write.
+  // ignore: no-empty-block
+  static void _doNothing({bool dropsChanges = false}) {}
+
   /// Makes this history's account of the app's entries start from the entry
   /// the browser now stands on, before [AutoRouterDelegate.setNewRoutePath]
   /// follows the browser there: the entries after it are the browser's, as

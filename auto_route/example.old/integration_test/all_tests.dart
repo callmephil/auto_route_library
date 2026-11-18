@@ -177,6 +177,8 @@ import 'navigate_root_from_nested_test.dart' as navigate_root_from_nested;
 import 'navigate_to_active_tab_while_guard_decides_test.dart'
     as navigate_to_active_tab_while_guard_decides;
 import 'navigate_to_non_tab_test.dart' as navigate_to_non_tab;
+import 'navigate_to_unlisted_page_in_unopened_tab_test.dart'
+    as navigate_to_unlisted_page_in_unopened_tab;
 import 'navigate_to_unshown_tab_keeps_children_test.dart'
     as navigate_to_unshown_tab_keeps_children;
 import 'navigation_closes_held_page_test.dart' as navigation_closes_held_page;
@@ -617,6 +619,7 @@ void main() {
   navigate_root_from_nested.main();
   navigate_to_active_tab_while_guard_decides.main();
   navigate_to_non_tab.main();
+  navigate_to_unlisted_page_in_unopened_tab.main();
   navigate_to_unshown_tab_keeps_children.main();
   navigation_closes_held_page.main();
   navigations_in_one_turn.main();

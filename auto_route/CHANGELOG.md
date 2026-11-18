@@ -31,6 +31,11 @@
   each open page. Before, after 30 pushes `back()` stopped after 20 steps with 11 pages open.
 - **FIX**: off the web, `router.back()` to a page that is still open asks no guard of that page, as the system back
   button does. Before, a guard that took its time delayed `back()`, and a guard that asks the user asked again.
+- **FIX**, **BEHAVIOR CHANGE**: `navigate` or `navigatePath` to a page that the tabs list of a nested `AutoTabsRouter`
+  does not hold, into a tab never opened, ends with the tab that was on screen, its url and its history as before.
+  `onFailure` gets a `RouteNotFoundFailure`; without it, the error is reported as an uncaught `FlutterError`, as the same
+  call does after the tab opened once. The tab shows for one frame before it goes, since its tabs list exists only
+  when the tab builds. Before, the call opened the tab on its first page, at its url, and reported nothing.
 - **BEHAVIOR CHANGE**: auto_route no longer reads the page transitions of an app's theme from Flutter's built-in
   `MaterialApp` (`package:flutter/material.dart`), which Flutter 3.50.0 deprecates in favor of `material_ui`. Pages
   follow the `pageTransitionsTheme` of `material_ui`'s `Theme` only, so an app still on the built-in `MaterialApp` gets
