@@ -11,9 +11,9 @@ import '../utils/held_guard.dart';
 // Steps: the app starts at '/g', whose guard says no, and no page of the app
 // is under it (the web opens a link alone, so prefix matches are off). The
 // guard answers at once, or later.
-// Should: the first page of the app shows, '/', and the url is its own. Before,
-// the root was left without a page: a black screen, and a first push became
-// its only page.
+// The first page of the app should show, '/', and the url should be its own.
+// Before, the root was left without a page: a black screen, and a first push
+// became its only page.
 // Native behavior: Flutter's Navigator.pages refuses an empty list, and a
 // Navigator with no route opens its default route, '/'
 // (navigator.dart `_debugCheckPageApiParameters`, `initState`). Android's
@@ -24,18 +24,13 @@ import '../utils/held_guard.dart';
 // popViewController(animated:): "you cannot pop the last item on the stack").
 // A browser keeps the document on screen when a navigation is canceled.
 void main() {
-  RootStackRouter build({
-    required AutoRouteGuard guard,
-    bool isGuardedFirst = false,
-    bool hasPlainFirst = true,
-  }) => RootStackRouter.build(
+  RootStackRouter build({required AutoRouteGuard guard}) => .build(
     routes: [
-      if (hasPlainFirst)
-        NamedRouteDef(
-          name: 'H',
-          path: '/',
-          builder: (_, _) => const NamedPage('H'),
-        ),
+      NamedRouteDef(
+        name: 'H',
+        path: '/',
+        builder: (_, _) => const NamedPage('H'),
+      ),
       NamedRouteDef(
         name: 'G',
         path: '/g',
@@ -67,9 +62,7 @@ void main() {
   for (final slow in [false, true]) {
     testWidgets('a guard saying no ${slow ? 'later' : 'at once'} to the '
         'launch link leaves the first page', (tester) async {
-      final guard = HeldGuard(
-        mode: slow ? HeldGuardMode.holdsCall : HeldGuardMode.answersNo,
-      );
+      final guard = HeldGuard(mode: slow ? .holdsCall : .answersNo);
       final router = build(guard: guard);
       await launchAt(tester, router);
       if (slow) await guard.last.reject();
@@ -99,7 +92,7 @@ void main() {
         NamedRouteDef(
           name: 'G',
           path: '/g',
-          guards: [HeldGuard(mode: HeldGuardMode.answersNo)],
+          guards: [HeldGuard(mode: .answersNo)],
           builder: (_, _) => const NamedPage('G'),
         ),
       ],
@@ -293,9 +286,9 @@ void main() {
           name: 'G',
           path: '/g',
           guards: [
-            AutoRouteGuard.simple((resolver, router) {
+            AutoRouteGuard.simple((resolver, guardedRouter) {
               resolver.reject();
-              unawaited(router.push(const NamedRoute('X')));
+              unawaited(guardedRouter.push(const NamedRoute('X')));
             }),
           ],
           builder: (_, _) => const NamedPage('G'),
