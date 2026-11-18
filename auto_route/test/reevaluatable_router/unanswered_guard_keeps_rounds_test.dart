@@ -168,7 +168,10 @@ void main() {
   // signed-out user.
   // Should: that yes is from before the last change: it opens nothing, and
   // the guard is asked again before Pushed goes in, as a guard that awaits
-  // inside its call already is (_canNavigate); a no stands.
+  // inside its call already is (_canNavigate). Since
+  // callmephil/auto_route_library#4 each call of the guard gets a resolver
+  // of its own, and only the latest call decides: the sign-out's call is
+  // the latest, so the first call's yes or no is ignored either way.
   // Native behavior this holds to: Flutter's Router drops an older route
   // transaction's result once newer route information has arrived
   // (_processParsedRouteInformation, router.dart).
@@ -226,8 +229,8 @@ void main() {
         expect(afterSignOut, isNot(contains('SecretRoute')));
         expect(names(router), isNot(contains('PushedRoute')));
         expect(names(router), isNotEmpty);
-        // A yes is followed by an ask from after the sign-out; a no stands.
-        expect(settingsAsks.toSet(), hasLength(isYes ? 2 : 1));
+        // The first call, and the one the sign-out made, which decides.
+        expect(settingsAsks.toSet(), hasLength(2));
       });
     }
   }

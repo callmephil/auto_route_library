@@ -1,4 +1,10 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: each call of a guard gets a `NavigationResolver` of its own when
+  `reevaluateGuards()` calls the guard again before it has answered. A guard that keeps one callback per call, and
+  answers each once, no longer fails the assert "Make sure `resolver.next()` is only called once." (in a release
+  build, a `StateError`). Only the answer of the latest call decides; a later answer from an earlier call is ignored,
+  a yes or a no. A call that waits on the user, behind its `redirectUntil` or on a page or dialog it showed, still
+  answers from what the user does there. Before, every call got the same resolver.
 - **FIX**: a sign-out closes the pages that need a session at once, also while the guard of a `push`, `replace`,
   `pushAll` or `navigate` awaits a request inside its call, and `reevaluateGuards()` no longer waits for that guard.
   The guard's yes from before the sign-out still opens nothing: it is asked again. A guard in a nested router that

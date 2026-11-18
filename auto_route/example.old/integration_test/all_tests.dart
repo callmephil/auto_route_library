@@ -109,6 +109,7 @@ import 'fragment_question_mark_url_test.dart' as fragment_question_mark_url;
 import 'full_url_nested_path_test.dart' as full_url_nested_path;
 import 'generic_page_test.dart' as generic_page;
 import 'guard_answers_at_once_test.dart' as guard_answers_at_once;
+import 'guard_answers_each_call_test.dart' as guard_answers_each_call;
 import 'guard_lets_go_keeps_router_test.dart' as guard_lets_go_keeps_router;
 import 'guard_throws_tab_test.dart' as guard_throws_tab;
 import 'guard_throws_test.dart' as guard_throws;
@@ -555,6 +556,7 @@ void main() {
   full_url_nested_path.main();
   generic_page.main();
   guard_answers_at_once.main();
+  guard_answers_each_call.main();
   guard_lets_go_keeps_router.main();
   guard_throws_tab.main();
   guard_throws.main();

@@ -537,9 +537,10 @@ class NavigationResolver {
   // [_calls]: the answer a call's code gives is known as that call's.
   static final _askedCallZone = Object();
 
-  // How many times the guard was called with this resolver: once when it is
+  // How many times the guard was called for this resolver: once when it is
   // asked, then once each time a reevaluation asks it again, see
-  // [_checkGuard].
+  // [_checkGuard]. Each call gets a resolver of its own, see
+  // [_CallResolver].
   var _calls = 0;
 
   // The last call before the latest change of the state the guards are asked
@@ -558,9 +559,16 @@ class NavigationResolver {
   bool get _isAnswerFromBeforeChange {
     final upTo = _staleUpTo;
     if (upTo == null) return false;
-    final call = _isOwnCodeRunning ? Zone.current[_askedCallZone] : null;
+    final call =
+        _answeringCall ??
+        (_isOwnCodeRunning ? Zone.current[_askedCallZone] : null);
     return call is! int || call <= upTo;
   }
+
+  // The number of the call whose resolver gives the answer now, see
+  // [_CallResolver]. It is known also for an answer from code outside every
+  // call, such as a callback the call kept.
+  int? _answeringCall;
 
   // Whether the code that runs now is the guard's that was given this
   // resolver.
@@ -656,7 +664,7 @@ class NavigationResolver {
     final call = ++_calls;
     try {
       await runZoned(
-        () => guard.onNavigation(this, router),
+        () => guard.onNavigation(_CallResolver(this, call), router),
         zoneValues: {_askedZone: this, _askedCallZone: call},
       );
     } finally {
@@ -671,6 +679,99 @@ class NavigationResolver {
       _router._letGoOfGuard(this);
     }
     return await future;
+  }
+}
+
+// The resolver one call of a guard gets, see [NavigationResolver._checkGuard].
+// A reevaluation can call a guard again before it has answered. Each call
+// gets a resolver of its own, so a guard that keeps one callback per call
+// answers each one once. The answer of a call decides for [_asked], the
+// resolver the guard was asked with, only while no later call has begun:
+// the router ignores a later answer from an earlier call, as Flutter's
+// Router ignores the result of an older route transaction once a newer one
+// has started, in _processParsedRouteInformation of router.dart. Not while the
+// guard waits on the user, behind its redirect or on a page or dialog it
+// showed. Its answer then comes from what the user does there, which is
+// fresh, see [NavigationResolver._isWaitingOnUser]. A second answer from the same
+// call fails the same assert as before.
+class _CallResolver extends NavigationResolver {
+  new(this._asked, this._call)
+    : super(
+        _asked._router,
+        _asked._completer,
+        _asked.route,
+        pendingRoutes: _asked.pendingRoutes,
+      );
+
+  final NavigationResolver _asked;
+
+  // The number of this call, see [NavigationResolver._calls].
+  final int _call;
+
+  var _hasAnswered = false;
+
+  // Whether no later call of the guard has begun.
+  bool get _isLatest => _asked._calls == _call;
+
+  // Whether this call's answer decides, see the class comment.
+  bool get _decides =>
+      _isLatest || _asked._isRedirecting || _asked._isWaitingOnUser;
+
+  @override
+  bool get isReevaluating => _asked.isReevaluating;
+
+  @override
+  BuildContext get context => _asked.context;
+
+  @override
+  void next() => _answer(_asked.next);
+
+  @override
+  void reject({bool goBack = false, bool reevaluateNext = true}) => _answer(
+    () => _asked.reject(goBack: goBack, reevaluateNext: reevaluateNext),
+  );
+
+  @override
+  void overrideNext({
+    List<PageRouteInfo>? children,
+    Object? args,
+    Map<String, dynamic>? queryParams,
+    String? fragment,
+    bool reevaluateNext = true,
+  }) => _answer(
+    () => _asked.overrideNext(
+      children: children,
+      args: args,
+      queryParams: queryParams,
+      fragment: fragment,
+      reevaluateNext: reevaluateNext,
+    ),
+  );
+
+  // A redirect of an earlier call shows nothing: a later call decides.
+  @override
+  Future<void> redirectUntil(
+    PageRouteInfo target, {
+    OnNavigationFailure? onFailure,
+    bool replace = false,
+  }) => _isLatest
+      ? _asked.redirectUntil(target, onFailure: onFailure, replace: replace)
+      : .value();
+
+  @override
+  Future<ResolverResult> checkGuard(AutoRouteGuard guard, StackRouter router) =>
+      _asked.checkGuard(guard, router);
+
+  void _answer(VoidCallback answer) {
+    assert(!_hasAnswered, 'Make sure `resolver.next()` is only called once.');
+    _hasAnswered = true;
+    if (!_decides || _asked.isResolved) return;
+    _asked._answeringCall = _call;
+    try {
+      answer();
+    } finally {
+      _asked._answeringCall = null;
+    }
   }
 }
 
