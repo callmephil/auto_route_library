@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**: a tab held off the screen for its guard, as after a sign-out, leaves with its tabs page. Once the user
+  closes the tabs page, no later change calls that tab's guard, and a later yes of the guard opens nothing. Before,
+  each change called the guard again, for a tab that was gone.
 - **FIX**: `replaceAll` ends the wait of a page held off the screen for its guard, as after a sign-out. The
   caller of that page's `push()` gets `null` at the `replaceAll`, no later change asks its guard again, and a
   later yes of the guard opens nothing. Before, the caller waited until the guard answered, maybe for good.

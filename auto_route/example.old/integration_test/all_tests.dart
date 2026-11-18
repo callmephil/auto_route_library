@@ -52,6 +52,7 @@ import 'change_during_navigation_guard_test.dart'
     as change_during_navigation_guard;
 import 'change_in_later_round_test.dart' as change_in_later_round;
 import 'child_route_fragment_test.dart' as child_route_fragment;
+import 'closed_tabs_end_held_tab_test.dart' as closed_tabs_end_held_tab;
 import 'covered_window_test.dart' as covered_window;
 import 'cupertino_page_pop_scope_with_drawer_test.dart'
     as cupertino_page_pop_scope_with_drawer;
@@ -504,6 +505,7 @@ void main() {
   change_during_navigation_guard.main();
   change_in_later_round.main();
   child_route_fragment.main();
+  closed_tabs_end_held_tab.main();
   covered_window.main();
   cupertino_page_pop_scope_with_drawer.main();
   cupertino_title_after_page_update.main();

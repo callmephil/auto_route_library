@@ -1673,6 +1673,10 @@ class TabsRouter extends RoutingController {
           ? null
           : ({required isWaitingOnUser}) {
               if (isWaitingOnUser) return false;
+              _guardsOfHeldTabs.add(resolver);
+              unawaited(
+                resolver.future.then((_) => _guardsOfHeldTabs.remove(resolver)),
+              );
               onLetGo();
               return true;
             },
@@ -1700,9 +1704,19 @@ class TabsRouter extends RoutingController {
 
   bool _isDisposed = false;
 
+  // The resolvers of the guards that let go of a tab of these tabs, see
+  // [_reevaluateActiveTab], until they answer. Their entries wait in [_guardRouter]'s
+  // [StackRouter._guardsLettingGo], which never learns on its own that the
+  // tabs are gone.
+  final _guardsOfHeldTabs = <NavigationResolver>{};
+
   @override
   void dispose() {
     _isDisposed = true;
+    // A held tab leaves with the tabs: no change asks its guard again, as
+    // Flutter's Navigator disposes a route that leaves the stack.
+    _guardRouter._dropLetGoGuards(_guardsOfHeldTabs.contains);
+    _guardsOfHeldTabs.clear();
     super.dispose();
   }
 
