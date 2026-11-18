@@ -33,23 +33,37 @@ class TypeResolver {
       return declaring.toString();
     }
 
-    final fallBackImports = <String>{};
+    // A library the app may not reach the type by is used only when no other
+    // library exports it. A deprecated one, such as
+    // package:flutter/material.dart on Flutter 3.50.0, makes the analyzer
+    // report deprecated_member_use in the generated router, which `type=lint`
+    // does not silence (#2345), and an implementation library under `src/`
+    // may change in any release of its package, so it comes last.
+    final fallBackImports = <String>[];
+    final implementationImports = <String>[];
     for (final lib in _libs) {
       if (!_isCoreDartType(lib) &&
           lib.exportNamespace.definedNames2.values.contains(element)) {
         final uri = lib.uri;
-        if (_kUnPreferredImports.contains(uri.toString())) {
-          fallBackImports.add(uri.toString());
-          continue;
+        final import = uri.scheme == 'asset'
+            ? _assetToPackage(uri)
+            : uri.toString();
+        if (_kUnPreferredImports.contains(import) ||
+            lib.metadata.hasDeprecated) {
+          fallBackImports.add(import);
+        } else if (_isImplementationLibrary(uri)) {
+          implementationImports.add(import);
+        } else {
+          return import;
         }
-        if (uri.scheme == 'asset') {
-          return _assetToPackage(lib.uri);
-        }
-        return lib.uri.toString();
       }
     }
-    return fallBackImports.firstOrNull;
+    return fallBackImports.firstOrNull ?? implementationImports.firstOrNull;
   }
+
+  /// Whether [uri] is a library under a package's `lib/src/`.
+  bool _isImplementationLibrary(Uri uri) =>
+      uri.scheme == 'package' && uri.pathSegments.elementAtOrNull(1) == 'src';
 
   String _assetToPackage(Uri uri) {
     if (uri.scheme == 'asset') {
