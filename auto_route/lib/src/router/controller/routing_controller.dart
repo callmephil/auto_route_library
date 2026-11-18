@@ -2726,16 +2726,35 @@ abstract class StackRouter extends RoutingController {
   // pages of each such wait stay off, their callers get null, and no change
   // asks their guards again. A later answer of those guards opens nothing,
   // see [NavigationResolver._isDropped].
-  void _endLetGoWaits(bool Function(AutoRoutePage<Object?> page) test) {
-    final pages = _waitingForLetGoGuards.keys.where(test).toSet();
-    if (pages.isEmpty) return;
-    for (final page in pages) {
+  void _endLetGoWaits(bool Function(RouteData<Object?> page) test) {
+    final waiting = _waitingForLetGoGuards.keys
+        .where((page) => test(page.routeData))
+        .toSet();
+    for (final page in waiting) {
       _waitingForLetGoGuards[page]?.end();
     }
+    final ended = {for (final page in waiting) page.routeData};
+    // A page a reevaluation took off for its guard in this turn, whose wait
+    // starts only a microtask later, see [_pushAllGuarded]: it is held no
+    // longer, so that wait doesn't take it on, and its caller gets null now.
+    final starting = _heldBackByReevaluation
+        .where(
+          (data) =>
+              test(data) &&
+              !ended.contains(data) &&
+              !_pages.any((page) => page.routeData == data),
+        )
+        .toList();
+    _heldBackByReevaluation.removeAll(starting);
+    for (final data in starting) {
+      data.onPopInvoked(null);
+    }
+    ended.addAll(starting);
+    if (ended.isEmpty) return;
     _dropLetGoGuards(
       (resolver) => switch (resolver.route) {
-        final ReevaluatableRouteMatch<Object?, Object?> route => pages.contains(
-          route.currentPage,
+        final ReevaluatableRouteMatch<Object?, Object?> route => ended.contains(
+          route.currentPage.routeData,
         ),
         _ => false,
       },
@@ -3917,6 +3936,12 @@ abstract class StackRouter extends RoutingController {
           final above = pagesLeaving.where((page) => !isAnchor(page)).toSet();
           onPagesAboveHeld(() {
             final left = _pages.where(above.contains).toList();
+            // A page among them that a reevaluation holds off the stack for
+            // its guard leaves for good too: its caller gets null, and its
+            // guard's yes no longer brings it back.
+            _endLetGoWaits(
+              (data) => above.any((page) => page.routeData == data),
+            );
             above.clear();
             if (left.isEmpty || _isDisposed) return;
             _markLeaving(left, .removed);

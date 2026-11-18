@@ -428,9 +428,10 @@ void main() {
           home('HomeRoute SettingsRoute', '/settings'),
           if (isLetIn) ...[
             home('HomeRoute', '/message/77', isOpen: true),
-            // The page let go of was off the stack when the navigation
-            // closed the pages over Home, so it comes back on its yes.
-            home('HomeRoute AccountRoute', '/account', isOpen: true),
+            // The navigation closed the pages over Home, the page let go of
+            // among them: it stays closed on its guard's yes
+            // (callmephil/auto_route_library#12).
+            home('HomeRoute', '/message/77', isOpen: true),
           ] else
             home('HomeRoute SettingsRoute AccountRoute', '/account'),
         ]);

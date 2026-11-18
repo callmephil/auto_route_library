@@ -174,6 +174,7 @@ import 'navigate_to_active_tab_while_guard_decides_test.dart'
 import 'navigate_to_non_tab_test.dart' as navigate_to_non_tab;
 import 'navigate_to_unshown_tab_keeps_children_test.dart'
     as navigate_to_unshown_tab_keeps_children;
+import 'navigation_closes_held_page_test.dart' as navigation_closes_held_page;
 import 'navigations_in_one_turn_test.dart' as navigations_in_one_turn;
 import 'nested_absolute_redirect_test.dart' as nested_absolute_redirect;
 import 'nested_back_test.dart' as nested_back;
@@ -604,6 +605,7 @@ void main() {
   navigate_to_active_tab_while_guard_decides.main();
   navigate_to_non_tab.main();
   navigate_to_unshown_tab_keeps_children.main();
+  navigation_closes_held_page.main();
   navigations_in_one_turn.main();
   nested_absolute_redirect.main();
   nested_back.main();

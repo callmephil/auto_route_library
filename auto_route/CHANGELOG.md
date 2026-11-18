@@ -1,4 +1,8 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: a navigation that closes the pages over an open page, such as `navigatePath` into
+  that page's nested router, also closes for good a page among them that is held off the screen for its guard, as
+  after a sign-out. A later sign-in no longer opens that page again, and its caller gets `null` at the close. A held
+  page that no navigation closed still comes back on its guard's yes.
 - **FIX**: a tab held off the screen for its guard, as after a sign-out, leaves with its tabs page. Once the user
   closes the tabs page, no later change calls that tab's guard, and a later yes of the guard opens nothing. Before,
   each change called the guard again, for a tab that was gone.
