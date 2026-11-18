@@ -1,4 +1,4 @@
-## Unreleased
+## 13.0.0-rc.1
 - **BEHAVIOR CHANGE**: auto_route no longer reads the page transitions of an app's theme from Flutter's built-in
   `MaterialApp` (`package:flutter/material.dart`), which Flutter 3.50.0 deprecates in favor of `material_ui`. Pages
   follow the `pageTransitionsTheme` of `material_ui`'s `Theme` only, so an app still on the built-in `MaterialApp` gets
