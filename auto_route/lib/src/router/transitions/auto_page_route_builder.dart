@@ -1,4 +1,3 @@
-import 'package:auto_route/src/router/transitions/flutter_material_theme.dart';
 import 'package:material_ui/material_ui.dart';
 
 /// A default implementation of [PageRoute]
@@ -43,16 +42,6 @@ class AutoPageRouteBuilder<T> extends PageRoute<T> {
   ) {
     if (_transitionBuilder != null) {
       return _transitionBuilder(context, animation, secondaryAnimation, child);
-    }
-    final flutterTheme = flutterMaterialThemeOf(context);
-    if (flutterTheme != null) {
-      return flutterTheme.pageTransitionsTheme.buildTransitions(
-        this,
-        context,
-        animation,
-        secondaryAnimation,
-        child,
-      );
     }
     final theme = Theme.of(context);
     return theme.pageTransitionsTheme.buildTransitions(

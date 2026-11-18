@@ -1,4 +1,8 @@
 ## Unreleased
+- **BEHAVIOR CHANGE**: auto_route no longer reads the page transitions of an app's theme from Flutter's built-in
+  `MaterialApp` (`package:flutter/material.dart`), which Flutter 3.50.0 deprecates in favor of `material_ui`. Pages
+  follow the `pageTransitionsTheme` of `material_ui`'s `Theme` only, so an app still on the built-in `MaterialApp` gets
+  auto_route's default page transitions instead of its theme's (support added for #2340). Move the app to `material_ui`.
 - **FIX**, **BEHAVIOR CHANGE**: an app that starts at a link its guard turns down, with no page of the app below it (as
   on the web, where a link opens alone), shows its first page, the one marked `initial` or at `/`, and its url, not an
   empty screen. A push meanwhile no longer becomes the only page. Before, the root had no page. When the app has global

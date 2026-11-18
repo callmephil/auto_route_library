@@ -1,5 +1,4 @@
 import 'package:auto_route/auto_route.dart';
-import 'package:auto_route/src/router/transitions/flutter_material_theme.dart';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PredictiveBackEvent;
@@ -235,10 +234,7 @@ class _CurrentPageChild extends StatelessWidget {
 }
 
 class _PageBasedMaterialPageRoute<T> extends _PageRoute<T>
-    with
-        MaterialRouteTransitionMixin<T>,
-        _FlutterMaterialThemeTransitionMixin<T>,
-        _CustomPredictiveBackGestureMixin<T> {
+    with MaterialRouteTransitionMixin<T>, _CustomPredictiveBackGestureMixin<T> {
   new({
     required super.page,
     this.enablePredictiveBackGesture = false,
@@ -254,88 +250,6 @@ class _PageBasedMaterialPageRoute<T> extends _PageRoute<T>
   @override
   Widget buildContent(BuildContext context) {
     return _page.buildPage(context);
-  }
-}
-
-/// Takes the page transitions from the app's theme when it comes from
-/// package:flutter/material.dart, see [flutterMaterialThemeOf]; otherwise
-/// [MaterialRouteTransitionMixin] reads the theme of package:material_ui.
-mixin _FlutterMaterialThemeTransitionMixin<T>
-    on MaterialRouteTransitionMixin<T> {
-  @override
-  Duration get transitionDuration {
-    final theme = flutterMaterialThemeOf(navigator!.context);
-    if (theme == null) return super.transitionDuration;
-    return flutterPageTransitionsBuilderOf(theme).transitionDuration;
-  }
-
-  @override
-  Duration get reverseTransitionDuration {
-    final theme = flutterMaterialThemeOf(navigator!.context);
-    if (theme == null) return super.reverseTransitionDuration;
-    return flutterPageTransitionsBuilderOf(theme).reverseTransitionDuration;
-  }
-
-  // The route below takes the delegated transition of the route above only
-  // when it differs from its own, and keeps it. So this stays the function of
-  // MaterialRouteTransitionMixin unless Flutter's theme is the nearer one, and
-  // is static either way: a method would hold this route after it's popped.
-  @override
-  DelegatedTransitionBuilder? get delegatedTransition {
-    final navigator = this.navigator;
-    if (navigator == null ||
-        flutterMaterialThemeOf(navigator.context) == null) {
-      return super.delegatedTransition;
-    }
-    return _flutterThemeDelegatedTransition;
-  }
-
-  static Widget? _flutterThemeDelegatedTransition(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    bool allowSnapshotting,
-    Widget? child,
-  ) {
-    final flutterTheme = flutterMaterialThemeOf(context);
-    final themeDelegatedTransition = flutterTheme != null
-        ? flutterTheme.pageTransitionsTheme.delegatedTransition(
-            flutterTheme.platform,
-          )
-        : Theme.of(context).pageTransitionsTheme
-              .delegatedTransition(Theme.of(context).platform);
-    return themeDelegatedTransition?.call(
-      context,
-      animation,
-      secondaryAnimation,
-      allowSnapshotting,
-      child,
-    );
-  }
-
-  @override
-  Widget buildTransitions(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    final theme = flutterMaterialThemeOf(context);
-    if (theme == null) {
-      return super.buildTransitions(
-        context,
-        animation,
-        secondaryAnimation,
-        child,
-      );
-    }
-    return theme.pageTransitionsTheme.buildTransitions(
-      this,
-      context,
-      animation,
-      secondaryAnimation,
-      child,
-    );
   }
 }
 
@@ -466,8 +380,7 @@ mixin _CustomPageRouteTransitionMixin<T> on _PageRoute<T> {
       secondaryAnimation,
       child,
     );
-    final platform =
-        flutterMaterialThemeOf(context)?.platform ?? Theme.of(context).platform;
+    final platform = Theme.of(context).platform;
     if (!routeType.enableCupertinoBackGesture ||
         (platform != .iOS && platform != .macOS)) {
       return transitions;
@@ -518,8 +431,7 @@ mixin _CustomPredictiveBackGestureMixin<T> on _PageRoute<T>
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final platform =
-        flutterMaterialThemeOf(context)?.platform ?? Theme.of(context).platform;
+    final platform = Theme.of(context).platform;
     if (!enablePredictiveBackGesture || platform != .android) {
       return super.buildTransitions(
         context,
