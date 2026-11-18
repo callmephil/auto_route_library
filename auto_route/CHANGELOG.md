@@ -1,4 +1,11 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, the browser's back and forward buttons after a tab change go through each page once, also when
+  the guard of the tab they go back into waits, such as a sign-in check that reads a token, and when a guard of the
+  page in that tab waits too. A second press while the guard still decides shows the page of the entry the browser
+  stands on. Before, the app wrote the url of the tab on screen over the entry of the page in that tab while the guard
+  decided: the next presses showed that tab again and moved the browser forward, and the page in the guarded tab was
+  lost. A link into such a tab now waits for the guard on every platform: off the web, the app's own history keeps the
+  link's entry while the guard decides, and a tab guard that fails after a wait reports its error, which was dropped.
 - **FIX**: two links that bring only their own page (on the web by default, and off the web with
   `includePrefixMatches: false`) into a page that is not open, whose nested guard is slow and turns both down, leave
   the user where they were. Before, the page stayed open on its first nested page, at its own url.

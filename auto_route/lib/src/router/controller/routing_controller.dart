@@ -2353,12 +2353,19 @@ class TabsRouter extends RoutingController {
     // there have answered, as Flutter's Router awaits the delegate's
     // setNewRoutePath before it reports the route as applied. Not when the
     // tab's own guards make the change wait: the call answers then, as it
-    // always has, and nothing waits for what follows.
+    // always has, and nothing waits for what follows. A link's change and
+    // what follows it hold the link open, so the delegate does not read the
+    // link as turned down while a guard still decides.
     Future<Object?>? inside;
     var isAnswered = !waitsInsideTabs;
     void onInside(Future<Object?> navigation) {
-      if (isAnswered) return unawaited(navigation);
-      inside = navigation;
+      if (!isAnswered) {
+        inside = navigation;
+      } else if (ofLink != null) {
+        root._holdLinkOpenUntil(ofLink, navigation);
+      } else {
+        unawaited(navigation);
+      }
     }
 
     void markAnswered() => isAnswered = true;
@@ -2369,7 +2376,7 @@ class TabsRouter extends RoutingController {
       if (pageToUpdateIndex != -1) {
         if (!isReevaluating && _activeIndex != pageToUpdateIndex) {
           // The change waits on the tab's guards when it has any; nothing
-          // here waits for it, as in setActiveIndex.
+          // here waits for it, as in setActiveIndex. It holds a link open.
           if (_changeTab(
                 pageToUpdateIndex,
                 route: mayUpdateRoute,
@@ -2380,7 +2387,11 @@ class TabsRouter extends RoutingController {
                 onInside: onInside,
               )
               case final Future<_TabChange> change) {
-            unawaited(change);
+            if (ofLink == null) {
+              unawaited(change);
+            } else {
+              root._holdLinkOpenUntil(ofLink, change);
+            }
           }
         } else {
           // A navigation to the tab on screen is the latest choice: it calls

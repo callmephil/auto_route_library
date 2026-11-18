@@ -109,11 +109,16 @@ abstract class RootStackRouter extends StackRouter {
   // [onAccepted] runs once the guards that navigation asks let the link in,
   // so a link the app turns down changes nothing else; when it asks no
   // guard, such as a link to the page already open, once it ends.
+  //
+  // Answers once that navigation has ended, and every navigation of the
+  // link that nothing awaits, see [_holdLinkOpenUntil]: the delegate reads a
+  // link that ended without being let in as turned down.
   Future<void> _openLink(
     Future<void> Function() open, {
     VoidCallback? onAccepted,
   }) {
     final link = _startingLink = ++_linkCount;
+    _linkHolds[link] = [];
     _linkSteps[link] = () {
       if (link > _letInLink) {
         _letInLink = link;
@@ -137,7 +142,46 @@ abstract class RootStackRouter extends StackRouter {
         ),
       );
     }
-    return navigation;
+    return _whenLinkEnds(link, navigation);
+  }
+
+  // The navigations that each link still opening started and that nothing
+  // awaits, by the link's count, each as a future that ends with it and
+  // never fails: see [_holdLinkOpenUntil].
+  final _linkHolds = <int, List<Future<void>>>{};
+
+  // Keeps [link] open until [navigation] ends: a navigation the link started
+  // that nothing awaits, such as a tab change that waits for the tab's own
+  // guard and takes the link's step. Until then the link is neither let in
+  // nor turned down, as Flutter's Router awaits the delegate's
+  // setNewRoutePath before it takes the route as applied. Its failure is
+  // reported as an uncaught error, as it is when nothing holds the link,
+  // and ends the hold. A link that has ended is not held.
+  void _holdLinkOpenUntil(int link, Future<Object?> navigation) {
+    final holds = _linkHolds[link];
+    if (holds == null) return unawaited(navigation);
+    final ended = Completer<void>();
+    holds.add(ended.future);
+    unawaited(navigation.whenComplete(ended.complete));
+  }
+
+  // Ends once [navigation], the navigation [link] started, has ended, and
+  // every navigation that holds the link open, also one that starts while
+  // the others run.
+  Future<void> _whenLinkEnds(int link, Future<void> navigation) async {
+    try {
+      await navigation;
+      for (
+        var holds = _linkHolds[link];
+        holds != null && holds.isNotEmpty;
+        holds = _linkHolds[link]
+      ) {
+        _linkHolds[link] = [];
+        await Future.wait(holds);
+      }
+    } finally {
+      _linkHolds.remove(link);
+    }
   }
 
   // Whether a link that started after [link] has been let in.
