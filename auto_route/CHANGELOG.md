@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**: `await reevaluateGuards()` completes with the error that the guard of a page held off the screen for it
+  throws when asked again, as it already did for the guard of a page on the stack. The error no longer also reaches
+  the zone as an uncaught error, and the router works on after it. Before, the app's `catch` got nothing.
 - **FIX**, **BEHAVIOR CHANGE**: each call of a guard gets a `NavigationResolver` of its own when
   `reevaluateGuards()` calls the guard again before it has answered. A guard that keeps one callback per call, and
   answers each once, no longer fails the assert "Make sure `resolver.next()` is only called once." (in a release

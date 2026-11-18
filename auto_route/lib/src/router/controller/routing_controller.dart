@@ -3063,9 +3063,51 @@ abstract class StackRouter extends RoutingController {
   ///
   /// Called again while a guard still runs its check, it asks the guards once
   /// more when that round ends, so the last change wins.
-  Future<void> reevaluateGuards() {
+  Future<void> reevaluateGuards() async {
     root._guardStateChanges++;
-    return _reevaluateGuards(roundsAskedAgain: 0);
+    final errors = <(Object, StackTrace)>[];
+    root._letGoCallErrors.add(errors);
+    try {
+      await _reevaluateGuards(roundsAskedAgain: 0);
+    } finally {
+      root._letGoCallErrors.remove(errors);
+    }
+    // The error a guard of a held page threw when this call asked it again,
+    // in its call: as for a guard of a page on the stack, this future
+    // completes with it.
+    if (errors.firstOrNull case (final error, final stackTrace)) {
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+  }
+
+  // On the root router: one list for each call of [reevaluateGuards] in
+  // progress, which collects the errors that guards of held pages throw in
+  // the calls it makes, see [_composeMatchesForReevaluate].
+  final _letGoCallErrors = <List<(Object, StackTrace)>>[];
+
+  // Asks the guard of [entry], which let go of its page, again. No round
+  // waits for its answer, but an error its call throws reaches the call of
+  // reevaluateGuards() that asked it, see [_reportLetGoCallError].
+  Future<void> _askLettingGo(GuardEntry entry) async {
+    try {
+      await entry._resolver.checkGuard(entry.guard, this);
+    } on Object catch (error, stackTrace) {
+      _reportLetGoCallError(error, stackTrace);
+    }
+  }
+
+  // Hands the error a guard of a held page threw in its call to the calls of
+  // [reevaluateGuards] in progress, which complete with it. With none, it is
+  // an uncaught error, as before: nothing waits for that ask.
+  void _reportLetGoCallError(Object error, StackTrace stackTrace) {
+    final calls = root._letGoCallErrors;
+    if (calls.isEmpty) {
+      Zone.current.handleUncaughtError(error, stackTrace);
+      return;
+    }
+    for (final errors in calls) {
+      errors.add((error, stackTrace));
+    }
   }
 
   Future<void> _reevaluateGuards({required int roundsAskedAgain}) async {
@@ -3246,7 +3288,7 @@ abstract class StackRouter extends RoutingController {
         if (resolver._waitingCompleter != null && !resolver._isWaitingOnUser) {
           resolver._markAnswersStale();
         }
-        unawaited(resolver.checkGuard(entry.guard, this));
+        unawaited(_askLettingGo(entry));
       }
       // A page kept on the stack for its let-go guard, as a router's last
       // page is: the round leaves its answer to that guard, as to a guard

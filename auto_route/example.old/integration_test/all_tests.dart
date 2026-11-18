@@ -117,6 +117,7 @@ import 'guarded_tab_link_after_tabs_left_test.dart'
     as guarded_tab_link_after_tabs_left;
 import 'held_back_page_after_rebuild_test.dart' as held_back_page_after_rebuild;
 import 'held_back_page_leaves_screen_test.dart' as held_back_page_leaves_screen;
+import 'held_page_guard_error_test.dart' as held_page_guard_error;
 import 'hero_controller_builder_test.dart' as hero_controller_builder;
 import 'hero_nested_router_test.dart' as hero_nested_router;
 import 'home_index_back_test.dart' as home_index_back;
@@ -563,6 +564,7 @@ void main() {
   guarded_tab_link_after_tabs_left.main();
   held_back_page_after_rebuild.main();
   held_back_page_leaves_screen.main();
+  held_page_guard_error.main();
   hero_controller_builder.main();
   hero_nested_router.main();
   home_index_back.main();
