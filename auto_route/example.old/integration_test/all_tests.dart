@@ -317,6 +317,7 @@ import 'remove_route_kept_handle_test.dart' as remove_route_kept_handle;
 import 'remove_where_same_route_test.dart' as remove_where_same_route;
 import 'repeated_query_key_number_test.dart' as repeated_query_key_number;
 import 'repeated_query_key_test.dart' as repeated_query_key;
+import 'replace_all_ends_held_page_test.dart' as replace_all_ends_held_page;
 import 'replace_all_from_deep_stack_test.dart' as replace_all_from_deep_stack;
 import 'replace_all_from_redirect_page_test.dart'
     as replace_all_from_redirect_page;
@@ -719,6 +720,7 @@ void main() {
   remove_where_same_route.main();
   repeated_query_key_number.main();
   repeated_query_key.main();
+  replace_all_ends_held_page.main();
   replace_all_from_deep_stack.main();
   replace_all_from_redirect_page.main();
   replace_all_guard_page_caller_waits.main();

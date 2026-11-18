@@ -4418,7 +4418,11 @@ abstract class StackRouter extends RoutingController {
           _markLeaving(_pages, .replaced);
           _pages.clear();
           // Also the pages a reevaluation holds off the stack for a guard
-          // that has not answered: they are replaced with the rest.
+          // that has not answered: they are replaced with the rest, so
+          // their callers get null now, and no change asks their guards
+          // again, as Flutter's Navigator completes each route that
+          // pushAndRemoveUntil removes at the removal.
+          _endLetGoWaits((_) => true);
           _heldBackByReevaluation.clear();
           if (!updateExistingRoutes) {
             _stackKey = UniqueKey();
