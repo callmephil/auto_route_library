@@ -1,4 +1,8 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, an app opened at a link into a tabs page with `includePrefixMatches: true` keeps the one browser
+  entry the browser made for the link when the tabs show their first tab in its place: while the guard of the tab the
+  link names decides, after that guard's "no", or when the link names no tab. Before, Home, which the prefix match
+  opens under the tabs page, got an entry of its own, and the back button showed it.
 - **FIX**: on the web, the browser's back and forward buttons after a tab change go through each page once, also when
   the guard of the tab they go back into waits, such as a sign-in check that reads a token, and when a guard of the
   page in that tab waits too. A second press while the guard still decides shows the page of the entry the browser

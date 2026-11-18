@@ -88,6 +88,16 @@ abstract class RootStackRouter extends StackRouter {
   @internal
   bool get isShowingLink => _isShowingLink;
 
+  // The url state of the history once a link reported its url, see
+  // [_isUrlStateOfLink].
+  UrlState? _linkUrlState;
+
+  // Whether the url state of the history is the one a link reported last:
+  // no other url was reported since. A url that names its pages further in
+  // its place, as a tabs host names the tab it shows, is that link's too.
+  bool get _isUrlStateOfLink =>
+      identical(navigationHistory.urlState, _linkUrlState);
+
   // Runs [show], which reports a url, as the url of a link when [isLink].
   T _showingLink<T>(T Function() show, {required bool isLink}) {
     final wasShowingLink = _isShowingLink;
@@ -95,6 +105,7 @@ abstract class RootStackRouter extends StackRouter {
     try {
       return show();
     } finally {
+      if (_isShowingLink) _linkUrlState = navigationHistory.urlState;
       _isShowingLink = wasShowingLink;
     }
   }

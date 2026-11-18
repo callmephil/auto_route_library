@@ -2079,16 +2079,24 @@ class TabsRouter extends RoutingController {
       _letInOrHandOn(letIn);
     }
     // A host opened by a url that names no tab, such as '/tabs' when no tab is
-    // initial, shows its first tab. The url names that tab too, in place of
-    // the host's own entry, so going back to that entry shows it. The router
-    // is set up while the app builds, so nobody is told of the new url: the
-    // web history writes it over the host's entry by itself.
+    // initial, shows its first tab, as it does while the guards of the tab
+    // the url names decide. The url names that tab too, in place of the
+    // host's own entry, so going back to that entry shows it. The router is
+    // set up while the app builds, so nobody is told of the new url: the web
+    // history writes it over the host's entry by itself. A link's url stays
+    // the link's, so the pages the link opened under the host, such as a
+    // prefix match, share its entry, as they do when the link's own tab
+    // shows: the user made one navigation.
     if (_pages.isNotEmpty &&
         navigationHistory.isRouteDataActive(routeData) &&
         !navigationHistory.isRouteDataActive(current)) {
-      navigationHistory.onNewUrlState(
-        UrlState.fromSegments(root.currentSegments, shouldReplace: true),
-        notify: false,
+      final isUrlOfLink = root._isUrlStateOfLink;
+      root._showingLink(
+        () => navigationHistory.onNewUrlState(
+          UrlState.fromSegments(root.currentSegments, shouldReplace: true),
+          notify: false,
+        ),
+        isLink: isUrlOfLink,
       );
     }
   }

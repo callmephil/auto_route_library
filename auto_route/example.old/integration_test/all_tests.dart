@@ -208,6 +208,8 @@ import 'nested_shell_back_test.dart' as nested_shell_back;
 import 'nested_tab_bar_reevaluation_test.dart' as nested_tab_bar_reevaluation;
 import 'non_ascii_url_test.dart' as non_ascii_url;
 import 'opened_at_rewritten_url_test.dart' as opened_at_rewritten_url;
+import 'opened_at_tab_with_waiting_guard_test.dart'
+    as opened_at_tab_with_waiting_guard;
 import 'optional_args_on_back_test.dart' as optional_args_on_back;
 import 'overlapping_reevaluation_test.dart' as overlapping_reevaluation;
 import 'override_args_on_reevaluate_test.dart' as override_args_on_reevaluate;
@@ -656,6 +658,7 @@ void main() {
   nested_tab_bar_reevaluation.main();
   non_ascii_url.main();
   opened_at_rewritten_url.main();
+  opened_at_tab_with_waiting_guard.main();
   optional_args_on_back.main();
   overlapping_reevaluation.main();
   override_args_on_reevaluate.main();
