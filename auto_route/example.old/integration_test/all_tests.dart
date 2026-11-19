@@ -164,6 +164,7 @@ import 'let_go_push_other_args_test.dart' as let_go_push_other_args;
 import 'let_go_redirect_cancel_test.dart' as let_go_redirect_cancel;
 import 'let_go_stale_yes_test.dart' as let_go_stale_yes;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
+import 'link_into_open_tabs_page_test.dart' as link_into_open_tabs_page;
 import 'link_to_removed_tab_test.dart' as link_to_removed_tab;
 import 'link_url_while_guard_decides_test.dart' as link_url_while_guard_decides;
 import 'list_query_param_test.dart' as list_query_param;
@@ -636,6 +637,7 @@ void main() {
   let_go_redirect_cancel.main();
   let_go_stale_yes.main();
   link_during_initial_guard.main();
+  link_into_open_tabs_page.main();
   link_to_removed_tab.main();
   link_url_while_guard_decides.main();
   list_query_param.main();

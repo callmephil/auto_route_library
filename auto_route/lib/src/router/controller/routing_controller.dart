@@ -6162,6 +6162,9 @@ abstract class StackRouter extends RoutingController {
     _endWaitOfTakenOff(_takenOffForNewPage);
     if (notify && identical(Zone.current[_firstPagesZone], this)) {
       _notifyFirstPages();
+    } else if (notify && _opensChildrenOnScreen(screen, data)) {
+      notifyListeners();
+      if (!isRoot) root.notifyListeners();
     } else if (notify) {
       notifyAll();
     }
@@ -6196,6 +6199,25 @@ abstract class StackRouter extends RoutingController {
     }
     return null;
   }
+
+  // Whether [data], a page that goes on over [screen], a screen the
+  // navigator shows, has children for the nested router built in that
+  // screen, which the navigation opens there next, as a link into another
+  // tab of the tabs page on screen does. That router reports the url as they
+  // go on. A url reported now would name the pages it still shows, which
+  // the children take the place of. The url names those pages already, or
+  // the link: the web history would take the link's entry, whose page is
+  // not open yet, for one whose page left, and step the browser back, then
+  // forward again. Not with a replace mark, which the url of the page keeps,
+  // see [_addNewPage].
+  bool _opensChildrenOnScreen(
+    RouteData<Object?>? screen,
+    RouteData<Object?> data,
+  ) =>
+      screen != null &&
+      data.hasPendingChildren &&
+      _innerControllerOfMatch(data.matchId) != null &&
+      !navigationHistory.isUrlStateMarkedForReplace;
 
   // The data of the page the navigator shows on top, once that page has left
   // the stack and [route] is about to go on top in its place. The new page

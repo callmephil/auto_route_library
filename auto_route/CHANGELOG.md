@@ -1,4 +1,8 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, a link into another tab of the tabs page on screen, from the platform or typed into the address
+  bar, adds one browser entry and moves the browser nowhere. Before, the tabs page that the link reaches again reported
+  the url of the tab still on screen first, so the app stepped the browser back from the link's entry and forward again,
+  and wrote a typed url again as a new entry.
 - **FIX**: on the web, the browser's back and forward buttons to an entry whose page is still open ask no guard of the
   open pages on the way, the global guards included: the tabs page and the page in a tab not on screen, or a page under
   the page on top and the page in its nested router. A step into another tab still asks that tab's own guards, as the
