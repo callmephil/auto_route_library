@@ -76,6 +76,11 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   /// [NavigationResolver.redirectUntil], goes on over the pages that are
   /// open, and back from it rejects the link and shows them
   ///
+  /// on the web, the browser's back and forward buttons are no deep-links:
+  /// they show the page of the entry they go to, with the pages under it,
+  /// as without this flag, since they change no entry; a url typed into
+  /// the address bar is one
+  ///
   /// this is used after a deep-link is
   /// resolved by [deepLinkBuilder] if provided
   ///
@@ -592,7 +597,11 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
           replacesLaunchPage: replacesLaunchPage,
           // An entry from before a reload opens as a link whose pages take
           // the place of the app's, which have their entries ahead of it.
-          rebuildsStack: rebuildStackOnDeepLink || history.isOnEntryBeforeApp,
+          // An entry the app wrote is no link: back and forward change no
+          // entry, so the pages under its page stay, with their entries.
+          rebuildsStack:
+              (rebuildStackOnDeepLink && entryRoutes == null) ||
+              history.isOnEntryBeforeApp,
           closing: pageless,
           onAccepted: () => isAccepted = true,
         );

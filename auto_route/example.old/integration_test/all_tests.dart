@@ -289,6 +289,8 @@ import 'query_param_rebuild_test.dart' as query_param_rebuild;
 import 'query_params_on_pop_test.dart' as query_params_on_pop;
 import 'query_toggle_back_test.dart' as query_toggle_back;
 import 'rapid_pops_test.dart' as rapid_pops;
+import 'rebuild_stack_back_and_forward_test.dart'
+    as rebuild_stack_back_and_forward;
 import 'rebuild_stack_rejected_link_test.dart' as rebuild_stack_rejected_link;
 import 'redirect_cycle_test.dart' as redirect_cycle;
 import 'redirect_fragment_test.dart' as redirect_fragment;
@@ -728,6 +730,7 @@ void main() {
   query_params_on_pop.main();
   query_toggle_back.main();
   rapid_pops.main();
+  rebuild_stack_back_and_forward.main();
   rebuild_stack_rejected_link.main();
   redirect_cycle.main();
   redirect_fragment.main();

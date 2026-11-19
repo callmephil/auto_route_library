@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: on the web, with `rebuildStackOnDeepLink`, the browser's back and forward buttons go
+  through each page once and change no entry, as without the flag: the pages under the page they show stay. Before, each
+  press replaced the stack with the pages of the entry it went to, as for a link: Home closed, its entry took the url of
+  the page on screen, and the back button stopped before Home. A url typed into the address bar still replaces the
+  stack.
 - **FIX**: off the web, `back()` while the guard of a link still decides leaves that link: the page on screen stays,
   and the guard's later answer changes nothing. Before, `back()` took the link's entry from the app's history, but the
   link went on: after a yes its page showed anyway, for a page of the root router with no step back left, and for a
