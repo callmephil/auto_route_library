@@ -68,7 +68,11 @@ abstract interface class HistoryBrowser {
 /// in order. For each it finds the first entry the browser holds otherwise:
 ///
 /// * none, and the browser stands elsewhere: it steps to the last entry
-///   wanted, which leaves the entries after it ahead, as history.back does;
+///   wanted, which leaves the entries after it ahead, as history.back does.
+///   But when the browser stands on an entry of the page of that last entry,
+///   at its url, the step would show nothing new: the entries between are of
+///   pages that closed, so that page's entry is written again after the
+///   entry before it, which drops them;
 /// * the entry the browser stands on: it writes over it, then adds the rest;
 /// * an entry under it: it steps back to the entry before that one and adds
 ///   from there, so nothing stale stays on the way back; the app's first
@@ -540,7 +544,7 @@ class HistoryWriter {
       return;
     }
     final userMoves = _userMoves;
-    final unheld = _firstUnheld(entries);
+    final unheld = _firstUnheld(entries) ?? _repeatedTopPlace(entries);
     if (unheld == null) {
       final top = first + entries.length - 1;
       if (_index != top) await _stepFor(top - _index);
@@ -575,6 +579,27 @@ class HistoryWriter {
       _index = _browser.index;
       _entries.removeWhere((number, _) => number > _index);
     }
+  }
+
+  // The place of the last of [entries], which the browser holds all, when
+  // the entry the browser stands on is after them and holds the page of
+  // that last entry, at its url and with its state. Only entries of pages
+  // that closed were between two entries of that page, as the pages the
+  // app took off a tab not on screen between two visits of the tab on
+  // screen. A step back would show nothing new and leave them ahead for the
+  // forward button, so the page's entry is written again after the entry
+  // before it, which drops them. Null otherwise.
+  int? _repeatedTopPlace(List<UrlState> entries) {
+    final standingOn = _entries[_index];
+    final top = entries.lastOrNull;
+    if (standingOn == null ||
+        top == null ||
+        _index <= first + entries.length - 1 ||
+        !HistoryEntryList.isEntryOf(standingOn, top) ||
+        standingOn.pathState != top.pathState) {
+      return null;
+    }
+    return entries.length - 1;
   }
 
   // The place in [entries] of the first one the browser holds otherwise, or

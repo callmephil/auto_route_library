@@ -32,6 +32,9 @@ bool isSameHistoryUrl(String a, String b) {
 ///   under the entries of other pages. So back never leads to a closed page.
 ///   Only a page popped from under the page on top keeps its entry until
 ///   the call that pops them is over, see [show].
+/// * Two entries in a row that hold one page at one url, with one path
+///   state, are one, as when only entries of closed pages were between
+///   them: a step back from one to the other would show nothing new.
 /// * A state the page on top already has an entry for, with the same url,
 ///   is that entry.
 /// * A state reported as a replace takes the place of the entry before it,
@@ -242,7 +245,7 @@ class HistoryEntryList {
     if (keepsClosedUnder) {
       _dropClosedOnTop();
     } else {
-      _entries.removeWhere((entry) => !_isPageOpen(entry));
+      _dropClosed();
     }
     final last = didDrop ? _entries.lastOrNull : topBefore;
     final entry = _withoutReplaceMark(state);
@@ -264,7 +267,8 @@ class HistoryEntryList {
   }
 
   /// Drops every entry whose page has left a stack, and returns whether
-  /// the entries changed.
+  /// the entries changed. Two entries of one page at one url that then
+  /// follow each other are one.
   ///
   /// [wayBack] holds the url state of each open page the back button
   /// reaches, the first page first, the page on top last. An entry that
@@ -273,8 +277,30 @@ class HistoryEntryList {
   bool didDropClosed({List<UrlState> wayBack = const []}) {
     final didHandOver = _handOverEntries(wayBack);
     final lengthBefore = _entries.length;
-    _entries.removeWhere((entry) => !_isPageOpen(entry));
+    _dropClosed();
     return didHandOver || _entries.length < lengthBefore;
+  }
+
+  // Drops every entry whose page has left a stack. Two entries left in a
+  // row that hold one page at one url, with one path state, are then one,
+  // the later: only entries of closed pages were between them, as the
+  // pages that the app closed in a tab not on screen between two visits of
+  // the tab on screen. The native history merges them the same way.
+  void _dropClosed() {
+    _entries.removeWhere((entry) => !_isPageOpen(entry));
+    final kept = <UrlState>[];
+    for (final (place, entry) in _entries.indexed) {
+      final next = _entries.elementAtOrNull(place + 1);
+      if (next != null &&
+          isEntryOf(entry, next) &&
+          entry.pathState == next.pathState) {
+        continue;
+      }
+      kept.add(entry);
+    }
+    _entries
+      ..clear()
+      ..addAll(kept);
   }
 
   /// Adds [state] as a new entry whatever the entry before it holds, as

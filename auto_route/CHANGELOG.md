@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, after the app closes pages in a tab not on screen with `removeUntil`, `removeWhere` or
+  `popUntil`, the browser's back button shows each page once, and the forward button does not open the closed pages
+  again. Before, the two entries of the tab on screen came next to each other, and one back press showed that tab again.
 - **FIX**: on the web, the pages of a nested router leave the browser's history with the page that holds the router,
   such as a tabs page or a shell, when the app closes that page with a pop or a removal. A pop steps the browser back to
   the entry of the page under it, and a removal from under another page drops their entries, or hands a link's entry to

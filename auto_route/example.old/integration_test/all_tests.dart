@@ -30,6 +30,8 @@ import 'back_after_push_all_test.dart' as back_after_push_all;
 import 'back_after_refused_navigation_test.dart'
     as back_after_refused_navigation;
 import 'back_after_reload_test.dart' as back_after_reload;
+import 'back_after_remove_until_in_hidden_tab_test.dart'
+    as back_after_remove_until_in_hidden_tab;
 import 'back_after_removing_link_page_test.dart'
     as back_after_removing_link_page;
 import 'back_after_sign_in_test.dart' as back_after_sign_in;
@@ -519,6 +521,7 @@ void main() {
   back_after_push_all.main();
   back_after_refused_navigation.main();
   back_after_reload.main();
+  back_after_remove_until_in_hidden_tab.main();
   back_after_removing_link_page.main();
   back_after_sign_in.main();
   back_after_tab_change_with_waiting_guard.main();
