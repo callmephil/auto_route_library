@@ -1391,6 +1391,13 @@ class TabsRouter extends RoutingController {
     if (_isDisposed || change != _tabChanges) return .replaced;
     _pendingTab = null;
     _pendingChange = null;
+    // The user left the link while the guard decided: the tab stays, as for
+    // a page of that link in a stack, see [RootStackRouter.leaveWaitingLinks].
+    if (link != null && root._isLinkLeft(link)) {
+      // A view that moved to the tab goes back to the active one.
+      if (notify) notifyListeners();
+      return .replaced;
+    }
     if (!result.continueNavigation) {
       // A view that moved to the tab goes back to the active one.
       if (notify) notifyListeners();

@@ -36,6 +36,7 @@ import 'back_after_tab_change_with_waiting_guard_test.dart'
 import 'back_in_declarative_router_test.dart' as back_in_declarative_router;
 import 'back_in_tabs_test.dart' as back_in_tabs;
 import 'back_into_waiting_tab_guard_test.dart' as back_into_waiting_tab_guard;
+import 'back_leaves_waiting_link_test.dart' as back_leaves_waiting_link;
 import 'back_rejected_by_guard_test.dart' as back_rejected_by_guard;
 import 'back_same_route_params_test.dart' as back_same_route_params;
 import 'back_same_url_test.dart' as back_same_url;
@@ -519,6 +520,7 @@ void main() {
   back_in_declarative_router.main();
   back_in_tabs.main();
   back_into_waiting_tab_guard.main();
+  back_leaves_waiting_link.main();
   back_rejected_by_guard.main();
   back_same_route_params.main();
   back_same_url.main();

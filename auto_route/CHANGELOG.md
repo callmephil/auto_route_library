@@ -1,4 +1,8 @@
 ## 13.0.0-rc.1
+- **FIX**: off the web, `back()` while the guard of a link still decides leaves that link: the page on screen stays,
+  and the guard's later answer changes nothing. Before, `back()` took the link's entry from the app's history, but the
+  link went on: after a yes its page showed anyway, for a page of the root router with no step back left, and for a
+  tab whose guard waits at its url.
 - **FIX**: on the web, after the back button closed a tabs page, the browser's forward button walks the same entries back
   up and changes none of them. Before, forward onto a page in a tab that the reopened tabs page had not built yet
   stepped the browser back, then wrote the tab's first page and that page as two new entries, so the entries ahead were

@@ -522,6 +522,16 @@ class NavigationHistoryImpl extends NavigationHistory {
     if (canNavigateBack) {
       _isNavigatingBack = true;
       final left = _entries.removeLast();
+      // The entry of a link whose page no stack has held yet, as one whose
+      // guard decides: the step back leaves that link, so the guard's answer
+      // later changes nothing, and the page on screen stays. Android's back
+      // closes the activity a link started, and a browser's traversal aborts
+      // its ongoing navigation.
+      if (_linkPages.contains(left.pageId) &&
+          !_wasOpen.contains(left) &&
+          !_isOpen(left)) {
+        router.root.leaveWaitingLinks();
+      }
 
       final last = _entries.lastOrNull;
       if (last == null) {

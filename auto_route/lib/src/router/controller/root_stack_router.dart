@@ -57,6 +57,11 @@ abstract class RootStackRouter extends StackRouter {
   // cancels no link before it, as a refused navigation changes nothing.
   int _letInLink = 0;
 
+  // The count of the latest link the user left while a guard of it still
+  // decided, as back() does off the web, see [leaveWaitingLinks]: a link up
+  // to it stops at its next guard, as an overtaken one does.
+  int _leftLink = 0;
+
   // What each link does once it is let in, by its count, until a guarded
   // navigation of that link takes it, see [_takeLinkStep].
   final _linkSteps = <int, VoidCallback>{};
@@ -195,8 +200,25 @@ abstract class RootStackRouter extends StackRouter {
     }
   }
 
-  // Whether a link that started after [link] has been let in.
-  bool _isLinkOvertaken(int link) => _letInLink > link;
+  // Whether a link that started after [link] has been let in, or the user
+  // left [link] while a guard of it decided.
+  bool _isLinkOvertaken(int link) => _letInLink > link || _isLinkLeft(link);
+
+  // Whether the user left [link] while a guard of it decided, see
+  // [leaveWaitingLinks].
+  bool _isLinkLeft(int link) => link <= _leftLink;
+
+  /// Leaves every link the delegate has opened whose navigation still waits
+  /// for a guard: once the guard answers, the link changes nothing, as if it
+  /// were turned down. The app's own history calls it off the web when
+  /// back() steps over the entry of such a link, so a step back leaves the
+  /// navigation that is still on its way, as a browser's traversal aborts its
+  /// ongoing navigation.
+  @internal
+  void leaveWaitingLinks() {
+    _leftLink = _linkCount;
+    _linkSteps.removeWhere((link, _) => _isLinkLeft(link));
+  }
 
   // The step [link] takes once it is let in, for the guarded navigation of
   // that link to run; null once taken.
