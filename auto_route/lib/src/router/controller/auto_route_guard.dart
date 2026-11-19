@@ -414,13 +414,14 @@ class NavigationResolver {
   }
 
   // Once this resolver is resolved, the redirect route that [redirectUntil]
-  // pushed leaves the stack.
+  // pushed leaves the stack. After a yes, the guarded page takes its place,
+  // see [StackRouter._takeOffRedirect].
   Future<void> _removeRedirectOnceResolved(
     StackRouter scope,
     RouteMatch<Object?> match,
   ) async {
     _redirectingResolvers[match.id] = this;
-    await _completer.future;
+    final result = await _completer.future;
     _isRedirecting = false;
     // A router that left with its page, as when the user leaves a shell
     // while its guard shows the redirect, took the redirect route with it:
@@ -429,13 +430,10 @@ class NavigationResolver {
     final routeData = scope.stackData.firstWhereOrNull(
       (e) => e.matchId == match.id,
     );
-    if (routeData != null) {
-      scope
-        ..markUrlStateForReplace()
-        .._removeRoute(match);
-      // complete the pop completer with null result
-      routeData.onPopInvoked(null);
-    }
+    if (routeData == null) return;
+    scope._takeOffRedirect(match, isLetIn: result.continueNavigation);
+    // complete the pop completer with null result
+    routeData.onPopInvoked(null);
   }
 
   /// Helpful for when you want to revert to the previous

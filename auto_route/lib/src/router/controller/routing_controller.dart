@@ -4535,6 +4535,35 @@ abstract class StackRouter extends RoutingController {
     );
   }
 
+  // Takes [redirect], the page a guard showed with redirectUntil, off the
+  // stack once the guard has answered, and marks the url for replace, see
+  // [NavigationResolver.redirectUntil].
+  //
+  // With [isLetIn], the guard let its navigation in: the guarded page goes
+  // on in the place of [redirect] a few microtasks later, in the same turn,
+  // as Navigator.pushReplacement puts a route in the place of another, and
+  // its url takes the place of the url of [redirect]. The page under
+  // [redirect] shows for no frame, so its url is not reported: the web
+  // history would take it for a step back to the entry of that page, and
+  // the guarded page for a new entry after it, which drops the entries
+  // ahead. A url that still names [redirect] once the next frame is drawn,
+  // as when a later guard still decides or says no, is rebuilt then.
+  void _takeOffRedirect(RouteMatch<Object?> redirect, {required bool isLetIn}) {
+    markUrlStateForReplace();
+    if (!isLetIn) return _removeRoute(redirect);
+    // Before the listeners hear of the change: the Router they tell reports
+    // the url after that frame too, and must read it rebuilt.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (!_isDisposed &&
+          navigationHistory.urlState.topMatch?.id == redirect.id) {
+        navigationHistory.rebuildUrl();
+      }
+    });
+    _removeRoute(redirect, notify: false);
+    notifyListeners();
+    if (!isRoot) root.notifyListeners();
+  }
+
   /// Adds the corresponding pages to given [routes] list to the [_pages] stack
   /// at once
   ///

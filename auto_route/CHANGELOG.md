@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, when the browser's forward button reaches a page whose guard shows a sign-in page with
+  `redirectUntil`, the page takes the place of the sign-in page on the entry the user went to once the guard lets it in,
+  and the entries ahead stay. The app's own push of such a page writes the sign-in page, then the page over it, with no
+  step back. Before, the sign-in page left first, and the url of the page under it stepped the browser back one entry:
+  the page then went on as a new entry, which dropped the entries ahead.
 - **FIX**: on the web, after the app closes pages in a tab not on screen with `removeUntil`, `removeWhere` or
   `popUntil`, the browser's back button shows each page once, and the forward button does not open the closed pages
   again. Before, the two entries of the tab on screen came next to each other, and one back press showed that tab again.
