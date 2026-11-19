@@ -1375,7 +1375,9 @@ class TabsRouter extends RoutingController {
 
   // Ends the change [change] to the tab at [index], whose guards answered
   // [result]. With [isNamedAtSetup] the tab is the one a navigation named
-  // for these tabs as they were set up, see [setupRoutes].
+  // for these tabs as they were set up, see [setupRoutes]. With
+  // [replacesUrl] its url takes the place of the url before it as it shows,
+  // see [_showTab].
   _TabChange _endTabChange(
     int change,
     int index,
@@ -1391,6 +1393,7 @@ class TabsRouter extends RoutingController {
     bool keepsUnnamedPages = false,
     ValueChanged<Future<Object?>>? onInside,
     bool isNamedAtSetup = false,
+    bool replacesUrl = false,
   }) {
     if (_isDisposed || change != _tabChanges) return .replaced;
     _pendingTab = null;
@@ -1407,6 +1410,14 @@ class TabsRouter extends RoutingController {
       if (notify) notifyListeners();
       return .rejected;
     }
+    // Shows the tab, in each way below once it may.
+    void showTab({bool isLinkStep = false}) => _showTab(
+      index,
+      notify: notify,
+      remember: remember,
+      isLinkStep: isLinkStep,
+      replacesUrl: replacesUrl,
+    );
     final isUpdated = update || !identical(result.route, match);
     // A link that goes on to pages in the tab's nested router shows the tab
     // once the guards there let it in, as a link into the nested router of a
@@ -1423,12 +1434,7 @@ class TabsRouter extends RoutingController {
           result.route,
           link: link,
           onLinkAccepted: onLinkAccepted,
-          show: () => _showTab(
-            index,
-            notify: notify,
-            remember: remember,
-            isLinkStep: true,
-          ),
+          show: () => showTab(isLinkStep: true),
           then: onLetIn,
           onFailure: onFailure,
         ),
@@ -1467,7 +1473,7 @@ class TabsRouter extends RoutingController {
           result.route,
           keepsUnnamedPages: keepsUnnamedPages,
         );
-        _showTab(index, notify: notify, remember: remember);
+        showTab();
         return .done;
       }
       _handInside(
@@ -1475,7 +1481,7 @@ class TabsRouter extends RoutingController {
           change,
           index,
           result.route,
-          show: () => _showTab(index, notify: notify, remember: remember),
+          show: showTab,
           then: onLetIn,
           onFailure: onFailure,
           keepsUnnamedPages: keepsUnnamedPages,
@@ -1490,10 +1496,7 @@ class TabsRouter extends RoutingController {
         result.route,
         keepsUnnamedPages: keepsUnnamedPages,
       );
-      final show = _showingTabOnce(
-        change,
-        () => _showTab(index, notify: notify, remember: remember),
-      );
+      final show = _showingTabOnce(change, showTab);
       _handInside(
         _navigateInsideTab(
           updated,
@@ -1526,7 +1529,7 @@ class TabsRouter extends RoutingController {
       // tab, never opened, has answered, see [_waitForTabsOfNewTab].
       final previous = _activeIndex;
       final releaseBrowser = navigationHistory.holdBrowserWrites();
-      _showTab(index, notify: notify, remember: remember);
+      showTab();
       _waitForTabsOfNewTab(
         index,
         previous,
@@ -1545,7 +1548,7 @@ class TabsRouter extends RoutingController {
       );
       return .done;
     }
-    _showTab(index, notify: notify, remember: remember);
+    showTab();
     if (updated == null) {
       onLetIn?.call();
     } else {
@@ -1642,11 +1645,19 @@ class TabsRouter extends RoutingController {
   // would name the page on top of the tab before them, which shows for no
   // frame, and the web history would give that page an entry of its own in
   // place of the link's.
+  //
+  // With [replacesUrl], the url of the tab takes the place of the url before
+  // it, as the tab a url named takes the place of the first tab, which
+  // showed while the tab's guards decided. The url is marked for that only
+  // as the tab shows, right before its url is reported: a url reported
+  // before, as by the tab's nested router while it opens its pages off the
+  // screen, names the tab before, and would use the mark up.
   void _showTab(
     int index, {
     required bool notify,
     required bool remember,
     bool isLinkStep = false,
+    bool replacesUrl = false,
   }) {
     // Preloads while the old tab is still active, whether or not this notifies.
     final shouldWaitForFrame =
@@ -1661,12 +1672,21 @@ class TabsRouter extends RoutingController {
     }
     _previousIndex = _activeIndex;
     _activeIndex = index;
+    // Reports the tab, whose url the mark makes take the place of the one
+    // before it.
+    void report() {
+      if (replacesUrl) markUrlStateForReplace();
+      notifyAll(forceUrlRebuild: replacesUrl);
+    }
+
     if (shouldWaitForFrame) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         // The tabs may be disposed by the end of the frame.
-        if (!_isDisposed) notifyAll();
+        if (!_isDisposed) report();
       });
     } else if (notify && isLinkStep) {
+      // The pages that go on in the tab next report its url.
+      if (replacesUrl) markUrlStateForReplace();
       notifyListeners();
       root.notifyListeners();
       scheduleMicrotask(() {
@@ -1675,7 +1695,7 @@ class TabsRouter extends RoutingController {
         }
       });
     } else if (notify) {
-      notifyAll();
+      report();
     }
   }
 
@@ -2119,17 +2139,13 @@ class TabsRouter extends RoutingController {
       _pendingTab = index;
       _pendingChange = guarding.then(
         (result) {
-          // The tab takes the first one's place in the url. Not once the tabs
-          // are gone: the url that follows is another page's, which must not
-          // take the place of the page shown before it.
-          if (result.continueNavigation &&
-              change == _tabChanges &&
-              !_isDisposed) {
-            markUrlStateForReplace();
-          }
           // The tabs may have changed meanwhile: replaceAll moves the tab.
           // The tab shows with the pages its page holds, and [letIn] waits
-          // for its nested router to open them.
+          // for its nested router to open them. The tab takes the first
+          // one's place in the url as it shows. Not once the tabs are gone,
+          // as the change then never shows: the url that follows is another
+          // page's, which must not take the place of the page shown before
+          // it.
           final outcome = _endTabChange(
             change,
             _pendingTab ?? index,
@@ -2137,6 +2153,7 @@ class TabsRouter extends RoutingController {
             result,
             update: true,
             isNamedAtSetup: true,
+            replacesUrl: true,
           );
           switch (outcome) {
             case .done:

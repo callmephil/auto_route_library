@@ -295,6 +295,8 @@ import 'push_into_nested_guard_takes_page_back_test.dart'
     as push_into_nested_guard_takes_page_back;
 import 'push_same_route_twice_test.dart' as push_same_route_twice;
 import 'push_then_replace_test.dart' as push_then_replace;
+import 'push_to_tab_with_waiting_guard_test.dart'
+    as push_to_tab_with_waiting_guard;
 import 'push_unknown_relative_path_test.dart' as push_unknown_relative_path;
 import 'query_param_rebuild_test.dart' as query_param_rebuild;
 import 'query_params_on_pop_test.dart' as query_params_on_pop;
@@ -742,6 +744,7 @@ void main() {
   push_into_nested_guard_takes_page_back.main();
   push_same_route_twice.main();
   push_then_replace.main();
+  push_to_tab_with_waiting_guard.main();
   push_unknown_relative_path.main();
   query_param_rebuild.main();
   query_params_on_pop.main();

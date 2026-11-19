@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: a navigation to a tab whose guard waits gives the tabs page one entry in the history, also when the tabs
+  build that tab's nested router before it shows: with `AutoTabsRouter.builder`, with `AutoTabsRouter.pageView(lazyLoad:
+  false)` or to ask a guard in that router. Before, the first tab, shown while the guard decided, kept an entry of its
+  own, on the web and off it, and back showed it. After a guard's "no" in that nested router, the next tab change no
+  longer takes the place of the first tab's entry.
 - **FIX**, **BEHAVIOR CHANGE**: a link, the launch url or a navigation such as `navigatePath` to a page in a tab of a
   tabs page that is not open, when the guard of that tab waits and the page has a guard of its own, opens the page once
   and asks its guard once, as when the tab's guard answers at once. The tab then shows while the page's guard decides,
