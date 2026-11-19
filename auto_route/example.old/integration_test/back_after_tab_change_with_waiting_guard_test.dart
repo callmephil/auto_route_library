@@ -34,7 +34,7 @@ void main() {
     // Was: 8 back presses; two moved the browser forward.
     // Should: back shows Order 7, Orders, then Home, one entry each, and
     // forward walks the same entries up to Account. Also with a guard of
-    // Order that waits too, which the back press into Orders asks again.
+    // Order that waits too, which the forward press onto Order 7 asks.
     for (final orderWaits in [false, true]) {
       testWidgets(
         'Back shows Order 7, Orders, then Home'

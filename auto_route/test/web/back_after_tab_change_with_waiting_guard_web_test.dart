@@ -15,8 +15,8 @@ import 'browser_history.dart';
 // (callmephil/auto_route_library#31). The steps, what was seen and what
 // should be seen are those of the headless test on the VM:
 // test/back_after_tab_change_with_waiting_guard_test.dart. The second run
-// adds a guard of Order that waits too, which the back press into Orders
-// asks again in the tab's nested router.
+// adds a guard of Order that waits too, which the forward press onto Order
+// 7, closed by the back walk, asks in the tab's nested router.
 //
 // Native behavior this holds to: the HTML standard's session history, where
 // a back or forward traversal moves to another entry and adds none, and

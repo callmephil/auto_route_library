@@ -50,6 +50,15 @@ abstract class RootStackRouter extends StackRouter {
   // own step, which the browser has already taken.
   bool _isOpeningBrowserEntry = false;
 
+  // The counts of the links still opening that open an entry of the
+  // browser's own history, see [_isOpeningBrowserEntry]. Such a link's
+  // navigation knows its link by this count also where it goes on after a
+  // guard's wait, as into a tab whose own guard waits.
+  final _browserEntryLinks = <int>{};
+
+  // Whether [link] opens an entry of the browser's own history.
+  bool _opensBrowserEntry(int? link) => _browserEntryLinks.contains(link);
+
   // The count of the latest link the app let in. A navigation a link starts
   // stops at its next guard once a link that started after it has been let
   // in: a slow guard of the link the app started at must not open its page
@@ -135,6 +144,7 @@ abstract class RootStackRouter extends StackRouter {
   }) {
     final link = _startingLink = ++_linkCount;
     _linkHolds[link] = [];
+    if (_isOpeningBrowserEntry) _browserEntryLinks.add(link);
     _linkSteps[link] = () {
       if (link > _letInLink) {
         _letInLink = link;
@@ -197,6 +207,7 @@ abstract class RootStackRouter extends StackRouter {
       }
     } finally {
       _linkHolds.remove(link);
+      _browserEntryLinks.remove(link);
     }
   }
 

@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, the browser's back and forward buttons to an entry whose page is still open ask no guard of the
+  open pages on the way, the global guards included: the tabs page and the page in a tab not on screen, or a page under
+  the page on top and the page in its nested router. A step into another tab still asks that tab's own guards, as the
+  app's own tab change does, and a page that is not open is asked as before. Before, those guards were asked again: a
+  slow one kept the tab or the page above on screen until it answered, and one that asks the user asked again.
 - **FIX**: on the web, when the browser's forward button reaches a page whose guard shows a sign-in page with
   `redirectUntil`, the page takes the place of the sign-in page on the entry the user went to once the guard lets it in,
   and the entries ahead stay. The app's own push of such a page writes the sign-in page, then the page over it, with no

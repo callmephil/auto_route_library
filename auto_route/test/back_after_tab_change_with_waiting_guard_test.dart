@@ -228,8 +228,11 @@ void main() {
         await _expectWalkOfOneEntryPerPage(_App(tester, guardWait: guardWait));
       });
 
-      // The back press into Orders asks the guard of Order 7 again, in the
-      // nested router of the tab, once the tab's own guard has let it in.
+      // The forward press onto Order 7, which the back walk closed, asks the
+      // guard of Order in the nested router of the tab. The back press into
+      // Orders asked it again too, once the tab's own guard had let the tab
+      // in, until it showed the open Order 7 as it is
+      // (callmephil/auto_route_library#36).
       // Was: the 8 presses of the issue. A fix that held the link open for
       // the tab change alone still took 6: Order 7, Account, OrdersIndex,
       // Account, OrdersIndex, Home, as the link ended while the guard of

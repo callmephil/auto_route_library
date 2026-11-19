@@ -4191,7 +4191,25 @@ abstract class StackRouter extends RoutingController {
     final anchorId = anchorPage?.routeData.matchId;
     if (anchorId != null) {
       // use the existing match id to avoid breaking child controllers
-      toPush[0] = anchor.withId(anchorId);
+      final reached = anchor.withId(anchorId);
+      // A step of the browser's back or forward button to an entry whose
+      // page is open, in a tab not on screen or under the page on top,
+      // reaches the open pages on the way again: the entry names each by its
+      // match id, with the route it has. Such a page shows as it is, and the
+      // guards that let it in are not asked again, as the app's own back()
+      // asks none of a page it shows once the pages above it leave, and as
+      // Navigator.pop asks nothing of the route under it. A tab change on the
+      // way asks the tab's guards, as the app's own tab change does, and a
+      // page that is not open is asked as before.
+      final isShownAsItIs =
+          anchorPage != null &&
+          root._opensBrowserEntry(link) &&
+          _isPageAsItIs(anchorPage.routeData, anchor);
+      toPush[0] = isShownAsItIs
+          ? reached.copyWith(
+              evaluatedGuards: [...root.guards, ...anchor.guards],
+            )
+          : reached;
     }
     // Let go once used, so the call that waits on the last page doesn't hold
     // the pages that left.
@@ -4290,6 +4308,20 @@ abstract class StackRouter extends RoutingController {
         }
       },
     );
+  }
+
+  // Whether [route] names the page of [data] as the page is: by its match id,
+  // with its args, path params, query params and fragment.
+  static bool _isPageAsItIs(
+    RouteData<Object?> data,
+    RouteMatch<Object?> route,
+  ) {
+    final shown = data.route;
+    return route.id == shown.id &&
+        route.args == shown.args &&
+        route.params == shown.params &&
+        route.queryParams == shown.queryParams &&
+        route.fragment == shown.fragment;
   }
 
   // How many of [matches], save the last, find a page they would build again
