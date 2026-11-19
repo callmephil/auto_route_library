@@ -10,6 +10,8 @@ import 'app_smoke_test.dart' as app_smoke;
 import 'app_tab_change_waits_for_nested_guards_test.dart'
     as app_tab_change_waits_for_nested_guards;
 import 'async_simple_guard_test.dart' as async_simple_guard;
+import 'back_after_closing_nested_router_page_test.dart'
+    as back_after_closing_nested_router_page;
 import 'back_after_closing_unbuilt_page_test.dart'
     as back_after_closing_unbuilt_page;
 import 'back_after_link_page_removed_test.dart' as back_after_link_page_removed;
@@ -505,6 +507,7 @@ void main() {
   app_smoke.main();
   app_tab_change_waits_for_nested_guards.main();
   async_simple_guard.main();
+  back_after_closing_nested_router_page.main();
   back_after_closing_unbuilt_page.main();
   back_after_link_page_removed.main();
   back_after_link_to_other_tab.main();

@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, the pages of a nested router leave the browser's history with the page that holds the router,
+  such as a tabs page or a shell, when the app closes that page with a pop or a removal. A pop steps the browser back to
+  the entry of the page under it, and a removal from under another page drops their entries, or hands a link's entry to
+  the page the link opened under them. Before, they counted as open until the closed page's widget was gone: a pop wrote
+  a new entry, a removal kept their entries, and the back button opened the closed page again.
 - **FIX**, **BEHAVIOR CHANGE**: on the web, with `rebuildStackOnDeepLink`, the browser's back and forward buttons go
   through each page once and change no entry, as without the flag: the pages under the page they show stay. Before, each
   press replaced the stack with the pages of the entry it went to, as for a link: Home closed, its entry took the url of

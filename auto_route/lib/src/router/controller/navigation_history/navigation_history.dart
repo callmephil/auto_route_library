@@ -272,16 +272,23 @@ abstract class NavigationHistory with ChangeNotifier {
 
   /// The controller, [router] or one nested in it, whose stack holds the page
   /// with [pageId], or null when no stack holds it any more.
+  ///
+  /// A nested router counts only while the page that holds it is in its
+  /// parent's stack. A router keeps the nested router of a page that left
+  /// among its children until that page's widget is gone, as while a popped
+  /// page animates out, but the pages of that router left with it.
   @protected
   RoutingController? controllerOfPage(
     LocalKey pageId, [
     RoutingController? controller,
   ]) {
     controller ??= router;
-    if (controller.stackData.any((data) => data.route.id == pageId)) {
+    final pages = controller.stackData;
+    if (pages.any((data) => data.route.id == pageId)) {
       return controller;
     }
     for (final child in controller.childControllers) {
+      if (!pages.any((data) => data.matchId == child.matchId)) continue;
       final holder = controllerOfPage(pageId, child);
       if (holder != null) return holder;
     }
