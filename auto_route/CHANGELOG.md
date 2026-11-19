@@ -1,4 +1,12 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: a link, the launch url or a navigation such as `navigatePath` to a page in a tab of a
+  tabs page that is not open, when the guard of that tab waits and the page has a guard of its own, opens the page once
+  and asks its guard once, as when the tab's guard answers at once. The tab then shows while the page's guard decides,
+  also as with a tab guard that answers at once. On the web the link keeps the one entry the browser made for it. After
+  a "no" of the page's guard, the tabs page is taken back and `onFailure` hears it, or at launch the tab shows its first
+  page. Before, the page went on two times and its guard was asked two times: back showed the page again, on the web the
+  next back press failed the assertion of Flutter's Navigator on two pages with one key, and the link got a second
+  entry. The first tab stayed on screen while the page's guard decided, and after a "no".
 - **FIX**: on the web, a link into another tab of the tabs page on screen, from the platform or typed into the address
   bar, adds one browser entry and moves the browser nowhere. Before, the tabs page that the link reaches again reported
   the url of the tab still on screen first, so the app stepped the browser back from the link's entry and forward again,

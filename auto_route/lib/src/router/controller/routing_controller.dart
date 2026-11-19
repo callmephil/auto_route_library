@@ -1373,6 +1373,9 @@ class TabsRouter extends RoutingController {
     _pendingChange = null;
   }
 
+  // Ends the change [change] to the tab at [index], whose guards answered
+  // [result]. With [isNamedAtSetup] the tab is the one a navigation named
+  // for these tabs as they were set up, see [setupRoutes].
   _TabChange _endTabChange(
     int change,
     int index,
@@ -1387,6 +1390,7 @@ class TabsRouter extends RoutingController {
     bool remember = true,
     bool keepsUnnamedPages = false,
     ValueChanged<Future<Object?>>? onInside,
+    bool isNamedAtSetup = false,
   }) {
     if (_isDisposed || change != _tabChanges) return .replaced;
     _pendingTab = null;
@@ -1450,6 +1454,22 @@ class TabsRouter extends RoutingController {
     if (goesInside &&
         tabRouter == null &&
         _asksGuards(result.route.children ?? const [])) {
+      // Not the tab named for the tabs as they were set up, [isNamedAtSetup]:
+      // it shows now, as when its own guards answer at once. Its page holds
+      // the pages named for its nested router, which opens them once it is
+      // built, and the navigation that put the tabs on waits for them there,
+      // see [setupRoutes]. Built off the screen, the router would open them
+      // from the page, and the change would open them a second time.
+      if (isNamedAtSetup) {
+        // A guard may have overridden the route, e.g. its args.
+        _updateTabPage(
+          index,
+          result.route,
+          keepsUnnamedPages: keepsUnnamedPages,
+        );
+        _showTab(index, notify: notify, remember: remember);
+        return .done;
+      }
       _handInside(
         _showTabOnceLinkLetIn(
           change,
@@ -2108,12 +2128,15 @@ class TabsRouter extends RoutingController {
             markUrlStateForReplace();
           }
           // The tabs may have changed meanwhile: replaceAll moves the tab.
+          // The tab shows with the pages its page holds, and [letIn] waits
+          // for its nested router to open them.
           final outcome = _endTabChange(
             change,
             _pendingTab ?? index,
             match,
             result,
             update: true,
+            isNamedAtSetup: true,
           );
           switch (outcome) {
             case .done:
