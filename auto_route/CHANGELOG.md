@@ -1,4 +1,12 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: with tabs that build every tab at once (`AutoTabsRouter(lazyLoad: false)`,
+  `AutoTabsRouter.pageView(lazyLoad: false)`, `AutoTabsRouter.builder`), a link, the launch url or a navigation such as
+  `navigatePath` to a page in a tab whose guard waits asks the page's guard once, after the tab's guard lets the tab in,
+  and opens the page once, as the default tabs do. A "no" of a guard inside that tab takes the new tabs page back, and
+  `onFailure` hears it. With any tabs, after a "no" of the tab's guard, or another tab chosen while it decides, the tab
+  holds no page of the navigation, and a later change to it shows its first page. Before, the page went on two times and
+  its guard was asked before the tab's guard answered: back showed the page again. A "no" inside the tab left the tabs
+  page open on its first tab, and a later change to the tab showed the refused page.
 - **FIX**: on the web, when the browser's back or forward button reaches a page in a tab not on screen whose guard shows
   a sign-in page with `redirectUntil`, the sign-in page takes the entry the user went to, and the page takes it back
   once the guard lets it in. The browser moves to no other entry, and the tab on screen gets no entry under the sign-in

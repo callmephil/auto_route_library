@@ -30,11 +30,10 @@ import 'router_test_utils.dart';
 // Account, took the place of the entry of Shop, and back from Account
 // skipped Shop.
 // Should: the url of Orders takes the place of the url of Shop. Back shows
-// Home, and forward shows Orders again on the same entry. After a no inside
-// the tab, the tab change to Account adds an entry of its own, and back
-// shows Shop again. With the guard of the app, the tab shows at once and
-// the no inside it takes the new tabs page back
-// (callmephil/auto_route_library#33), so no tab change follows.
+// Home, and forward shows Orders again on the same entry. The tab shows as
+// its own guard lets it in, and a no inside it takes the new tabs page back
+// (callmephil/auto_route_library#33, and callmephil/auto_route_library#45
+// for the tabs that build Orders at once), so no tab change follows.
 //
 // Native behavior this holds to: one navigation adds one step back, as
 // each call of Android's NavController.navigate pushes one destination and
@@ -186,12 +185,6 @@ class _App {
     await browser.settle(tester);
   }
 
-  // The user selects the Account tab.
-  Future<void> selectAccount() async {
-    router.innerRouterOf<TabsRouter>('Store')!.setActiveIndex(2);
-    await browser.settle(tester);
-  }
-
   // The page shown after each press of [press], at most [limit] presses,
   // until it has no entry to go to.
   Future<List<String>> walk(bool Function() press, int limit) async {
@@ -255,71 +248,30 @@ void main() {
         expect(await app.walkBack(), ['Home /']);
       }, skip: kIsWeb);
 
-      // Tabs that build Orders at once keep Shop after a no inside Orders,
-      // as the tab never showed. With the guard of the app, the no takes
-      // Store back: see the test after this group.
-      if (tabs == .appGuard) return;
+      // The tab that the path names shows as soon as its own guard lets it
+      // in, and its nested router asks the guard of OrdersIndex on screen:
+      // the no then takes the new tabs page back, as a nested guard's no
+      // does (callmephil/auto_route_library#33 and #45).
+      for (final writesBrowser in [true, if (!kIsWeb) false]) {
+        testWidgets('a no of the guard inside Orders takes Store '
+            'back${writesBrowser ? '' : ', off the web'}', (tester) async {
+          final app = _App(
+            tester,
+            tabs: tabs,
+            refusesIndex: true,
+            writesBrowser: writesBrowser,
+          );
+          await app.openOrders();
 
-      testWidgets('after a no of the guard inside Orders, a change to the '
-          'Account tab adds an entry, and back shows Shop again', (
-        tester,
-      ) async {
-        final app = _App(tester, tabs: tabs, refusesIndex: true);
-        await app.openOrders();
-        // The no keeps the tabs page, on Shop.
-        expect(app.shown, 'Shop /store/shop');
-        final asked = app.browser.asked.length;
-
-        await app.selectAccount();
-
-        expect(app.browser.asked.skip(asked), ['push /store/account']);
-        expect(app.browser.held, '/ /store/shop >/store/account');
-        expect(await app.walk(app.browser.didPressBack, 1), [
-          'Shop /store/shop',
-        ]);
-      });
-
-      testWidgets('off the web, after a no of the guard inside Orders, back() '
-          'from the Account tab shows Shop', (tester) async {
-        final app = _App(
-          tester,
-          tabs: tabs,
-          refusesIndex: true,
-          writesBrowser: false,
-        );
-        await app.openOrders();
-        expect(app.shownByApp, 'Shop /store/shop');
-        await app.selectAccount();
-
-        expect(await app.walkBack(), ['Shop /store/shop', 'Home /']);
-      }, skip: kIsWeb);
-    });
-  }
-
-  // With the guard of the app, the tab that the path names shows as soon as
-  // its own guard lets it in, and its nested router asks the guard of
-  // OrdersIndex on screen: the no then takes the new tabs page back, as a
-  // nested guard's no does (callmephil/auto_route_library#33).
-  for (final writesBrowser in [true, if (!kIsWeb) false]) {
-    testWidgets('With the guard of the app, a no of the guard inside Orders '
-        'takes Store back${writesBrowser ? '' : ', off the web'}', (
-      tester,
-    ) async {
-      final app = _App(
-        tester,
-        tabs: .appGuard,
-        refusesIndex: true,
-        writesBrowser: writesBrowser,
-      );
-      await app.openOrders();
-
-      expect(
-        (
-          writesBrowser ? app.shown : app.shownByApp,
-          app.router.stack.map((page) => page.name).join(' '),
-        ),
-        ('Home /', 'Home'),
-      );
+          expect(
+            (
+              writesBrowser ? app.shown : app.shownByApp,
+              app.router.stack.map((page) => page.name).join(' '),
+            ),
+            ('Home /', 'Home'),
+          );
+        });
+      }
     });
   }
 }

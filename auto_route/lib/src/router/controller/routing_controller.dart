@@ -1302,6 +1302,7 @@ class TabsRouter extends RoutingController {
       return _TabChange.done;
     }
     final change = ++_tabChanges;
+    _letGoOfHeldTab();
     // What a link that changes the tab does once the tab's guards let it in.
     final onLinkAccepted = link == null ? null : root._takeLinkStep(link);
     final checked = _checkTabGuards(
@@ -1371,6 +1372,25 @@ class TabsRouter extends RoutingController {
     _tabChanges++;
     _pendingTab = null;
     _pendingChange = null;
+    _letGoOfHeldTab();
+  }
+
+  // The page, by match id, of the tab named as these tabs were set up, while
+  // that tab's guards decide, see [setupRoutes]. Its nested router, when
+  // built before the tab shows, opens no page until the change ends, unless
+  // the app's widgets manage it.
+  LocalKey? _heldTab;
+
+  void _letGoOfHeldTab() {
+    final held = _heldTab;
+    if (held == null) return;
+    _heldTab = null;
+    if (_innerControllerOfMatch(held) case final NestedStackRouter router
+        when router._setupWaitsForTabs && !router._isDisposed) {
+      router
+        .._setupWaitsForTabs = false
+        ..setupInitialRoutes();
+    }
   }
 
   // Ends the change [change] to the tab at [index], whose guards answered
@@ -1410,7 +1430,6 @@ class TabsRouter extends RoutingController {
       if (notify) notifyListeners();
       return .rejected;
     }
-    // Shows the tab, in each way below once it may.
     void showTab({bool isLinkStep = false}) => _showTab(
       index,
       notify: notify,
@@ -1457,25 +1476,22 @@ class TabsRouter extends RoutingController {
         onLinkAccepted == null &&
         isUpdated &&
         (result.route.children ?? const []).isNotEmpty;
+    // The tab named as the tabs were set up, [isNamedAtSetup], shows now, as
+    // when its guards answer at once: its nested router, not built yet or
+    // held, see [_heldTab], opens the pages named for it as its first pages,
+    // and the navigation that set up the tabs waits for them there.
+    if (isNamedAtSetup &&
+        goesInside &&
+        (tabRouter == null
+            ? _asksGuards(result.route.children ?? const [])
+            : tabRouter is NestedStackRouter && tabRouter._isHeldByTabs)) {
+      _updateTabPage(index, result.route, keepsUnnamedPages: keepsUnnamedPages);
+      showTab();
+      return .done;
+    }
     if (goesInside &&
         tabRouter == null &&
         _asksGuards(result.route.children ?? const [])) {
-      // Not the tab named for the tabs as they were set up, [isNamedAtSetup]:
-      // it shows now, as when its own guards answer at once. Its page holds
-      // the pages named for its nested router, which opens them once it is
-      // built, and the navigation that put the tabs on waits for them there,
-      // see [setupRoutes]. Built off the screen, the router would open them
-      // from the page, and the change would open them a second time.
-      if (isNamedAtSetup) {
-        // A guard may have overridden the route, e.g. its args.
-        _updateTabPage(
-          index,
-          result.route,
-          keepsUnnamedPages: keepsUnnamedPages,
-        );
-        showTab();
-        return .done;
-      }
       _handInside(
         _showTabOnceLinkLetIn(
           change,
@@ -2116,6 +2132,13 @@ class TabsRouter extends RoutingController {
       if (checked is Future<ResolverResult>) {
         guardedIndex = correspondingRouteIndex;
         guarding = checked;
+        // The tab goes on as listed, with the id the url names, see [_heldTab].
+        if (_resolveRoutes(routes).elementAtOrNull(correspondingRouteIndex)
+            case final listed?) {
+          routesToPush[correspondingRouteIndex] = listed.withId(
+            preMatchedRoute.id,
+          );
+        }
       } else if (correspondingRouteIndex != -1 &&
           checked?.continueNavigation != false) {
         routesToPush[correspondingRouteIndex] =
@@ -2137,15 +2160,15 @@ class TabsRouter extends RoutingController {
       final index = guardedIndex;
       final match = preMatchedRoute!;
       _pendingTab = index;
+      _heldTab = _pages.elementAtOrNull(index)?.routeData.matchId;
       _pendingChange = guarding.then(
         (result) {
           // The tabs may have changed meanwhile: replaceAll moves the tab.
-          // The tab shows with the pages its page holds, and [letIn] waits
-          // for its nested router to open them. The tab takes the first
-          // one's place in the url as it shows. Not once the tabs are gone,
-          // as the change then never shows: the url that follows is another
-          // page's, which must not take the place of the page shown before
-          // it.
+          // The tab shows with the navigation's pages, which [letIn] waits
+          // for its nested router to open, and takes the first tab's place in
+          // the url. Not once the tabs are gone, as the change then never
+          // shows: the url that follows is another page's, which must not
+          // take the place of the page shown before it.
           final outcome = _endTabChange(
             change,
             _pendingTab ?? index,
@@ -2164,10 +2187,12 @@ class TabsRouter extends RoutingController {
             case .replaced:
               letIn?.turnDown(canTakeBack: false);
           }
+          _letGoOfHeldTab();
           return outcome;
         },
         onError: (Object error, StackTrace stackTrace) {
           letIn?.turnDown(canTakeBack: false);
+          _letGoOfHeldTab();
           return _failTabChange(change, error, stackTrace);
         },
       );
@@ -2245,11 +2270,20 @@ class TabsRouter extends RoutingController {
 
   // The tab named for these tabs is on: [letIn] waits for the nested router
   // of the active tab instead, when that tab went on with pages of its own
-  // for a router not built yet; otherwise it is let in, after the frame, as
-  // this may run while widgets build. See [NestedStackRouter._letInOrHandOn].
+  // for a router not built yet, or held, see [_heldTab]; otherwise it is let
+  // in after the frame, as this may run while widgets build.
   void _letInOrHandOn(_NestedLetIn? letIn) {
     if (letIn == null) return;
-    letIn.letInOrWaitOn(this, _activePage?.routeData);
+    final active = _activePage?.routeData;
+    final inner = _innerControllerOfPage(active);
+    if (active != null &&
+        active.hasPendingChildren &&
+        inner is NestedStackRouter &&
+        inner._isHeldByTabs) {
+      letIn.waitOn(active);
+    } else {
+      letIn.letInOrWaitOn(this, active);
+    }
   }
 
   // When a widget above AutoTabsRouter rebuilds it from scratch, the new
@@ -7276,7 +7310,7 @@ class NestedStackRouter extends StackRouter {
   @internal
   bool setupInitialRoutesSynchronously() {
     _nestedLetIn ??= _NestedLetIn.claim(_routeData);
-    if (managedByWidget || root.guards.isNotEmpty) {
+    if (managedByWidget || root.guards.isNotEmpty || _isHeldByTabs) {
       return false;
     }
     final hasPendingChildren = _routeData.hasPendingChildren;
@@ -7314,6 +7348,15 @@ class NestedStackRouter extends StackRouter {
   // guards here let it in, see [_NestedLetIn]: claimed as the router is
   // built, before the end of the frame that builds it.
   _NestedLetIn? _nestedLetIn;
+
+  bool _setupWaitsForTabs = false;
+
+  bool get _isHeldByTabs =>
+      !managedByWidget &&
+      switch (_parent) {
+        final TabsRouter tabs => tabs._heldTab == matchId,
+        _ => false,
+      };
 
   _NestedLetIn? _takeNestedLetIn() {
     final letIn = _nestedLetIn ?? _NestedLetIn.claim(_routeData);
@@ -7432,6 +7475,10 @@ class NestedStackRouter extends StackRouter {
   /// A router built by `AutoRouter.declarative` pushes nothing: it hands the
   /// routes a link opened to [pendingRoutesHandler] for its routes callback.
   void setupInitialRoutes() {
+    if (_isHeldByTabs) {
+      _setupWaitsForTabs = true;
+      return;
+    }
     final letIn = _takeNestedLetIn();
     if (_routeData.hasPendingChildren) {
       final initialRoutes = List<RouteMatch<Object?>>.unmodifiable(

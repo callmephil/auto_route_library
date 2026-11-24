@@ -124,54 +124,22 @@ void main() {
       ]);
     });
 
-    // With the guard of the app, the no inside Orders takes Store back
-    // instead: see the test after this loop.
-    if (tabs == .appGuard) continue;
-    testWidgets('after a no of the guard inside Orders, a change to the '
-        'Account tab adds an entry, and back shows Shop again (${tabs.name})', (
-      tester,
-    ) async {
+    // Orders shows as soon as its own guard lets it in, and the no of the
+    // guard inside it takes the new tabs page back, as a nested guard's no
+    // does (callmephil/auto_route_library#33 and #45).
+    testWidgets('a no of the guard inside Orders takes Store back '
+        '(${tabs.name})', (tester) async {
       final router = _storeRouter(tabs, refusesIndex: true);
       await pumpRouterConfigApp(tester, router.config());
       await settleBrowser(tester);
-      final home = browserSerialCount;
-      String shown() =>
-          '${router.topRoute.name} $browserPath ${browserSerialCount - home}';
 
       unawaited(router.pushPath<Object?>('/store/orders'));
       await settleBrowser(tester);
-      // The page shown and the entry it is on: after the push, which the no
-      // leaves on Shop, after the tab change, and after back.
-      final shownAfter = [shown()];
-      router.innerRouterOf<TabsRouter>('Store')!.setActiveIndex(2);
-      await settleBrowser(tester);
-      shownAfter.add(shown());
-      await pressBrowserBack(tester);
-      shownAfter.add(shown());
 
-      expect(shownAfter, [
-        'Shop /store/shop 1',
-        'Account /store/account 2',
-        'Shop /store/shop 1',
-      ]);
+      expect(
+        ('${router.topRoute.name} $browserPath', router.stack.length),
+        ('Home /', 1),
+      );
     });
   }
-
-  // With the guard of the app, Orders shows as soon as its own guard lets
-  // it in, and the no of the guard inside it takes the new tabs page back,
-  // as a nested guard's no does (callmephil/auto_route_library#33).
-  testWidgets('with the guard of the app, a no of the guard inside Orders '
-      'takes Store back', (tester) async {
-    final router = _storeRouter(.appGuard, refusesIndex: true);
-    await pumpRouterConfigApp(tester, router.config());
-    await settleBrowser(tester);
-
-    unawaited(router.pushPath<Object?>('/store/orders'));
-    await settleBrowser(tester);
-
-    expect(
-      ('${router.topRoute.name} $browserPath', router.stack.length),
-      ('Home /', 1),
-    );
-  });
 }

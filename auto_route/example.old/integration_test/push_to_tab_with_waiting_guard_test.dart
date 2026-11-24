@@ -50,58 +50,26 @@ void main() {
         },
       );
 
-      // With the guard of the app, the no inside Orders takes Store back
-      // instead: see the test after this loop.
-      if (tabs.hasAppGuard) continue;
-
       // Steps: the same, with a guard in the nested router of Orders that
-      // says no. The tabs page stays on Shop. Select the Account tab, then
-      // go back.
-      // Was: the tab change took the place of the entry of Shop, and back
-      // showed Home.
-      // Should: back shows Shop.
+      // says no.
+      // Should: Orders shows as soon as its own guard lets it in, and the no
+      // takes the new tabs page back, as a nested guard's no does
+      // (callmephil/auto_route_library#33 and #45).
       testWidgets(
-        'after a no inside the tab, back from the next tab shows Shop, with '
-        'the ${tabs.name}',
+        'a no inside the tab takes the tabs page back, with the ${tabs.name}',
         (tester) async {
           final router = _storeRouter(tabs, refusesIndex: true);
           await pumpRouterAppWithConfig(tester, router);
 
           unawaited(router.pushPath<Object?>('/store/orders'));
           await tester.pumpAndSettle();
-          expect(router.topRoute.name, 'ShopTab');
-          await expectBrowserEntryAfter(1, () async {
-            router.innerRouterOf<TabsRouter>('StoreRoute')!.setActiveIndex(2);
-            await tester.pumpAndSettle();
-          });
-          await expectBrowserUrl('/store/account');
 
-          await _expectBack(tester, router, ('ShopTab', '/store/shop'));
+          expect(router.topRoute.name, 'HomeRoute');
+          expect(router.stack.length, 1);
+          await expectBrowserUrl('/');
         },
       );
     }
-
-    // Steps: with the default tabs and a guard of the app, push the path
-    // /store/orders, with a guard in the nested router of Orders that says
-    // no.
-    // Should: Orders shows as soon as its own guard lets it in, and the no
-    // takes the new tabs page back, as a nested guard's no does
-    // (callmephil/auto_route_library#33).
-    testWidgets(
-      'with the default tabs and a guard of the app, a no inside the tab '
-      'takes the tabs page back',
-      (tester) async {
-        final router = _storeRouter(_appGuardTabs, refusesIndex: true);
-        await pumpRouterAppWithConfig(tester, router);
-
-        unawaited(router.pushPath<Object?>('/store/orders'));
-        await tester.pumpAndSettle();
-
-        expect(router.topRoute.name, 'HomeRoute');
-        expect(router.stack.length, 1);
-        await expectBrowserUrl('/');
-      },
-    );
   });
 }
 
