@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -115,7 +116,12 @@ void main() {
           expect(_slow?.isCompleted, isFalse, reason: 'the guard waits');
           expect(_names(router), before, reason: 'while it decides');
           expect(find.text('Draft'), findsOneWidget, reason: 'meanwhile');
-          expect(router.currentUrl, '/details', reason: 'meanwhile');
+          // On the web a link's url shows at once and stays while it waits.
+          expect(
+            router.currentUrl,
+            kIsWeb && way == .link ? '/message/77' : '/details',
+            reason: 'meanwhile',
+          );
           _slow!.complete(answer == .waitsThenYes);
           await tester.pumpAndSettle();
         }
