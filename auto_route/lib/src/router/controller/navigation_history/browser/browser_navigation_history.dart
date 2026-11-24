@@ -103,6 +103,8 @@ class BrowserNavigationHistory extends NavigationHistory {
   // pages above its page off their stack; see [onNewUrlState].
   UrlState? _landedEntry;
 
+  UrlState? _followedEntry;
+
   // Whether the change being reported keeps the entries of closed pages
   // that are under the entry of an open one; see [rebuildUrlAfterPop].
   bool _keepsClosedUnder = false;
@@ -163,25 +165,36 @@ class BrowserNavigationHistory extends NavigationHistory {
   void onNewUrlState(UrlState newState, {bool notify = true}) {
     final landed = _landedEntry;
     if (landed != null && !HistoryEntryList.isEntryOf(landed, newState)) {
-      // The pages above the page of the entry the browser landed on leave
-      // before the app shows that entry. The url on the way names another
-      // page, as the tab on screen when they leave a tab not on screen. The
-      // browser holds its entries already: a new one would move it forward
-      // or drop the entries ahead. Only the url state changes.
+      // The browser holds its entries already: only the url state changes.
       super.onNewUrlState(newState, notify: notify);
       return;
     }
+    final state = _takesFollowedEntry(newState)
+        ? newState.copyWith(shouldReplace: true)
+        : newState;
     final shown = _list.show(
-      newState,
+      state,
       keepsClosedUnder: _keepsClosedUnder,
       under: pagesUnderTop(router),
       isLink: router.root.isShowingLink,
     );
     super.onNewUrlState(
-      shown.copyWith(shouldReplace: newState.shouldReplace),
+      shown.copyWith(shouldReplace: state.shouldReplace),
       notify: notify,
     );
-    _writer.bringTo(_list.entries, isReplace: newState.shouldReplace);
+    _writer.bringTo(_list.entries, isReplace: state.shouldReplace);
+  }
+
+  // Whether [state] shows first in place of the page of [_followedEntry], as
+  // a sign-in page of the link's guard does: the browser stands on its entry.
+  bool _takesFollowedEntry(UrlState state) {
+    final followed = _followedEntry;
+    final top = _list.entries.lastOrNull;
+    return followed != null &&
+        top != null &&
+        router.root.isFollowingBrowserEntry &&
+        HistoryEntryList.isEntryOf(top, followed) &&
+        !HistoryEntryList.isEntryOf(followed, state);
   }
 
   /// Starts this history over on the entry the browser stands on, which
@@ -244,6 +257,7 @@ class BrowserNavigationHistory extends NavigationHistory {
     final top = _topNumber;
     _topBeforeFollowing = top;
     _isOnEntryBeforeApp = false;
+    _followedEntry = null;
     if (at == top) return;
     if (at < _writer.first) {
       // An entry from before the app started, as a reload leaves them under
@@ -262,8 +276,7 @@ class BrowserNavigationHistory extends NavigationHistory {
       return;
     }
     // The entries up to the one the browser stands on. A page kept out of
-    // the address bar has no entry, so the back button skips it: it closes
-    // with the pages over the entry the browser went back to.
+    // the address bar has none: it closes with the pages over that entry.
     var number = _writer.first - 1;
     final followed = <UrlState>[];
     for (final (place, entry) in _list.entries.indexed) {
@@ -271,12 +284,24 @@ class BrowserNavigationHistory extends NavigationHistory {
       if (hasEntry ? ++number > at : number >= at) break;
       followed.add(entry);
     }
+    final ahead = _list.entries.skip(followed.length).toList();
     // And the browser's own, as the entries ahead that its forward button
     // goes to, or one it made for a url typed into the address bar.
     for (number++; number <= at; number++) {
       followed.add(_browserEntry(number));
     }
-    _list.reset(followed);
+    // An open page whose own entries are all ahead, as the tab on screen after
+    // back into another tab, gets no entry under a page shown here later.
+    _list.reset(
+      followed,
+      withEntriesAhead: {
+        for (final entry in ahead)
+          if (entry.topMatch?.id case final pageId?
+              when controllerOfPage(pageId) != null &&
+                  !followed.any((kept) => kept.topMatch?.id == pageId))
+            pageId,
+      },
+    );
   }
 
   // What the browser entry [number] holds: what this history wrote there,
@@ -333,6 +358,7 @@ class BrowserNavigationHistory extends NavigationHistory {
         return const [];
       }
     }
+    _followedEntry = entry;
     return [UrlState.toHierarchy(entry.segments)];
   }
 

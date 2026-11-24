@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, when the browser's back or forward button reaches a page in a tab not on screen whose guard shows
+  a sign-in page with `redirectUntil`, the sign-in page takes the entry the user went to, and the page takes it back
+  once the guard lets it in. The browser moves to no other entry, and the tab on screen gets no entry under the sign-in
+  page. Before, the app stepped the browser forward one entry and pushed the sign-in page after the entry of the tab on
+  screen: after the sign-in, the back button showed that tab first.
 - **FIX**: off the web, a link to the running app opens over the page on screen also after a route that opened no page,
   such as a link that no route matches. Before, the rule that lets the link of a cold start take the place of the first
   page stayed on after such a route: the next link took the place of the first page, and the system back left the app.

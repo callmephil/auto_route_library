@@ -56,8 +56,12 @@ abstract class RootStackRouter extends StackRouter {
   // guard's wait, as into a tab whose own guard waits.
   final _browserEntryLinks = <int>{};
 
-  // Whether [link] opens an entry of the browser's own history.
   bool _opensBrowserEntry(int? link) => _browserEntryLinks.contains(link);
+
+  /// Whether the latest link opens a browser entry and is not let in yet.
+  @internal
+  bool get isFollowingBrowserEntry =>
+      _browserEntryLinks.contains(_linkCount) && _letInLink < _linkCount;
 
   // The count of the latest link the app let in. A navigation a link starts
   // stops at its next guard once a link that started after it has been let
