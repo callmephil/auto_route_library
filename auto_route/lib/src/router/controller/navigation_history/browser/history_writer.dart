@@ -97,6 +97,7 @@ class HistoryWriter {
     this.landingLimit = const Duration(seconds: 1),
   }) : first = _browser.index,
        _index = _browser.index,
+       _reachedTop = _browser.index,
        _firstUrl = _browser.url {
     _browser.listen(browserLanded);
   }
@@ -123,8 +124,10 @@ class HistoryWriter {
 
   int _index;
 
-  // The url of the entry the browser stood on when the app was first shown
-  // there: the url the browser opened the app at.
+  // The entry of the app's page on top, as the writer last reached it.
+  int _reachedTop;
+
+  // The url the browser opened the app at, when the app was first shown.
   String? _firstUrl;
 
   // The entry a step of the writer's own is on its way to, and what ends the
@@ -409,7 +412,10 @@ class HistoryWriter {
 
   /// Notes that the browser entry with the number [number] now holds
   /// [entry], as when the app shows the page of the entry the user moved to.
-  void adopt(int number, UrlState entry) => _entries[number] = entry;
+  void adopt(int number, UrlState entry) {
+    _entries[number] = entry;
+    _reachedTop = number;
+  }
 
   // The browser moved without the writer asking: the user did, or the app
   // through [step]. What was still to do no longer fits where the browser
@@ -548,7 +554,10 @@ class HistoryWriter {
     if (unheld == null) {
       final top = first + entries.length - 1;
       if (_index != top) await _stepFor(top - _index);
-      if (userMoves == _userMoves) _adoptAll(entries, entries.length);
+      if (userMoves == _userMoves) {
+        _adoptAll(entries, entries.length);
+        _reachedTop = _index;
+      }
       return;
     }
     final at = first + unheld;
@@ -579,6 +588,7 @@ class HistoryWriter {
       _index = _browser.index;
       _entries.removeWhere((number, _) => number > _index);
     }
+    if (userMoves == _userMoves) _reachedTop = _index;
   }
 
   // The place of the last of [entries], which the browser holds all, when
@@ -612,12 +622,12 @@ class HistoryWriter {
   }
 
   // Whether the browser entry [number] holds the url and path state of
-  // [entry]. An entry the writer never wrote, as one from before a reload,
-  // can be read only while the browser stands on it. The entry the app
-  // starts on is always written once, over what the browser holds there, as
-  // Flutter's Router reports its first route: the url is then as the app
-  // writes it.
+  // [entry]. Ahead of the browser, past [_reachedTop], none does: the app adds
+  // [entry] there, and pushState drops the entries ahead. One never written,
+  // as from before a reload, is read only while the browser stands on it.
+  // The app's first entry is written once, as Flutter's Router reports it.
   bool _holds(int number, UrlState entry) {
+    if (number > _index && number > _reachedTop) return false;
     final held = _entries[number];
     if (held != null) {
       return isSameHistoryUrl(held.url, entry.url) &&

@@ -1,4 +1,11 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: on the web, `pushAndPopUntil` into a tabs page that shows another tab leaves no entry of
+  the old tab ahead. The browser steps back to the page the call keeps, and the new page's url gets a new entry, so the
+  forward button finds no removed page. Any navigation of the app to the url of an entry ahead of the browser now drops
+  the entries ahead, as `history.pushState` does. Examples: a push of a page at the url of one that `pushAndPopUntil` or
+  `popUntil` closed, and a tab change after back presses. Before, the browser stepped forward onto the old entry, and
+  the forward button showed the removed tab, or the page that back had closed. A back press that the page on top refuses
+  still returns the browser to the entry of that page.
 - **FIX**, **BEHAVIOR CHANGE**: with tabs that build every tab at once (`AutoTabsRouter(lazyLoad: false)`,
   `AutoTabsRouter.pageView(lazyLoad: false)`, `AutoTabsRouter.builder`), a link, the launch url or a navigation such as
   `navigatePath` to a page in a tab whose guard waits asks the page's guard once, after the tab's guard lets the tab in,

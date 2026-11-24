@@ -292,6 +292,8 @@ import 'push_all_nested_routes_test.dart' as push_all_nested_routes;
 import 'push_all_waits_for_guard_test.dart' as push_all_waits_for_guard;
 import 'push_and_pop_until_async_test.dart' as push_and_pop_until_async;
 import 'push_and_pop_until_flash_test.dart' as push_and_pop_until_flash;
+import 'push_and_pop_until_into_tabs_page_test.dart'
+    as push_and_pop_until_into_tabs_page;
 import 'push_and_pop_until_test.dart' as push_and_pop_until;
 import 'push_and_pop_until_with_name_in_one_turn_test.dart'
     as push_and_pop_until_with_name_in_one_turn;
@@ -746,6 +748,7 @@ void main() {
   push_all_waits_for_guard.main();
   push_and_pop_until_async.main();
   push_and_pop_until_flash.main();
+  push_and_pop_until_into_tabs_page.main();
   push_and_pop_until.main();
   push_and_pop_until_with_name_in_one_turn.main();
   push_and_reevaluate.main();
