@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -231,5 +232,5 @@ void main() {
       walk.add('${app.router.topRoute.name} ${app.router.urlState.url}');
     }
     expect(walk, ['OneIndexRoute /tabs/one', 'HomeRoute /']);
-  });
+  }, skip: kIsWeb);
 }
