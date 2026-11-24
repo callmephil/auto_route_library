@@ -1,4 +1,7 @@
 ## 13.0.0-rc.1
+- **FIX**: off the web, a link to the running app opens over the page on screen also after a route that opened no page,
+  such as a link that no route matches. Before, the rule that lets the link of a cold start take the place of the first
+  page stayed on after such a route: the next link took the place of the first page, and the system back left the app.
 - **FIX**: a navigation to a tab whose guard waits gives the tabs page one entry in the history, also when the tabs
   build that tab's nested router before it shows: with `AutoTabsRouter.builder`, with `AutoTabsRouter.pageView(lazyLoad:
   false)` or to ask a guard in that router. Before, the first tab, shown while the guard decided, kept an entry of its

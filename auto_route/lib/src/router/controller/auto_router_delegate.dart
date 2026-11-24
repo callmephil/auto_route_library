@@ -545,83 +545,91 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
   @override
   Future<void> setNewRoutePath(UrlState configuration) async {
     _wasGivenRoute = true;
-    final history = controller.navigationHistory;
-    if (history.consumeOwnBrowserMove(configuration)) {
-      return;
-    }
-    if (history.isBrowserBehindApp && _doesTopRouteRefusePop()) {
-      history.returnBrowserToApp();
-      return;
-    }
-    history.followBrowser();
-    final pageless = _pagelessRoutesOnTop();
-
-    final pageToPush = history.pageToPushForBrowserEntry(configuration);
-    if (pageToPush != null) {
-      final (stack, page) = pageToPush;
-      // The future completes when the page is popped.
-      unawaited(
-        stack._pushAllGuarded([
-          page,
-        ], onFirstRouteAccepted: () => _closePagelessRoutes(pageless)),
-      );
-    } else if (configuration.hasSegments) {
-      final entryRoutes = controller.navigationHistory.routesOfBrowserEntry(
-        configuration,
-      );
-      if (entryRoutes != null && entryRoutes.isEmpty) {
-        notifyListeners();
+    // Every route the Router hands over ends the launch, one that opens no
+    // page too; a link ends it right after it reads it.
+    try {
+      final history = controller.navigationHistory;
+      if (history.consumeOwnBrowserMove(configuration)) {
         return;
       }
-      final platLink = PlatformDeepLink._(
-        entryRoutes == null
-            ? configuration
-            : configuration.copyWith(segments: entryRoutes),
-        false,
-      );
-      final handover = ++_handedOverLinks;
-      final resolvedLink = deepLinkBuilder == null
-          ? platLink
-          : await deepLinkBuilder!(platLink);
-      if (_wasOvertaken(handover)) return;
-      final replacesLaunchPage = _doesLinkReplaceLaunchPage(resolvedLink);
-      _endLaunch();
-      var isAccepted = false;
-      final root = controller.root;
-      final Future<void> opening;
-      try {
-        root._isOpeningBrowserEntry = entryRoutes != null;
-        opening = _handleDeepLink(
-          resolvedLink,
-          handover: handover,
-          replacesLaunchPage: replacesLaunchPage,
-          // An entry from before a reload opens as a link whose pages take
-          // the place of the app's, which have their entries ahead of it.
-          // An entry the app wrote is no link: back and forward change no
-          // entry, so the pages under its page stay, with their entries.
-          rebuildsStack:
-              (rebuildStackOnDeepLink && entryRoutes == null) ||
-              history.isOnEntryBeforeApp,
-          closing: pageless,
-          onAccepted: () => isAccepted = true,
-        );
-      } finally {
-        root._isOpeningBrowserEntry = false;
+      if (history.isBrowserBehindApp && _doesTopRouteRefusePop()) {
+        history.returnBrowserToApp();
+        return;
       }
-      // The count of this link, or of the one before for a link the app
-      // ignores.
-      final count = controller.root._linkCount;
-      await opening;
-      // A later link reports its own url.
-      if (!isAccepted && !_isDisposed && count == controller.root._linkCount) {
-        return _reportTurnedDownLink(resolvedLink);
-      }
-    }
+      history.followBrowser();
+      final pageless = _pagelessRoutesOnTop();
 
-    // The link's navigation ends when its page leaves the stack, which
-    // disposing the router also does.
-    if (_isDisposed) return;
-    notifyListeners();
+      final pageToPush = history.pageToPushForBrowserEntry(configuration);
+      if (pageToPush != null) {
+        final (stack, page) = pageToPush;
+        // The future completes when the page is popped.
+        unawaited(
+          stack._pushAllGuarded([
+            page,
+          ], onFirstRouteAccepted: () => _closePagelessRoutes(pageless)),
+        );
+      } else if (configuration.hasSegments) {
+        final entryRoutes = controller.navigationHistory.routesOfBrowserEntry(
+          configuration,
+        );
+        if (entryRoutes != null && entryRoutes.isEmpty) {
+          notifyListeners();
+          return;
+        }
+        final platLink = PlatformDeepLink._(
+          entryRoutes == null
+              ? configuration
+              : configuration.copyWith(segments: entryRoutes),
+          false,
+        );
+        final handover = ++_handedOverLinks;
+        final resolvedLink = deepLinkBuilder == null
+            ? platLink
+            : await deepLinkBuilder!(platLink);
+        if (_wasOvertaken(handover)) return;
+        final replacesLaunchPage = _doesLinkReplaceLaunchPage(resolvedLink);
+        _endLaunch();
+        var isAccepted = false;
+        final root = controller.root;
+        final Future<void> opening;
+        try {
+          root._isOpeningBrowserEntry = entryRoutes != null;
+          opening = _handleDeepLink(
+            resolvedLink,
+            handover: handover,
+            replacesLaunchPage: replacesLaunchPage,
+            // An entry from before a reload opens as a link whose pages take
+            // the place of the app's, which have their entries ahead of it.
+            // An entry the app wrote is no link: back and forward change no
+            // entry, so the pages under its page stay, with their entries.
+            rebuildsStack:
+                (rebuildStackOnDeepLink && entryRoutes == null) ||
+                history.isOnEntryBeforeApp,
+            closing: pageless,
+            onAccepted: () => isAccepted = true,
+          );
+        } finally {
+          root._isOpeningBrowserEntry = false;
+        }
+        // The count of this link, or of the one before for a link the app
+        // ignores.
+        final count = controller.root._linkCount;
+        await opening;
+        // A later link reports its own url.
+        if (!isAccepted &&
+            !_isDisposed &&
+            count == controller.root._linkCount) {
+          return _reportTurnedDownLink(resolvedLink);
+        }
+      }
+
+      // The link's navigation ends when its page leaves the stack, which
+      // disposing the router also does.
+      if (_isDisposed) return;
+      notifyListeners();
+    } finally {
+      _endLaunch();
+    }
   }
 
   // A Router hands its route to the delegate it starts with alone. A delegate

@@ -163,6 +163,8 @@ import 'let_go_page_above_test.dart' as let_go_page_above;
 import 'let_go_push_other_args_test.dart' as let_go_push_other_args;
 import 'let_go_redirect_cancel_test.dart' as let_go_redirect_cancel;
 import 'let_go_stale_yes_test.dart' as let_go_stale_yes;
+import 'link_after_route_without_page_test.dart'
+    as link_after_route_without_page;
 import 'link_during_initial_guard_test.dart' as link_during_initial_guard;
 import 'link_into_open_tabs_page_test.dart' as link_into_open_tabs_page;
 import 'link_to_guarded_page_in_waiting_tab_test.dart'
@@ -640,6 +642,7 @@ void main() {
   let_go_push_other_args.main();
   let_go_redirect_cancel.main();
   let_go_stale_yes.main();
+  link_after_route_without_page.main();
   link_during_initial_guard.main();
   link_into_open_tabs_page.main();
   link_to_guarded_page_in_waiting_tab.main();
