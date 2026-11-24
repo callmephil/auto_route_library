@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:auto_route/auto_route.dart';
 import 'package:auto_route/src/router/controller/navigation_history/browser/browser_navigation_history.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -215,8 +216,9 @@ void main() {
       ..add(('/b', null));
     await app.walk([app.browser.didPressForward]);
 
-    // The link's own pages, a new Home with it, replace A and Home.
-    expect(app.shown, 'B [Home B] /b');
+    // The link's pages replace A and Home: with prefix matches, the VM's
+    // default, a new Home is under B; on the web, B is alone.
+    expect(app.shown, kIsWeb ? 'B [B] /b' : 'B [Home B] /b');
     expect(app.router.stack.firstOrNull?.routeData.matchId, isNot(home));
   });
 }
