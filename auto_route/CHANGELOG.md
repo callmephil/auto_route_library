@@ -1,4 +1,9 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: off the web, `router.back()` into another tab asks only the guards of that tab, as
+  `setActiveIndex` and the browser's back button do, and no guard of a page that is still open, the global guards
+  included: the tabs page and the page open in the tab show as they are. A step to a page that is not open, or not as
+  the step shows it, still asks its guards. Before, `back()` asked the guards of those open pages again: a slow one kept
+  the tab on screen until it answered, one that asks the user asked again, and one that now said no stopped the step.
 - **FIX**: on the web, a sign-out closes a guarded page also when the user presses the browser's back button to that
   page while its guard, asked again by the `reevaluateListenable`, still decides. The press shows the open page as it
   is, the same page, and the guard's "no" closes it, as with no press. Before, the press put a new page of the same

@@ -1023,9 +1023,9 @@ abstract class RoutingController with ChangeNotifier {
   //
   // [waitsInsideTabs] false makes the first tabs router the navigation
   // reaches answer once its tab change has started, without waiting for the
-  // navigation in the tab's nested router, as a step of the app's own
-  // history back() wants: it ends its step by the url the router reports,
-  // or by this answer, see [StackRouter.navigateAllBack].
+  // navigation in the tab's nested router, and with [isStepBack] each open
+  // page it reaches again as it is shows as it is: both for a step back of
+  // the app's own history, see [StackRouter.navigateAllBack].
   Future<T?> _navigateAll<T extends Object?>(
     List<RouteMatch<Object?>> routes, {
     OnNavigationFailure? onFailure,
@@ -1035,6 +1035,7 @@ abstract class RoutingController with ChangeNotifier {
     VoidCallback? onLetIn,
     ValueChanged<StackRouter>? onGuardShowsPage,
     bool waitsInsideTabs = true,
+    bool isStepBack = false,
   });
 
   Future<void> _navigateAllRoutes(
@@ -1289,6 +1290,7 @@ class TabsRouter extends RoutingController {
     int? link,
     VoidCallback? onLetIn,
     ValueChanged<Future<Object?>>? onInside,
+    bool isStepBack = false,
   }) {
     if (_activeIndex == index) {
       onLetIn?.call();
@@ -1325,6 +1327,7 @@ class TabsRouter extends RoutingController {
         remember: remember,
         keepsUnnamedPages: keepsUnnamedPages,
         onInside: onInside,
+        isStepBack: isStepBack,
       );
     }
     _pendingTab = index;
@@ -1343,6 +1346,7 @@ class TabsRouter extends RoutingController {
         remember: remember,
         keepsUnnamedPages: keepsUnnamedPages,
         onInside: onInside,
+        isStepBack: isStepBack,
       ),
       onError: (Object error, StackTrace stackTrace) =>
           _failTabChange(change, error, stackTrace),
@@ -1414,6 +1418,7 @@ class TabsRouter extends RoutingController {
     ValueChanged<Future<Object?>>? onInside,
     bool isNamedAtSetup = false,
     bool replacesUrl = false,
+    bool isStepBack = false,
   }) {
     if (_isDisposed || change != _tabChanges) return .replaced;
     _pendingTab = null;
@@ -1526,6 +1531,7 @@ class TabsRouter extends RoutingController {
           onGuardShowsPage: (router) {
             if (_isInside(router, tabRouter)) show();
           },
+          isStepBack: isStepBack,
         ),
         onInside,
       );
@@ -1559,6 +1565,7 @@ class TabsRouter extends RoutingController {
           keepsUnnamedPages: keepsUnnamedPages,
           link: link,
           onLetIn: onLetIn,
+          isStepBack: isStepBack,
         ),
         onInside,
       );
@@ -1575,6 +1582,7 @@ class TabsRouter extends RoutingController {
           keepsUnnamedPages: keepsUnnamedPages,
           link: link,
           onLetIn: onLetIn,
+          isStepBack: isStepBack,
         ),
         onInside,
       );
@@ -2488,6 +2496,7 @@ class TabsRouter extends RoutingController {
     VoidCallback? onLetIn,
     ValueChanged<StackRouter>? onGuardShowsPage,
     bool waitsInsideTabs = true,
+    bool isStepBack = false,
   }) async {
     final ofLink = isReevaluating ? null : (link ?? root._startingLink);
     final routesToProcess = isReevaluating ? routes : routes.reversed.take(1);
@@ -2528,6 +2537,7 @@ class TabsRouter extends RoutingController {
                 link: ofLink,
                 onLetIn: onLetIn,
                 onInside: onInside,
+                isStepBack: isStepBack,
               )
               case final Future<_TabChange> change) {
             if (ofLink == null) {
@@ -2567,6 +2577,7 @@ class TabsRouter extends RoutingController {
                   link: ofLink,
                   onLetIn: onLetIn,
                   onGuardShowsPage: onGuardShowsPage,
+                  isStepBack: isStepBack,
                 );
           if (isReevaluating) {
             await navigation;
@@ -2809,6 +2820,7 @@ class TabsRouter extends RoutingController {
     int? link,
     VoidCallback? onLetIn,
     ValueChanged<StackRouter>? onGuardShowsPage,
+    bool isStepBack = false,
   }) {
     // By match id: a tab sharing its route with another has its own nested
     // router.
@@ -2824,6 +2836,7 @@ class TabsRouter extends RoutingController {
       link: link,
       onLetIn: isAsked ? onLetIn : null,
       onGuardShowsPage: onGuardShowsPage,
+      isStepBack: isStepBack,
     );
   }
 
@@ -4231,6 +4244,7 @@ abstract class StackRouter extends RoutingController {
     _PagesReplacement? replacement,
     int? link,
     ValueChanged<StackRouter>? onGuardShowsPage,
+    bool isStepBack = false,
   }) {
     // replaceAll reaches no page again: [replacement] takes every page off
     // once every guard has let [matches] through, and their pages go on in
@@ -4263,16 +4277,17 @@ abstract class StackRouter extends RoutingController {
         ? null
         : staying.lastWhereOrNull((p) => p.routeKey == anchor.key);
     final anchorId = anchorPage?.routeData.matchId;
-    // A step of the browser's back or forward button to an entry whose page
-    // is open, in a tab not on screen or under the page on top, reaches the
-    // open pages on the way again: the entry names each by its match id,
-    // with the route it has. Such a page shows as it is: it stays, as the
-    // route under Navigator.pop does, and its guards are not asked again, so
-    // a reevaluation that asks one meanwhile still closes it. A tab change on
+    // A step of the browser's back or forward button, or of the app's own
+    // back() off the web ([isStepBack]), to an entry whose page is open, in a
+    // tab not on screen or under the page on top, reaches the open pages on
+    // the way again: the entry names each by its match id, with the route it
+    // has. Such a page shows as it is: it stays, as the route under
+    // Navigator.pop does, and its guards are not asked again, so a
+    // reevaluation that asks one meanwhile still closes it. A tab change on
     // the way asks the tab's guards, and a page not open is asked as before.
     final shownAsItIs =
         anchorPage != null &&
-            root._opensBrowserEntry(link) &&
+            (isStepBack || root._opensBrowserEntry(link)) &&
             _isPageAsItIs(anchorPage.routeData, anchor)
         ? anchorPage
         : null;
@@ -6611,16 +6626,21 @@ abstract class StackRouter extends RoutingController {
   }
 
   /// [navigateAll] for a step back the app's own history takes off the web:
-  /// [onLetIn] runs once the guards of [routes], and those of the nested
-  /// routers and tabs they reach, let the navigation in. That may be after
-  /// the returned future has completed, as when the guard of a tab answers
-  /// later: the tabs answer once their change has started. A navigation they
-  /// turn down, or that a later change of the tab replaces, never runs it.
+  /// an open page that [routes] reach again as it is shows without its
+  /// guards. [onLetIn] runs once the guards asked let the navigation in, also
+  /// after the returned future has completed, as when a tab's guard answers
+  /// later: the tabs answer once their change has started. A navigation
+  /// turned down, or replaced by a later change of the tab, never runs it.
   @internal
   Future<void> navigateAllBack(
     List<RouteMatch<Object?>> routes, {
     required VoidCallback onLetIn,
-  }) => _navigateAll(routes, onLetIn: onLetIn, waitsInsideTabs: false);
+  }) => _navigateAll(
+    routes,
+    onLetIn: onLetIn,
+    waitsInsideTabs: false,
+    isStepBack: true,
+  );
 
   @override
   Future<T?> _navigateAll<T extends Object?>(
@@ -6633,6 +6653,7 @@ abstract class StackRouter extends RoutingController {
     VoidCallback? onLetIn,
     ValueChanged<StackRouter>? onGuardShowsPage,
     bool waitsInsideTabs = true,
+    bool isStepBack = false,
   }) async {
     // A reevaluation closes the pages its guards reject, and a guard may show
     // a page of its own meanwhile, so the pages it closes are reported once
@@ -6656,6 +6677,7 @@ abstract class StackRouter extends RoutingController {
           onLetIn: onLetIn,
           onGuardShowsPage: onGuardShowsPage,
           waitsInsideTabs: waitsInsideTabs,
+          isStepBack: isStepBack,
         ),
         zoneValues: {_letInAboveZone: true},
       );
@@ -6724,6 +6746,7 @@ abstract class StackRouter extends RoutingController {
           link: ofLink,
           onGuardShowsPage: onGuardShowsPage,
           onPagesAboveHeld: (takeOff) => takeOffPagesAbove = takeOff,
+          isStepBack: isStepBack,
         );
         // No pause when the last page went on in the call, as it does when
         // no guard makes the routes wait: the nested router or the tabs of
@@ -6852,6 +6875,7 @@ abstract class StackRouter extends RoutingController {
             onLetIn: lettingIn,
             onGuardShowsPage: onNestedGuardShowsPage,
             waitsInsideTabs: waitsInsideTabs,
+            isStepBack: isStepBack,
           );
         }
         var isLetIn = false;
@@ -6866,6 +6890,7 @@ abstract class StackRouter extends RoutingController {
           },
           onGuardShowsPage: onNestedGuardShowsPage,
           waitsInsideTabs: waitsInsideTabs,
+          isStepBack: isStepBack,
         );
         if (!isLetIn) {
           _putBackRouteDataIfTurnedDown(
@@ -6889,6 +6914,7 @@ abstract class StackRouter extends RoutingController {
           keepsUnnamedPages: keepsUnnamedPages,
           link: ofLink,
           waitsInsideTabs: waitsInsideTabs,
+          isStepBack: isStepBack,
         );
       }
     } else if (!managedByWidget && !keepsUnnamedPages) {

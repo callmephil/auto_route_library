@@ -423,8 +423,11 @@ void main() {
     });
   }
 
+  // The guard of MailTab holds the step. ComposeRoute is open in the tab, so
+  // no step back asks its guard (callmephil/auto_route_library#42).
   testWidgets('back() into a page of a tab whose guard waits, then lets it '
       'in, steps back once', (tester) async {
+    final tabGuard = HeldGuard(mode: .answersYes);
     final guard = HeldGuard(mode: .answersYes);
     final router = RootStackRouter.build(
       routes: [
@@ -445,6 +448,7 @@ void main() {
             NamedRouteDef(
               name: 'MailTab',
               path: 'mail',
+              guards: [tabGuard],
               builder: (_, _) => const AutoRouter(),
               children: [
                 _tab('InboxRoute').copyWith(path: ''),
@@ -462,30 +466,34 @@ void main() {
       await tester.pumpAndSettle();
     }
     final atStart = (router.currentUrl, router.navigationHistory.length);
-    guard
+    guard.clear();
+    tabGuard
       ..clear()
       ..holdCall();
 
     router.back();
     await tester.pumpAndSettle();
-    await guard.last.allow();
+    await tabGuard.last.allow();
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(atStart, ('/settings', 4));
     expect(router.currentUrl, '/mail/compose');
-    expect(await _walk(tester, router, guard), [
+    expect(await _walk(tester, router, tabGuard), [
       '/mail/compose',
       '/mail',
       '/feed',
     ]);
+    expect(guard.askCount, 0);
   });
 
   // The late step is its own: it changes the history only when it lands on
   // the page gone back to, and only while the entry back() put back is
-  // still where back() put it. As on dev in both cases below.
+  // still where back() put it. As on dev in both cases below. In the first,
+  // the guard of MailTab holds the step, and the user's pick calls it off.
   testWidgets('back() into a page of a tab whose guard waits, while the user '
       'picks another tab, keeps the tab left on the way back', (tester) async {
+    final tabGuard = HeldGuard(mode: .answersYes);
     final guard = HeldGuard(mode: .answersYes);
     final router = RootStackRouter.build(
       routes: [
@@ -506,6 +514,7 @@ void main() {
             NamedRouteDef(
               name: 'MailTab',
               path: 'mail',
+              guards: [tabGuard],
               builder: (_, _) => const AutoRouter(),
               children: [
                 _tab('InboxRoute').copyWith(path: ''),
@@ -522,7 +531,8 @@ void main() {
       unawaited(router.navigatePath(path));
       await tester.pumpAndSettle();
     }
-    guard
+    guard.clear();
+    tabGuard
       ..clear()
       ..holdCall();
 
@@ -530,18 +540,19 @@ void main() {
     await tester.pumpAndSettle();
     router.innerRouterOf<TabsRouter>('TabsRoute')!.setActiveIndex(0);
     await tester.pumpAndSettle();
-    await guard.last.allow();
+    await tabGuard.last.allow();
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(router.currentUrl, '/feed');
-    expect(await _walk(tester, router, guard), [
+    expect(await _walk(tester, router, tabGuard), [
       '/feed',
       '/settings',
       '/mail/compose',
       '/mail',
       '/feed',
     ]);
+    expect(guard.askCount, 0);
   });
 
   testWidgets('back() into a tab whose guard waits, while the app pushes a '
