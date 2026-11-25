@@ -291,6 +291,29 @@ class BrowserNavigationHistory extends NavigationHistory {
   bool _isOnEntryBeforeApp = false;
 
   @override
+  VoidCallback? startAtLinkEntry() {
+    final first = _writer.first;
+    final number = _topNumber;
+    final linkPlace = _list.entries.indexed
+        .lastWhereOrNull(
+          (placed) => _writer.hasBrowserEntry(placed.$1, placed.$2),
+        )
+        ?.$1;
+    if (linkPlace == null || number <= first) return null;
+    final before = _list.entries.take(linkPlace).toList();
+    _list.reset(_list.entries.skip(linkPlace));
+    _writer.startAt(number);
+    return () {
+      if (_writer.first != number) return;
+      _writer.startBackAt(first);
+      // Not after a page went on: _putBack puts the pages back over that page.
+      if (_list.entries.length == 1) {
+        _list.reset([...before, ..._list.entries]);
+      }
+    };
+  }
+
+  @override
   void followBrowser() {
     final at = _browser.index;
     final passed = [
@@ -337,10 +360,9 @@ class BrowserNavigationHistory extends NavigationHistory {
     _followedEntry = null;
     if (at == top) return;
     if (at < _writer.first) {
-      // An entry from before the app started, as a reload leaves them under
-      // the entry the app starts on: the app's entries start from it now.
-      // The pages open now have their entries ahead of it, and its page
-      // takes their place.
+      // An entry before the app's first, as a reload or [startAtLinkEntry]
+      // leaves them: the app's entries start from it now. The pages open
+      // have their entries ahead of it, and its page takes their place.
       _isOnEntryBeforeApp = true;
       _writer.first = at;
       _list.reset(

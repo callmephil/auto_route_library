@@ -640,4 +640,29 @@ void main() {
       expect(web.browser.held, '/ /a >/b');
     },
   );
+
+  // Steps: on A over Home with an entry ahead, the browser on that entry, the
+  // app's first entry moves up to A and A alone is shown, so the writer steps
+  // back to A. Before it lands, the first entry moves back to Home, and Home
+  // and A are shown, as when the tabs turn down a typed url that the app keeps
+  // out of the address bar (callmephil/auto_route_library#43).
+  // Native behavior this holds to: the HTML standard's session history, where
+  // a traversal changes no entry.
+  test('A step that lands after the first entry moved back notes no entry '
+      'at the numbers it had', () async {
+    final web = _Web()..show('/ /a /x');
+    await web.finish();
+    web.browser.asked.clear();
+    web.writer.startAt(1);
+    web.show('/a');
+    await web.settle();
+    web.writer.startBackAt(0);
+    web.show('/ /a');
+    await web.finish();
+
+    expect(
+      (web.browser.asked.join(', '), web.browser.held),
+      ('go -1', '/ >/a /x'),
+    );
+  });
 }

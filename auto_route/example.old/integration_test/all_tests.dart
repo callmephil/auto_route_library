@@ -317,6 +317,7 @@ import 'rapid_pops_test.dart' as rapid_pops;
 import 'rebuild_stack_back_and_forward_test.dart'
     as rebuild_stack_back_and_forward;
 import 'rebuild_stack_rejected_link_test.dart' as rebuild_stack_rejected_link;
+import 'rebuild_stack_typed_url_back_test.dart' as rebuild_stack_typed_url_back;
 import 'redirect_cycle_test.dart' as redirect_cycle;
 import 'redirect_fragment_test.dart' as redirect_fragment;
 import 'redirect_history_test.dart' as redirect_history;
@@ -774,6 +775,7 @@ void main() {
   rapid_pops.main();
   rebuild_stack_back_and_forward.main();
   rebuild_stack_rejected_link.main();
+  rebuild_stack_typed_url_back.main();
   redirect_cycle.main();
   redirect_fragment.main();
   redirect_history.main();

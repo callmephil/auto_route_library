@@ -118,9 +118,8 @@ class HistoryWriter {
   final _queue = Queue<_Work>();
 
   /// The number of the app's first entry: the entry the browser stood on
-  /// when the app started. The app sets a lower one when it follows the user
-  /// to an entry from before it started, which a reload leaves under the
-  /// entry the app starts on.
+  /// when the app started, an entry from before that the user went back to,
+  /// as a reload leaves them, or the one [startAt] or [startBackAt] names.
   int first;
 
   int _index;
@@ -262,11 +261,9 @@ class HistoryWriter {
   /// and nothing can be written.
   void pause() => _isPaused = true;
 
-  /// Takes up the work again after [pause].
-  ///
-  /// A writer that has written nothing yet starts from the entry the
-  /// browser stands on now: the app may be shown long after its router was
-  /// made, and the browser may have moved meanwhile.
+  /// Takes up the work again after [pause]. A writer that has written nothing
+  /// yet starts from the entry the browser stands on now: the app may be shown
+  /// long after its router was made, and the browser may have moved meanwhile.
   void resume() {
     if (_isPaused && _entries.isEmpty) {
       _index = _browser.index;
@@ -277,10 +274,9 @@ class HistoryWriter {
     _run();
   }
 
-  /// Forgets what the browser holds and what was still to do, and holds
-  /// the work back until [resume]: another writer writes the browser now.
-  /// The writer then starts from the entry the browser stands on, and
-  /// writes it first.
+  /// Forgets what the browser holds and what was still to do, and holds the
+  /// work back until [resume]: another writer writes the browser now. Then
+  /// it starts from the entry the browser stands on, and writes it first.
   void restart() {
     _userMoves++;
     _queue.clear();
@@ -292,6 +288,52 @@ class HistoryWriter {
     _isLandingUnreported = false;
     _isPaused = true;
     if (isIdle) _completeIdle();
+  }
+
+  /// Raises [first] to [number]; the queued work keeps its entries from there.
+  void startAt(int number) {
+    final count = number - first;
+    if (count <= 0) return;
+    first = number;
+    final works = [
+      for (final work in _queue)
+        if (work is _Entries) _withoutFirst(count, work) else work,
+    ];
+    _queue
+      ..clear()
+      ..addAll(works);
+    if (_lastWanted case final wanted?) {
+      _lastWanted = _withoutFirst(count, wanted);
+    }
+    if (_wantedAtHold case final wanted?) {
+      _wantedAtHold = _withoutFirst(count, wanted);
+    }
+  }
+
+  _Entries _withoutFirst(int count, _Entries wanted) {
+    final entries = wanted.entries;
+    var dropped = 0;
+    for (final (place, entry) in entries.indexed) {
+      if (!hasBrowserEntry(place, entry)) continue;
+      if (dropped == count) {
+        return _Entries(entries.sublist(place), isReplace: wanted.isReplace);
+      }
+      dropped++;
+    }
+    return _Entries(const [], isReplace: wanted.isReplace);
+  }
+
+  /// Lowers [first] back to [number]; the entries still queued are dropped.
+  void startBackAt(int number) {
+    if (number >= first) return;
+    first = number;
+    final steps = _queue.indexed.where((placed) => placed.$2 is _Step).toList();
+    _queuedAtHold = steps.where((placed) => placed.$1 < _queuedAtHold).length;
+    _queue
+      ..clear()
+      ..addAll(steps.map((placed) => placed.$2));
+    _lastWanted = null;
+    _wantedAtHold = null;
   }
 
   /// Stops the writer for good.
@@ -562,7 +604,7 @@ class HistoryWriter {
     _browser.write(top, replaces: told == null || isReplace);
   }
 
-  // Brings the browser to [entries]; stops when the user moves it meanwhile.
+  // Brings the browser to [entries]; stops when the user or [first] moves.
   Future<void> _reach(List<UrlState> entries) async {
     if (entries.isEmpty) return;
     // A move of the user's that no event told of.
@@ -576,6 +618,8 @@ class HistoryWriter {
           !_isSame(owed, entries.elementAtOrNull(number - first)),
     );
     final userMoves = _userMoves;
+    final firstAtStart = first;
+    bool isStale() => userMoves != _userMoves || first != firstAtStart;
     var unheld = _firstUnheld(entries) ?? _repeatedTopPlace(entries);
     // On the entry the browser stands on, with the entries after it held, as
     // after a back the page on top refused: it writes that one, then steps on.
@@ -585,13 +629,13 @@ class HistoryWriter {
         _firstUnheld(entries, start: unheld + 1) == null) {
       _adoptAll(entries, unheld);
       await _writeAll(entries.skip(unheld).take(1), replaces: true);
-      if (userMoves != _userMoves) return;
+      if (isStale()) return;
       unheld = null;
     }
     if (unheld == null) {
       final top = first + entries.length - 1;
       if (_index != top) await _stepFor(top - _index);
-      if (userMoves == _userMoves) {
+      if (!isStale()) {
         _adoptAll(entries, entries.length);
         _reachedTop = _index;
       }
@@ -604,7 +648,7 @@ class HistoryWriter {
         at == _index || _owed.containsKey(at) || (at < _index && unheld == 0);
     final from = replaces ? at : at - 1;
     if (from != _index && !await _stepFor(from - _index)) return;
-    if (userMoves != _userMoves) return;
+    if (isStale()) return;
     _adoptAll(entries, unheld);
     await _writeAll(entries.skip(unheld), replaces: replaces);
     // Writes that never reached the browser, as through a route information

@@ -4858,6 +4858,7 @@ abstract class StackRouter extends RoutingController {
     // a reevaluation was asking about them then.
     int? changesAtSetAside;
     var isSetAside = false;
+    VoidCallback? moveFirstEntryBack;
     // Sets the pages to replace aside for the page that goes on next in
     // their place, or with [isPageOn] for one that is on already.
     void setPagesAside({bool isPageOn = false}) {
@@ -4943,8 +4944,10 @@ abstract class StackRouter extends RoutingController {
             _stackKey = UniqueKey();
           }
           markUrlStateForReplace();
+          if (isLink) moveFirstEntryBack = navigationHistory.startAtLinkEntry();
           return replacing;
         },
+        onPutBack: () => moveFirstEntryBack?.call(),
         onRejected: () {
           pagesBefore = null;
           isGuardWaiting = false;
@@ -5826,6 +5829,7 @@ abstract class StackRouter extends RoutingController {
                   linkStep: onLinkAccepted,
                   onFailure: onFailure,
                   canTakeBack: canTakeBack,
+                  onPutBack: replacement?.onPutBack,
                 );
               }
             }
@@ -5901,6 +5905,7 @@ abstract class StackRouter extends RoutingController {
     required bool canTakeBack,
     OnNavigationFailure? onFailure,
     RouteData<Object?>? newPage,
+    VoidCallback? onPutBack,
   }) {
     final data = newPage ?? _pages.lastOrNull?.routeData;
     if (data == null ||
@@ -5920,7 +5925,7 @@ abstract class StackRouter extends RoutingController {
       // Pages this step took off, as replace does, come back only when the
       // nested router can not show the page at all, see [_putBack].
       putBack: !canTakeBack && canUndo
-          ? () => _putBack(pagesBefore, added)
+          ? () => _putBack(pagesBefore, added, onPutBack: onPutBack)
           : null,
     ).waitOn(data);
   }
@@ -5984,10 +5989,12 @@ abstract class StackRouter extends RoutingController {
   // longer.
   bool _putBack(
     List<AutoRoutePage<Object?>> pagesBefore,
-    List<AutoRoutePage<Object?>> added,
-  ) {
+    List<AutoRoutePage<Object?>> added, {
+    VoidCallback? onPutBack,
+  }) {
     final onStack = added.where(_pages.contains).toList();
     if (_isDisposed || onStack.isEmpty) return false;
+    onPutBack?.call();
     markUrlStateForReplace();
     for (final page in onStack.reversed) {
       _pages.remove(page);
@@ -7875,6 +7882,7 @@ class _PagesReplacement {
     required this.onPageWentOn,
     required this.onAllAccepted,
     required this.onRejected,
+    required this.onPutBack,
   });
 
   // A guard that has not answered puts a page of its own on the stack of the
@@ -7900,8 +7908,10 @@ class _PagesReplacement {
   // A guard rejected a route.
   final VoidCallback onRejected;
 
-  // This replacement, with [then] called with the routes [onAllAccepted]
-  // returns.
+  // The pages it replaced come back, before their url is reported.
+  final VoidCallback onPutBack;
+
+  // This replacement, with [then] called with what [onAllAccepted] returns.
   _PagesReplacement thenOnAllAccepted(
     ValueChanged<List<RouteMatch<Object?>>> then,
   ) => .new(
@@ -7911,6 +7921,7 @@ class _PagesReplacement {
     onPageGoesOn: onPageGoesOn,
     onPageWentOn: onPageWentOn,
     onRejected: onRejected,
+    onPutBack: onPutBack,
     onAllAccepted: (accepted) {
       final replacing = onAllAccepted(accepted);
       then(replacing);
