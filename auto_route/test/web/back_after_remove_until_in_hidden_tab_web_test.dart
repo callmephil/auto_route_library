@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:auto_route/auto_route.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:web/web.dart' show window;
 
 import '../router_test_utils.dart';
 import 'browser_history.dart';
@@ -66,9 +65,9 @@ RootStackRouter _tabsRouter() => .build(
 // browser's history: a push drops the entries ahead and adds one, and a
 // move through the history changes none.
 Future<int> _historyLengthChangeOf(Future<void> Function() step) async {
-  final before = window.history.length;
+  final before = browserEntryCount;
   await step();
-  return window.history.length - before;
+  return browserEntryCount - before;
 }
 
 void main() {

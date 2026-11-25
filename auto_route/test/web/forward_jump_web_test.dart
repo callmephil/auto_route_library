@@ -85,7 +85,7 @@ List<String?> _stack(RootStackRouter router) =>
   _stack(router).join(' '),
   browserSerialCount - home,
   browserPath,
-  window.history.length,
+  browserEntryCount,
 );
 
 // Hands [location] over as url_launcher's Link does on the web: the engine
@@ -155,7 +155,7 @@ void main() {
     bool loginRefusesPop = false,
   }) async {
     final home = await openABC(tester, router);
-    final length = window.history.length;
+    final length = browserEntryCount;
     for (var i = 0; i < 3; i++) {
       await pressBrowserBack(tester);
     }
@@ -301,7 +301,7 @@ void main() {
       for (var i = 0; i < 3; i++) {
         await pressBrowserBack(tester);
       }
-      final length = window.history.length;
+      final length = browserEntryCount;
       await tester.pumpWidget(const SizedBox());
       await settleBrowser(tester);
       first.dispose();
@@ -350,7 +350,7 @@ void main() {
     await pressBrowserBack(tester);
     await pressBrowserForward(tester);
     // The browser's entries from the app's first: /, /a, /b and /c.
-    final twoEntries = window.history.length - 2;
+    final twoEntries = browserEntryCount - 2;
 
     router.popUntilRoot();
     unawaited(_followLink('/d'));

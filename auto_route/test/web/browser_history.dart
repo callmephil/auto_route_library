@@ -1,4 +1,5 @@
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:ui_web' as ui_web;
 
 import 'package:auto_route/auto_route.dart';
@@ -47,14 +48,20 @@ Future<void> rewindBrowserHistory() async {
   await popped;
 }
 
-/// The serial number the engine gives the current browser history entry.
-///
-/// Counts from 0 for the first entry the app wrote; -1 before the app wrote
-/// any.
+/// The serial number the engine gives the current browser history entry: 0
+/// for the first entry the app wrote, -1 before the app wrote any.
 int get browserSerialCount {
   final state = window.history.state.dartify();
   return state is Map ? (state['serialCount'] as num).toInt() : -1;
 }
+
+/// The number of entries of this page, from the Navigation API. Chrome stops
+/// window.history.length at 50, so late in a long run it misses new entries.
+int get browserEntryCount => globalContext
+    .getProperty<JSObject>('navigation'.toJS)
+    .callMethod<JSArray<JSObject>>('entries'.toJS)
+    .toDart
+    .length;
 
 /// The app path the current browser history entry holds, such as '/second-route'.
 String get browserPath => ui_web.urlStrategy!.getPath();
