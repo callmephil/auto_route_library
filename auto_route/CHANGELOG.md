@@ -1,4 +1,19 @@
 ## 13.0.0-rc.1
+- **FIX**, **BEHAVIOR CHANGE**: on the web, a jump forward over several entries, from the list a long press on the
+  forward button shows or `history.go(2)`, opens the page of each entry it passes, in order, as forward presses do, and
+  changes no entry. The stack and the entries are then what the same number of forward presses give, and the back button
+  shows the pages of the entries passed. The entry landed on may be one from before a reload. A guard that says no to a
+  passed entry ends the jump on the page shown before. A sign-in page that a guard shows for a passed entry changes no
+  entry either, nor does a page that takes its place, such as a sign-up page or the guarded page at another url: that
+  entry gets its url when the browser stands on it again. After the jump, a back that the page on top refuses keeps
+  every entry too. While the jump waits for a guard, such a back ends it, and the browser goes back to the entry of the
+  page on top, but the entries ahead of that entry can be lost. A navigation of the app's own meanwhile ends it too,
+  such as `popAndPush`, a push, a pop, `back()`, `forward()` or `pushPathState`, and its entries reach the browser; a
+  page that takes the place of a passed entry's sign-in page does not, nor does the first page that shows while the
+  guard of the entry landed on decides: the address bar keeps the url of that entry until its page shows. A jump over
+  the entry of a declarative router still removes that entry. After a reload, a jump over entries from before the reload
+  that the app has not shown since still removes them. Before, the app opened only the page of the entry landed on, over
+  the page on screen: it stepped the browser back and pushed that url, which dropped the entries between and ahead.
 - **FIX**, **BEHAVIOR CHANGE**: off the web, `router.back()` into another tab asks only the guards of that tab, as
   `setActiveIndex` and the browser's back button do, and no guard of a page that is still open, the global guards
   included: the tabs page and the page open in the tab show as they are. A step to a page that is not open, or not as

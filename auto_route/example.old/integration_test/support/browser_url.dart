@@ -13,6 +13,10 @@ void pressBrowserBack() =>
 void pressBrowserForward() =>
     throw UnsupportedError('Only the web has a browser forward button.');
 
+/// Moves the browser [delta] entries at once; only the web has a history.
+void jumpBrowser(int delta) =>
+    throw UnsupportedError('Only the web has a browser history.');
+
 /// Types a url into the browser's address bar; only the web has one.
 void typeBrowserUrl(String path) =>
     throw UnsupportedError('Only the web has an address bar.');
@@ -23,8 +27,7 @@ void openBrowserAt(String path) =>
     throw UnsupportedError('Only the web has an address bar.');
 
 /// Whether the app has written the browser's current entry since
-/// [openBrowserAt] made it;
-/// only the web has one.
+/// [openBrowserAt] made it; only the web has one.
 bool didAppWriteBrowserEntry() =>
     throw UnsupportedError('Only the web has a browser history.');
 

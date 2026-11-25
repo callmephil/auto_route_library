@@ -85,8 +85,8 @@ abstract class NavigationHistory with ChangeNotifier {
   @internal
   bool consumeOwnBrowserMove(UrlState configuration) => false;
 
-  /// The routes the app showed when it wrote the browser entry that
-  /// [configuration], a route the platform just reported, came from.
+  /// The routes the app showed when it wrote the browser entry of
+  /// [configuration], reported by the platform or passed by a jump.
   ///
   /// A browser entry holds only a url, so a page reopened from it by the
   /// browser's back or forward button would lose the arguments the url can't
@@ -107,8 +107,8 @@ abstract class NavigationHistory with ChangeNotifier {
       null;
 
   /// The page to push, and the stack to push it on, to follow the browser to
-  /// the entry that [configuration], a route the platform just reported, came
-  /// from, when that entry is the next one after the app's and holds a page
+  /// the entry of [configuration], reported by the platform or passed by a
+  /// jump, when that entry is the next one after the app's and holds a page
   /// that was pushed over the app's current page with the same url.
   ///
   /// The browser's forward button reopens such an entry after going back
@@ -149,30 +149,37 @@ abstract class NavigationHistory with ChangeNotifier {
   /// Holds back what this history writes to the browser until the returned
   /// function is called, and then writes only where the app's entries ended.
   /// Called with `dropsChanges`, it writes nothing of what was held, and the
-  /// entries are as they were: the app took the change back.
-  ///
-  /// For a change the app may take back in the frame that follows: a browser
-  /// entry, once written, can only be stepped back over, so a change taken
-  /// back leaves one behind unless it was never written. Does nothing on
-  /// native platforms.
+  /// entries are as they were: the app took the change back. A written entry
+  /// can only be stepped back over, so this keeps a change the app may take
+  /// back unwritten. Does nothing on native platforms.
   @internal
   void Function({bool dropsChanges}) holdBrowserWrites() => _doNothing;
+
+  /// Holds the writes as [holdBrowserWrites] does while a jump forward is on
+  /// its way, and calls [onLeft] once a navigation of the app's own leaves it.
+  @internal
+  void Function({bool dropsChanges}) holdBrowserWritesForJump({
+    required VoidCallback onLeft,
+  }) => holdBrowserWrites();
 
   // Native platforms have no browser to write.
   // ignore: no-empty-block
   static void _doNothing({bool dropsChanges = false}) {}
 
   /// Makes this history's account of the app's entries start from the entry
-  /// the browser now stands on, before [AutoRouterDelegate.setNewRoutePath]
-  /// follows the browser there: the entries after it are the browser's, as
-  /// the ones its forward button goes to. Does nothing when the browser
-  /// stands on the entry of the app's page on top, as when the platform
-  /// hands over a link, and on native platforms.
+  /// the browser now stands on, or, after the user's jump forward over entries
+  /// this history wrote, from each entry passed in turn, see
+  /// [followPassedEntry]. Does nothing on the entry of the app's page on top.
   @internal
   // ignore: no-empty-block
   void followBrowser() {
     // Native platforms have no browser to follow.
   }
+
+  /// Follows the next entry a jump forward passed, whose page the app opens
+  /// as a forward press does, and returns it; null at the entry landed on.
+  @internal
+  UrlState? followPassedEntry() => null;
 
   /// Whether [followBrowser] last followed the browser onto an entry from
   /// before the app started, as its back button reaches after a reload.

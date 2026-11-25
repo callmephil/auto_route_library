@@ -125,6 +125,8 @@ import 'encoded_url_test.dart' as encoded_url;
 import 'enum_query_param_test.dart' as enum_query_param;
 import 'forward_after_tabs_page_closes_test.dart'
     as forward_after_tabs_page_closes;
+import 'forward_jump_opens_passed_pages_test.dart'
+    as forward_jump_opens_passed_pages;
 import 'forward_with_sign_in_redirect_test.dart'
     as forward_with_sign_in_redirect;
 import 'fragment_question_mark_url_test.dart' as fragment_question_mark_url;
@@ -617,6 +619,7 @@ void main() {
   encoded_url.main();
   enum_query_param.main();
   forward_after_tabs_page_closes.main();
+  forward_jump_opens_passed_pages.main();
   forward_with_sign_in_redirect.main();
   fragment_question_mark_url.main();
   full_url_nested_path.main();

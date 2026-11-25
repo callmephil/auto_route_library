@@ -9,6 +9,7 @@ external _History get _history;
 extension type const _History(JSObject _) implements JSObject {
   external void back();
   external void forward();
+  external void go(int delta);
   external JSAny? get state;
   external void replaceState(JSAny? data, String unused, String url);
 }
@@ -28,12 +29,14 @@ void pressBrowserBack() => _history.back();
 /// Presses the browser's forward button: moves the browser one entry forward.
 void pressBrowserForward() => _history.forward();
 
+/// Moves the browser [delta] entries at once, as history.go does.
+void jumpBrowser(int delta) => _history.go(delta);
+
 /// Makes the browser's current entry hold [path], as when the app is opened at
 /// a deep link.
 ///
-/// The entry keeps its serial number, so [browserEntryIndex] stays the same,
-/// and is marked as the browser's until the app writes it; see
-/// [didAppWriteBrowserEntry].
+/// The entry keeps its serial number, so [browserEntryIndex] stays, and is
+/// the browser's until the app writes it; see [didAppWriteBrowserEntry].
 void openBrowserAt(String path) {
   final serialCount = browserEntryIndex() ?? 0;
   _history.replaceState(

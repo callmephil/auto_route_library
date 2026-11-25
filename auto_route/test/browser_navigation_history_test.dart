@@ -199,25 +199,39 @@ void main() {
     expect(app.browser.held, '>/ /a /b /c');
   });
 
-  // Steps: open A, B and C over Home and call popUntilRoot; then the user
-  // goes three entries forward at once, onto the entry of C.
-  // Native behavior this holds to: the HTML History API, where history.go(3)
-  // lands on the third entry ahead and passes the two between. The app
-  // shows that entry's page as it shows a link, so C is over Home and takes
-  // the entry over Home's: the back button then shows Home.
-  testWidgets('A jump forward over several entries opens the page of the '
-      'entry landed on, on the entry over the page under it', (tester) async {
+  // Steps: open A, B and C over Home, call popUntilRoot, then go three
+  // entries forward at once (callmephil/auto_route_library#41).
+  // Was: C over Home on a new entry; the entries of A and B were lost.
+  // Should: A, B and C open again, as three forward presses open them.
+  // Native behavior this holds to: the HTML standard's session history,
+  // where history.go(3) adds no entry and changes none.
+  testWidgets('A jump forward over several entries opens the page of each '
+      'entry it passes, as forward presses do, and changes no entry', (
+    tester,
+  ) async {
     final app = _App(tester);
     await app.start(['ARoute', 'BRoute', 'CRoute']);
     app.router.popUntilRoot();
     await app.settle();
     expect(app.browser.held, '>/ /a /b /c');
+    app.browser.asked.clear();
 
     expect(app.browser.didJump(3), isTrue);
     await app.settle();
-    expect(app.router.stack.map((page) => page.name), ['HomeRoute', 'CRoute']);
-    expect(app.browser.held, '/ >/c');
-    expect(await app.backButtonWalk(), ['CRoute /c', 'HomeRoute /']);
+    expect(app.router.stack.map((page) => page.name), [
+      'HomeRoute',
+      'ARoute',
+      'BRoute',
+      'CRoute',
+    ]);
+    expect(app.browser.held, '/ /a /b >/c');
+    expect(app.browser.asked, isEmpty);
+    expect(await app.backButtonWalk(), [
+      'CRoute /c',
+      'BRoute /b',
+      'ARoute /a',
+      'HomeRoute /',
+    ]);
   });
 
   // Steps: over Home, push a page whose url is kept out of the address bar

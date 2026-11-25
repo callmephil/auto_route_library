@@ -542,39 +542,91 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
         link.matches.firstOrNull?.name != launchPage.name;
   }
 
+  void Function({bool dropsChanges})? _releaseJumpWrites;
+
+  void _endJump() {
+    _releaseJumpWrites?.call();
+    _releaseJumpWrites = null;
+  }
+
   @override
   Future<void> setNewRoutePath(UrlState configuration) async {
     _wasGivenRoute = true;
-    // Every route the Router hands over ends the launch, one that opens no
-    // page too; a link ends it right after it reads it.
+    // Every route handed over ends the launch, one that opens no page too.
     try {
       final history = controller.navigationHistory;
       if (history.consumeOwnBrowserMove(configuration)) {
         return;
       }
+      _endJump();
       if (history.isBrowserBehindApp && _doesTopRouteRefusePop()) {
         history.returnBrowserToApp();
         return;
       }
       history.followBrowser();
+      var passed = history.followPassedEntry();
+      if (passed == null) {
+        await _followEntry(configuration);
+        return;
+      }
+      // The browser is where the jump landed: write nothing until it ends.
+      final releaseWrites = _releaseJumpWrites = history
+          .holdBrowserWritesForJump(onLeft: _endJump);
+      try {
+        while (passed != null) {
+          final shown = Completer<bool>();
+          unawaited(_followEntry(passed, onShown: shown.complete));
+          if (!await shown.future ||
+              !identical(releaseWrites, _releaseJumpWrites)) {
+            return;
+          }
+          passed = history.followPassedEntry();
+        }
+        await _followEntry(configuration, onShown: (_) => releaseWrites());
+      } finally {
+        releaseWrites();
+      }
+    } finally {
+      _endLaunch();
+    }
+  }
+
+  // Opens the followed entry's page, and tells [onShown] once it shows or not.
+  Future<void> _followEntry(
+    UrlState configuration, {
+    ValueChanged<bool>? onShown,
+  }) async {
+    var isTold = false;
+    void tell({required bool isShown}) {
+      if (isTold) return;
+      isTold = true;
+      onShown?.call(isShown);
+    }
+
+    try {
+      final history = controller.navigationHistory;
       final pageless = _pagelessRoutesOnTop();
 
       final pageToPush = history.pageToPushForBrowserEntry(configuration);
       if (pageToPush != null) {
         final (stack, page) = pageToPush;
-        // The future completes when the page is popped.
-        unawaited(
-          stack._pushAllGuarded([
-            page,
-          ], onFirstRouteAccepted: () => _closePagelessRoutes(pageless)),
+        final pushed = Completer<void>();
+        final popped = stack._pushAllGuarded(
+          [page],
+          pushed: pushed,
+          onFirstRouteAccepted: () => _closePagelessRoutes(pageless),
         );
+        if (onShown == null) {
+          unawaited(popped);
+        } else {
+          await Future.any([pushed.future, popped]);
+          tell(isShown: pushed.isCompleted);
+        }
       } else if (configuration.hasSegments) {
-        final entryRoutes = controller.navigationHistory.routesOfBrowserEntry(
-          configuration,
-        );
+        final entryRoutes = history.routesOfBrowserEntry(configuration);
         if (entryRoutes != null && entryRoutes.isEmpty) {
           notifyListeners();
-          return;
+          return tell(isShown: true);
         }
         final platLink = PlatformDeepLink._(
           entryRoutes == null
@@ -606,13 +658,15 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
                 (rebuildStackOnDeepLink && entryRoutes == null) ||
                 history.isOnEntryBeforeApp,
             closing: pageless,
-            onAccepted: () => isAccepted = true,
+            onAccepted: () {
+              isAccepted = true;
+              tell(isShown: true);
+            },
           );
         } finally {
           root._isOpeningBrowserEntry = false;
         }
-        // The count of this link, or of the one before for a link the app
-        // ignores.
+        // This link's count, or the one before for a link the app ignores.
         final count = controller.root._linkCount;
         await opening;
         // A later link reports its own url.
@@ -621,6 +675,8 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
             count == controller.root._linkCount) {
           return _reportTurnedDownLink(resolvedLink);
         }
+      } else {
+        tell(isShown: true);
       }
 
       // The link's navigation ends when its page leaves the stack, which
@@ -628,7 +684,7 @@ class AutoRouterDelegate extends RouterDelegate<UrlState> with ChangeNotifier {
       if (_isDisposed) return;
       notifyListeners();
     } finally {
-      _endLaunch();
+      tell(isShown: false);
     }
   }
 

@@ -7,7 +7,7 @@ import 'package:auto_route/src/router/controller/navigation_history/navigation_h
 import 'package:auto_route/src/router/controller/routing_controller.dart';
 import 'package:auto_route/src/router/parser/default_route_parser.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show LocalKey, protected;
+import 'package:flutter/foundation.dart' show LocalKey, VoidCallback, protected;
 import 'package:flutter/scheduler.dart' show SchedulerBinding;
 import 'package:flutter/widgets.dart' show BuildContext;
 
@@ -95,9 +95,13 @@ class BrowserNavigationHistory extends NavigationHistory {
   // and the delegate then asks this history how to follow it.
   late final _writer = HistoryWriter(_browser, landingLimit: landingLimit);
 
-  // The number of the browser entry the app's page on top had when the app
-  // last followed the browser, see [followBrowser].
+  // The number of the app's top entry when the app last followed the browser.
   int? _topBeforeFollowing;
+
+  int? _jumpTarget;
+  int? _passedNumber;
+
+  int get _followedNumber => _passedNumber ?? _browser.index;
 
   // The entry the browser landed on, while [routesOfBrowserEntry] takes the
   // pages above its page off their stack; see [onNewUrlState].
@@ -161,6 +165,29 @@ class BrowserNavigationHistory extends NavigationHistory {
     };
   }
 
+  VoidCallback? _onJumpLeft;
+
+  bool get _isOnJump =>
+      _topNumber == _followedNumber && _writer.holdsAll(_list.entries);
+
+  @override
+  void Function({bool dropsChanges}) holdBrowserWritesForJump({
+    required VoidCallback onLeft,
+  }) {
+    final release = holdBrowserWrites();
+    _onJumpLeft = onLeft;
+    return ({bool dropsChanges = false}) {
+      if (identical(_onJumpLeft, onLeft)) _onJumpLeft = null;
+      release(dropsChanges: dropsChanges);
+    };
+  }
+
+  void _leaveJump() {
+    final onLeft = _onJumpLeft;
+    _onJumpLeft = null;
+    onLeft?.call();
+  }
+
   @override
   void onNewUrlState(UrlState newState, {bool notify = true}) {
     final landed = _landedEntry;
@@ -169,9 +196,14 @@ class BrowserNavigationHistory extends NavigationHistory {
       super.onNewUrlState(newState, notify: notify);
       return;
     }
-    final state = _takesFollowedEntry(newState)
+    final takesFollowed = _takesFollowedEntry(newState);
+    final state = takesFollowed
         ? newState.copyWith(shouldReplace: true)
         : newState;
+    // A page that replaces one whose entry is owed is owed that entry too.
+    final top = _topNumber;
+    final replacesOwed =
+        state.shouldReplace && _writer.owes(top, _list.entries.lastOrNull);
     final shown = _list.show(
       state,
       keepsClosedUnder: _keepsClosedUnder,
@@ -182,11 +214,21 @@ class BrowserNavigationHistory extends NavigationHistory {
       shown.copyWith(shouldReplace: state.shouldReplace),
       notify: notify,
     );
+    final owed = takesFollowed
+        ? _passedNumber
+        : (replacesOwed && _topNumber == top ? top : null);
+    if (owed != null) _writer.owe(owed, shown);
     _writer.bringTo(_list.entries, isReplace: state.shouldReplace);
+    if (_onJumpLeft != null &&
+        landed == null &&
+        !takesFollowed &&
+        !router.root.isShowingLink &&
+        !_isOnJump) {
+      _leaveJump();
+    }
   }
 
-  // Whether [state] shows first in place of the page of [_followedEntry], as
-  // a sign-in page of the link's guard does: the browser stands on its entry.
+  // Whether [state], as a guard's sign-in page, first takes [_followedEntry].
   bool _takesFollowedEntry(UrlState state) {
     final followed = _followedEntry;
     final top = _list.entries.lastOrNull;
@@ -197,10 +239,9 @@ class BrowserNavigationHistory extends NavigationHistory {
         !HistoryEntryList.isEntryOf(followed, state);
   }
 
-  /// Starts this history over on the entry the browser stands on, which
-  /// then holds the page on top: another history has written the browser
-  /// since this one did, as when an app swaps its router and a Router shows
-  /// this one again.
+  /// Starts this history over on the entry the browser stands on, which then
+  /// holds the page on top: another history wrote the browser since, as when
+  /// an app swaps its router and a Router shows this one again.
   @protected
   void takeBrowser() {
     _writer.restart();
@@ -233,9 +274,7 @@ class BrowserNavigationHistory extends NavigationHistory {
   bool get isBrowserBehindApp {
     final at = _browser.index;
     if (at >= _topNumber) return false;
-    // An entry of the page on top, as one before a pushPathState entry,
-    // closes no page: like the browser moving between two states of one
-    // document, it asks no PopScope.
+    // The top page's entry, as under a pushPathState one, asks no PopScope.
     final held = _writer.entryAt(at);
     final pageId = urlState.topMatch?.id;
     return held == null ||
@@ -254,6 +293,44 @@ class BrowserNavigationHistory extends NavigationHistory {
   @override
   void followBrowser() {
     final at = _browser.index;
+    final passed = [
+      for (var number = _topNumber + 1; number < at; number++)
+        _writer.entryAt(number),
+    ];
+    // Not the entry the engine pushes for a link, one after the browser's.
+    final isTraversal =
+        _writer.userStep > 1 || (_writer.entryAt(at)?.hasSegments ?? false);
+    _passedNumber = null;
+    _jumpTarget =
+        _writer.isUserLanding &&
+            isTraversal &&
+            passed.isNotEmpty &&
+            passed.every((entry) => entry?.hasSegments ?? false)
+        ? at
+        : null;
+    if (_jumpTarget == null) _followTo(at);
+  }
+
+  @override
+  UrlState? followPassedEntry() {
+    final target = _jumpTarget;
+    if (target == null) return null;
+    final passed = _passedNumber;
+    final top = _topNumber;
+    // A passed entry whose page took no entry of its own ends the walk.
+    final next = passed == null || passed == top ? top + 1 : target;
+    if (next < target) {
+      _passedNumber = next;
+      _followTo(next);
+      return _writer.entryAt(next);
+    }
+    _jumpTarget = null;
+    _passedNumber = null;
+    _followTo(target);
+    return null;
+  }
+
+  void _followTo(int at) {
     final top = _topNumber;
     _topBeforeFollowing = top;
     _isOnEntryBeforeApp = false;
@@ -275,8 +352,8 @@ class BrowserNavigationHistory extends NavigationHistory {
       );
       return;
     }
-    // The entries up to the one the browser stands on. A page kept out of
-    // the address bar has none: it closes with the pages over that entry.
+    // The entries up to [at]. A page kept out of the address bar has none:
+    // it closes with the pages over that entry.
     var number = _writer.first - 1;
     final followed = <UrlState>[];
     for (final (place, entry) in _list.entries.indexed) {
@@ -285,8 +362,7 @@ class BrowserNavigationHistory extends NavigationHistory {
       followed.add(entry);
     }
     final ahead = _list.entries.skip(followed.length).toList();
-    // And the browser's own, as the entries ahead that its forward button
-    // goes to, or one it made for a url typed into the address bar.
+    // And the browser's own: the entries ahead, or one made for a typed url.
     for (number++; number <= at; number++) {
       followed.add(_browserEntry(number));
     }
@@ -319,7 +395,7 @@ class BrowserNavigationHistory extends NavigationHistory {
 
   @override
   List<RouteMatch<Object?>>? routesOfBrowserEntry(UrlState configuration) {
-    final held = _writer.entryAt(_browser.index);
+    final held = _writer.entryAt(_followedNumber);
     if (held == null ||
         !held.hasSegments ||
         !isSameHistoryUrl(held.url, configuration.url)) {
@@ -366,7 +442,7 @@ class BrowserNavigationHistory extends NavigationHistory {
   (StackRouter, RouteMatch<Object?>)? pageToPushForBrowserEntry(
     UrlState configuration,
   ) {
-    final at = _browser.index;
+    final at = _followedNumber;
     final entry = _writer.entryAt(at);
     final page = entry?.topMatch;
     final currentPageId = urlState.topMatch?.id;
@@ -394,11 +470,16 @@ class BrowserNavigationHistory extends NavigationHistory {
   /// came from; stepping back from the app's first entry would leave the app.
   @override
   void back() {
-    if (canNavigateBack) _writer.step(-1);
+    if (!canNavigateBack) return;
+    _leaveJump();
+    _writer.step(-1);
   }
 
   @override
-  void forward() => _writer.step(1);
+  void forward() {
+    _leaveJump();
+    _writer.step(1);
+  }
 
   @override
   bool get canNavigateBack => _browser.index > 0;
@@ -426,6 +507,7 @@ class BrowserNavigationHistory extends NavigationHistory {
     _list.add(newState);
     super.onNewUrlState(newState);
     _writer.bringTo(_list.entries);
+    _leaveJump();
   }
 
   @override
@@ -459,6 +541,6 @@ class BrowserNavigationHistory extends NavigationHistory {
     super.onNewUrlState(shown, notify: false);
     final entries = _list.entries;
     _list.reset([...entries.take(entries.length - 1), shown]);
-    _writer.adopt(_browser.index, shown);
+    _writer.adopt(_followedNumber, shown);
   }
 }
