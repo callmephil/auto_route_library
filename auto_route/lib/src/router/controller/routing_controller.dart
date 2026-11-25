@@ -310,6 +310,11 @@ abstract class RoutingController with ChangeNotifier {
     return navigationHistory.isRouteDataActive(data);
   }
 
+  bool _isInUrl(RouteMatch<Object?>? match) => navigationHistory
+      .urlState
+      .segments
+      .any((segment) => segment == match && segment.id == match?.id);
+
   /// See [NavigationHistory.isPathActive]
   bool isPathActive(String path) {
     return navigationHistory.isPathActive(path);
@@ -4933,17 +4938,16 @@ abstract class StackRouter extends RoutingController {
               : accepted;
           _markLeaving(_pages, .replaced);
           _pages.clear();
-          // Also the pages a reevaluation holds off the stack for a guard
-          // that has not answered: they are replaced with the rest, so
-          // their callers get null now, and no change asks their guards
-          // again, as Flutter's Navigator completes each route that
-          // pushAndRemoveUntil removes at the removal.
+          // Also the pages a reevaluation holds off for an unanswered guard:
+          // their callers get null now and no change asks their guards again,
+          // as Navigator.pushAndRemoveUntil completes each route it removes.
           _endLetGoWaits((_) => true);
           _heldBackByReevaluation.clear();
           if (!updateExistingRoutes) {
             _stackKey = UniqueKey();
           }
-          markUrlStateForReplace();
+          // A link's url, reported as it came, names its pages already.
+          if (!_isInUrl(replacing.lastOrNull)) markUrlStateForReplace();
           if (isLink) moveFirstEntryBack = navigationHistory.startAtLinkEntry();
           return replacing;
         },

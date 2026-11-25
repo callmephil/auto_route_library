@@ -1,4 +1,12 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, after a link replaces the stack, the app's next push adds one entry after the entry of that link,
+  and a forward press onto the entry of another tab changes no entry. Such a link is a url typed into the address bar
+  with `rebuildStackOnDeepLink`, or an entry that the back button opens alone, as one that a typed url closed or one
+  from before a reload. Before, with `includePrefixMatches`, a push of C after a typed `/b` wrote `/` over the entry of
+  `/b` and pushed `/b` and `/c`, and a forward press onto the entry of another tab stepped the browser back and pushed
+  the url of that tab again, which removed the entries ahead. Off the web, with `includePrefixMatches`, `router.back()`
+  after a push that followed a link with `rebuildStackOnDeepLink` stayed on the pushed page; now it shows the page of
+  the link.
 - **FIX**, **BEHAVIOR CHANGE**: on the web, with `rebuildStackOnDeepLink`, once a url typed into the address bar
   replaces the stack, the browser's back button shows the page of each entry before it alone, as after a reload, and no
   press changes an entry: Home, A, a typed `/b` and two backs show A, then Home, and forward walks the same entries back
@@ -7,10 +15,9 @@
   page was not open: Home and A come back, the browser steps back to the entry of A, and back shows Home once. Forward
   onto the entry of that url, or a jump over it, opens the url again over A, the tabs turn it down again, and the
   browser steps back to A, as after a guard's no: A and a dialog over it stay. If the app pushes a page while that tabs
-  page still loads, as a deferred page does, the app writes the entries again, one for each page. A forward press onto
-  the entry of another tab that a closed tabs page wrote can still change entries. Before, back showed A over B, moved
-  the browser back one more entry and wrote `/a` over the entry of Home, so back could not reach Home, and the app's
-  next push or pop moved the browser back to the entry of Home.
+  page still loads, as a deferred page does, the app writes the entries again, one for each page. Before, back showed A
+  over B, moved the browser back one more entry and wrote `/a` over the entry of Home, so back could not reach Home, and
+  the app's next push or pop moved the browser back to the entry of Home.
 - **FIX**: on the web, a url typed into the address bar to a child of a tabs page that is not open, which the tabs of
   that page do not list, keeps its url in its entry. The tabs turn the link down, the page shown before stays, and the
   browser steps back to the entry of that page, as after a guard's no. The forward button then opens the url again, and
