@@ -2553,10 +2553,9 @@ class TabsRouter extends RoutingController {
           }
         } else {
           // A navigation to the tab on screen is the latest choice: it calls
-          // off a change to another tab still waiting for its guards. A
-          // setActiveIndex to it is not: the tabs views echo the active index
-          // while a guard decides, and Flutter's TabController ignores a
-          // choice of the selected tab.
+          // off a change to another tab that waits for its guards. Not so a
+          // setActiveIndex to it: the tabs views echo the active index while a
+          // guard decides, and Flutter's TabController ignores that choice.
           if (!isReevaluating && _pendingTab != null) _callOffPendingChange();
           final shouldNotify =
               mayUpdateRoute !=
@@ -2566,7 +2565,14 @@ class TabsRouter extends RoutingController {
             mayUpdateRoute,
             keepsUnnamedPages: keepsUnnamedPages,
           );
-          if (shouldNotify) {
+          // The link's url names these pages; a declarative tab still reports.
+          final inner = _innerControllerOfMatch(routeToBeUpdated.id);
+          if (shouldNotify &&
+              !(inner?.managedByWidget ?? false) &&
+              _isInUrl(routeToBeUpdated.flattened.lastOrNull)) {
+            notifyListeners();
+            root.notifyListeners();
+          } else if (shouldNotify) {
             notifyAll();
           }
           // A reevaluation goes on once the guards of a tab and of the pages

@@ -1,4 +1,11 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, after a reload, or after a url typed with `rebuildStackOnDeepLink`, a forward press onto the
+  entry of a page in the tab on screen changes no entry, such as onto Order 8 while the Orders tab shows Order 7.
+  Before, the app stepped the browser back one entry and pushed the url of that entry again, which removed the entries
+  ahead, so the forward button could not reach them. A url typed into the tab on screen without `rebuildStackOnDeepLink`
+  asks for no step either; before, the app stepped the browser back one entry and pushed the url. Not so in a tab whose
+  nested router is `AutoRouter.declarative`: its app may keep its pages, so the app still reports the url of the pages
+  on screen first, and a url that the app there does not take steps the browser back to the entry of the page shown.
 - **FIX**: on the web, after a link replaces the stack, the app's next push adds one entry after the entry of that link,
   and a forward press onto the entry of another tab changes no entry. Such a link is a url typed into the address bar
   with `rebuildStackOnDeepLink`, or an entry that the back button opens alone, as one that a typed url closed or one
