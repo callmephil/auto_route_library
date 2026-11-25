@@ -34,10 +34,10 @@ import 'router_test_utils.dart';
 // opens the url again over A, the tabs turn it down again, and the browser
 // steps back to A's entry, as for /closed, whose root guard says no; A and
 // its dialog stay. Or type /depot/hidden, whose tabs page loads a library
-// first, and push C meanwhile. Should: one entry for each page, /c / /a,
-// with C under the pages put back, as _putBack orders them. Push C and pop
-// it instead, then jump two entries forward over the typed entry: the jump
-// ends on A, as a forward onto that entry does.
+// first, and push C meanwhile. Should: one entry for each page, / /a /c,
+// with C over the pages put back (callmephil/auto_route_library#58). Push C
+// and pop it instead, then jump two entries forward over the typed entry:
+// the jump ends on A, as a forward onto that entry does.
 //
 // Native behavior this holds to: the HTML standard's session history, where
 // a traversal goes to another entry and adds or changes none, and
@@ -352,11 +352,11 @@ void main() {
     app.router.library.complete();
     await app.browser.settle(tester);
 
-    expect(app.shown, 'A [C Home A] /c / >/a');
+    expect(app.shown, 'C [Home A C] / /a >/c');
     final back = app.browser.didPressBack;
     expect(await app.walk([back, back, back]), [
-      'Home [C Home] /c >/ /a',
-      'C [C] >/c / /a',
+      'A [Home A] / >/a /c',
+      'Home [Home] >/ /a /c',
     ]);
   });
 }

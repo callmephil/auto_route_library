@@ -1,4 +1,12 @@
 ## 13.0.0-rc.1
+- **FIX**: a page that the app pushes while a new tabs page waits for its tabs router, as while a `DeferredWidget` loads
+  its library, stays on top when the tabs then turn down a route that they do not list. The pages that `replace`,
+  `replacePath`, `replaceAll` or a link with `rebuildStackOnDeepLink` took off come back in the place of the tabs page,
+  under the pushed page. So Home, A, one of these navigations to such a route, and a push of C during the wait give
+  Home, A and C, and C stays on screen. On the web, the browser holds one entry for each page and stands on the entry of
+  C, and an entry that A pushed with `pushPathState` before a typed url stays. Before, Home and A came back over C, or A
+  came back over C after `replace` and `replacePath`, so A showed with no action of the user, and back showed the pages
+  in the wrong order.
 - **FIX**: on the web, after a reload, or after a url typed with `rebuildStackOnDeepLink`, a forward press onto the
   entry of a page in the tab on screen changes no entry, such as onto Order 8 while the Orders tab shows Order 7.
   Before, the app stepped the browser back one entry and pushed the url of that entry again, which removed the entries
@@ -22,9 +30,9 @@
   page was not open: Home and A come back, the browser steps back to the entry of A, and back shows Home once. Forward
   onto the entry of that url, or a jump over it, opens the url again over A, the tabs turn it down again, and the
   browser steps back to A, as after a guard's no: A and a dialog over it stay. If the app pushes a page while that tabs
-  page still loads, as a deferred page does, the app writes the entries again, one for each page. Before, back showed A
-  over B, moved the browser back one more entry and wrote `/a` over the entry of Home, so back could not reach Home, and
-  the app's next push or pop moved the browser back to the entry of Home.
+  page still loads, as a deferred page does, the browser holds one entry for each page. Before, back showed A over B,
+  moved the browser back one more entry and wrote `/a` over the entry of Home, so back could not reach Home, and the
+  app's next push or pop moved the browser back to the entry of Home.
 - **FIX**: on the web, a url typed into the address bar to a child of a tabs page that is not open, which the tabs of
   that page do not list, keeps its url in its entry. The tabs turn the link down, the page shown before stays, and the
   browser steps back to the entry of that page, as after a guard's no. The forward button then opens the url again, and

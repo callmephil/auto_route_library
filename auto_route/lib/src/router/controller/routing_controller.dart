@@ -5990,13 +5990,13 @@ abstract class StackRouter extends RoutingController {
     return true;
   }
 
-  // Puts [pagesBefore], which a replace took off the stack, back, and takes
-  // [added], which it put on, off, once the nested router of the new page
-  // could not show the route named for it, see [_turnDownPendingRoute]: the
-  // stack, the screen and the url are as before the call. The callers of the
-  // pages that left heard null already, as for any page that leaves. Returns
-  // false, and changes nothing, when none of [added] is on the stack any
-  // longer.
+  // Puts [pagesBefore], which a replace took off the stack, back in the place
+  // of [added], which it put on, once the nested router of the new page could
+  // not show the route named for it, see [_turnDownPendingRoute]. The pages
+  // that went on over [added] meanwhile stay on top, as Navigator.replace
+  // keeps the routes above. The callers of the pages that left heard null
+  // already. Returns false, and changes nothing, when none of [added] is on
+  // the stack any longer.
   bool _putBack(
     List<AutoRoutePage<Object?>> pagesBefore,
     List<AutoRoutePage<Object?>> added, {
@@ -6006,16 +6006,18 @@ abstract class StackRouter extends RoutingController {
     if (_isDisposed || onStack.isEmpty) return false;
     onPutBack?.call();
     markUrlStateForReplace();
+    final place = _pages.indexWhere(onStack.contains);
     for (final page in onStack.reversed) {
       _pages.remove(page);
       _noteLeft(page);
       page.routeData.onPopInvoked(null);
     }
-    for (final page in pagesBefore.whereNot(_pages.contains)) {
+    final comingBack = pagesBefore.whereNot(_pages.contains).toList();
+    for (final page in comingBack) {
       page.routeData._isReplaced = false;
       _leaveKinds.remove(page.routeData);
-      _pages.add(page);
     }
+    _pages.insertAll(place, comingBack);
     _shareTopPathData();
     notifyAll(forceUrlRebuild: true);
     return true;

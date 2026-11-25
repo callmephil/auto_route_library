@@ -16,8 +16,9 @@ import 'browser_history.dart';
 // alone, and no press changes an entry (callmephil/auto_route_library#43).
 // A typed url the tabs turn down, /store/hidden, leaves the browser on the
 // entry of A, with no entry but the user's own added, also after forward
-// onto it, which keeps the dialog over A, after a jump over it, or after a
-// push while its deferred tabs page loads.
+// onto it, which keeps the dialog over A, or after a jump over it. A push
+// while its deferred tabs page loads stays on top, on an entry after A's
+// (callmephil/auto_route_library#58).
 // The steps, what was seen and what should be seen are those of the
 // headless test on the VM: test/rebuild_stack_typed_url_back_test.dart.
 // Prefix matches are off, as on the web by default.
@@ -244,7 +245,7 @@ void main() {
     await settleBrowser(tester);
     library.complete();
     await settleBrowser(tester);
-    expect(_shown(router, home), 'A [C Home A] /a 2');
+    expect(_shown(router, home), 'C [Home A C] /c 2');
     expect(browserEntryCount, length + 1);
 
     final walk = <String>[];
@@ -252,6 +253,6 @@ void main() {
       await pressBrowserBack(tester);
       walk.add(_shown(router, home));
     }
-    expect(walk, ['Home [C Home] / 1', 'C [C] /c 0']);
+    expect(walk, ['A [Home A] /a 1', 'Home [Home] / 0']);
   });
 }

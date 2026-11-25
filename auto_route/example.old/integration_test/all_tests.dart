@@ -312,6 +312,8 @@ import 'push_then_replace_test.dart' as push_then_replace;
 import 'push_to_tab_with_waiting_guard_test.dart'
     as push_to_tab_with_waiting_guard;
 import 'push_unknown_relative_path_test.dart' as push_unknown_relative_path;
+import 'put_back_under_page_pushed_meanwhile_test.dart'
+    as put_back_under_page_pushed_meanwhile;
 import 'query_param_rebuild_test.dart' as query_param_rebuild;
 import 'query_params_on_pop_test.dart' as query_params_on_pop;
 import 'query_toggle_back_test.dart' as query_toggle_back;
@@ -774,6 +776,7 @@ void main() {
   push_then_replace.main();
   push_to_tab_with_waiting_guard.main();
   push_unknown_relative_path.main();
+  put_back_under_page_pushed_meanwhile.main();
   query_param_rebuild.main();
   query_params_on_pop.main();
   query_toggle_back.main();

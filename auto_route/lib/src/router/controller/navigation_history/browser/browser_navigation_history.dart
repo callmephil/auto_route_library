@@ -306,10 +306,8 @@ class BrowserNavigationHistory extends NavigationHistory {
     return () {
       if (_writer.first != number) return;
       _writer.startBackAt(first);
-      // Not after a page went on: _putBack puts the pages back over that page.
-      if (_list.entries.length == 1) {
-        _list.reset([...before, ..._list.entries]);
-      }
+      // Also with a page that went on meanwhile, which _putBack keeps on top.
+      _list.reset([...before, ..._list.entries]);
     };
   }
 
