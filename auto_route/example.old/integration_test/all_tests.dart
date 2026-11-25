@@ -439,6 +439,8 @@ import 'set_query_param_read_test.dart' as set_query_param_read;
 import 'set_query_param_test.dart' as set_query_param;
 import 'sign_in_closes_awaited_redirect_test.dart'
     as sign_in_closes_awaited_redirect;
+import 'sign_out_during_back_closes_page_test.dart'
+    as sign_out_during_back_closes_page;
 import 'sign_out_while_push_guard_awaits_test.dart'
     as sign_out_while_push_guard_awaits;
 import 'simultaneous_taps_test.dart' as simultaneous_taps;
@@ -859,6 +861,7 @@ void main() {
   set_query_param_read.main();
   set_query_param.main();
   sign_in_closes_awaited_redirect.main();
+  sign_out_during_back_closes_page.main();
   sign_out_while_push_guard_awaits.main();
   simultaneous_taps.main();
   slow_link_builder_order.main();

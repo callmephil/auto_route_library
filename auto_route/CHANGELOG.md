@@ -1,4 +1,8 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, a sign-out closes a guarded page also when the user presses the browser's back button to that
+  page while its guard, asked again by the `reevaluateListenable`, still decides. The press shows the open page as it
+  is, the same page, and the guard's "no" closes it, as with no press. Before, the press put a new page of the same
+  route in its place, the "no" counted as too late, and the page stayed open and on screen.
 - **FIX**, **BEHAVIOR CHANGE**: on the web, `pushAndPopUntil` into a tabs page that shows another tab leaves no entry of
   the old tab ahead. The browser steps back to the page the call keeps, and the new page's url gets a new entry, so the
   forward button finds no removed page. Any navigation of the app to the url of an entry ahead of the browser now drops

@@ -4263,23 +4263,23 @@ abstract class StackRouter extends RoutingController {
         ? null
         : staying.lastWhereOrNull((p) => p.routeKey == anchor.key);
     final anchorId = anchorPage?.routeData.matchId;
+    // A step of the browser's back or forward button to an entry whose page
+    // is open, in a tab not on screen or under the page on top, reaches the
+    // open pages on the way again: the entry names each by its match id,
+    // with the route it has. Such a page shows as it is: it stays, as the
+    // route under Navigator.pop does, and its guards are not asked again, so
+    // a reevaluation that asks one meanwhile still closes it. A tab change on
+    // the way asks the tab's guards, and a page not open is asked as before.
+    final shownAsItIs =
+        anchorPage != null &&
+            root._opensBrowserEntry(link) &&
+            _isPageAsItIs(anchorPage.routeData, anchor)
+        ? anchorPage
+        : null;
     if (anchorId != null) {
       // use the existing match id to avoid breaking child controllers
       final reached = anchor.withId(anchorId);
-      // A step of the browser's back or forward button to an entry whose
-      // page is open, in a tab not on screen or under the page on top,
-      // reaches the open pages on the way again: the entry names each by its
-      // match id, with the route it has. Such a page shows as it is, and the
-      // guards that let it in are not asked again, as the app's own back()
-      // asks none of a page it shows once the pages above it leave, and as
-      // Navigator.pop asks nothing of the route under it. A tab change on the
-      // way asks the tab's guards, as the app's own tab change does, and a
-      // page that is not open is asked as before.
-      final isShownAsItIs =
-          anchorPage != null &&
-          root._opensBrowserEntry(link) &&
-          _isPageAsItIs(anchorPage.routeData, anchor);
-      toPush[0] = isShownAsItIs
+      toPush[0] = shownAsItIs != null
           ? reached.copyWith(
               evaluatedGuards: [...root.guards, ...anchor.guards],
             )
@@ -4334,15 +4334,17 @@ abstract class StackRouter extends RoutingController {
       link: link,
       onGuardShowsPage: onGuardShowsPage,
       lastPageAt: holdsPagesAbove ? () => anchorIndex : null,
+      shownAsItIs: shownAsItIs,
       onFirstRouteAccepted: () {
         // A page popped while the guards decided has left already. And a
         // later navigation to the same page, let in while these guards
         // decided, has put its own page in the anchor's place, with the
         // anchor's match id: that page leaves for this one, which takes over
         // its screen, or the stack would hold two pages with one key, which
-        // Flutter's Navigator forbids.
+        // Flutter's Navigator forbids. A page shown as it is stays.
         final pagesLeaving = leaving ?? const [];
         leaving = null;
+        final asItIs = _pages.contains(shownAsItIs) ? shownAsItIs : null;
         bool isAnchor(AutoRoutePage<Object?> page) =>
             anchorId != null && page.routeData.matchId == anchorId;
         if (holds) {
@@ -4365,7 +4367,8 @@ abstract class StackRouter extends RoutingController {
         final left = _pages
             .where(
               (page) =>
-                  (pagesLeaving.contains(page) && !holds) || isAnchor(page),
+                  !identical(page, asItIs) &&
+                  ((pagesLeaving.contains(page) && !holds) || isAnchor(page)),
             )
             .toList();
         if (holdsPagesAbove) {
@@ -4374,7 +4377,7 @@ abstract class StackRouter extends RoutingController {
         }
         _markLeaving(left, .removed);
         _pages.removeWhere(left.contains);
-        if (anchorId == null) return;
+        if (anchorId == null || asItIs != null) return;
         for (final ctr in _childControllers) {
           if (ctr.matchId == anchorId) {
             ctr._isMarkedForDataUpdate = true;
@@ -5490,11 +5493,14 @@ abstract class StackRouter extends RoutingController {
     _PagesReplacement? replacement,
     int? link,
     ValueChanged<StackRouter>? onGuardShowsPage,
-    // Where the last page goes, when not on top: a page reached again under
-    // the pages above it, see [_popUntilOrPushAll].
+    // Where the last page goes, when not on top, and the open page the first
+    // route shows as it is, which stays: see [_popUntilOrPushAll].
     int? Function()? lastPageAt,
+    AutoRoutePage<Object?>? shownAsItIs,
   }) async {
     assert(!managedByWidget, _managedByWidgetMessage);
+    AutoRoutePage<Object?>? asItIs() =>
+        _pages.contains(shownAsItIs) ? shownAsItIs : null;
 
     // A page popped since the stack was collected for reevaluation stays
     // closed, with the pages above it.
@@ -5576,6 +5582,8 @@ abstract class StackRouter extends RoutingController {
         if (index == 0) onFirstRouteAccepted?.call();
         if (match is ReevaluatableRouteMatch) {
           _addReevaluatedPage(match, notify: false);
+        } else if (index == 0 ? asItIs() : null case final page?) {
+          _showAsItIs(page, match, notify: false);
         } else {
           unawaited(_addNewPage<T>(match, notify: false, takeovers: takeovers));
         }
@@ -5602,15 +5610,19 @@ abstract class StackRouter extends RoutingController {
         openChildrenOfTakeovers();
         return null;
       }
-      final popped = root._showingLink(
-        () => _addNewPage<T>(
-          match,
-          notify: notify,
-          index: lastPageAt?.call(),
-          onFailure: onFailure,
-        ),
-        isLink: ofLink != null,
-      );
+      final page = routes.length == 1 ? asItIs() : null;
+      final popped = root._showingLink(() {
+        if (page == null) {
+          return _addNewPage<T>(
+            match,
+            notify: notify,
+            index: lastPageAt?.call(),
+            onFailure: onFailure,
+          );
+        }
+        _showAsItIs(page, match, notify: notify);
+        return _poppedAs<T>(page.routeData);
+      }, isLink: ofLink != null);
       openChildrenOfTakeovers();
       if (pushed != null && !pushed.isCompleted) pushed.complete();
       return popped;
@@ -6236,7 +6248,7 @@ abstract class StackRouter extends RoutingController {
     _endWaitOfTakenOff(_takenOffForNewPage);
     if (notify && identical(Zone.current[_firstPagesZone], this)) {
       _notifyFirstPages();
-    } else if (notify && _opensChildrenOnScreen(screen, data)) {
+    } else if (notify && _opensChildrenOnScreen(screen, match)) {
       notifyListeners();
       if (!isRoot) root.notifyListeners();
     } else if (notify) {
@@ -6255,12 +6267,15 @@ abstract class StackRouter extends RoutingController {
         takeovers.add(data);
       }
     }
-    return switch (data.popped) {
-      final Future<T?> popped => popped,
-      // The caller named a type the screen's result doesn't have.
-      final popped => popped.then((result) => result is T ? result : null),
-    };
+    return _poppedAs(data);
   }
+
+  static Future<T?> _poppedAs<T extends Object?>(RouteData<Object?> data) =>
+      switch (data.popped) {
+        final Future<T?> popped => popped,
+        // The caller named a type the screen's result doesn't have.
+        final popped => popped.then((result) => result is T ? result : null),
+      };
 
   // The data of the page with match [id] that the navigator shows, once it
   // has left the stack for a new page of its route to take its place, as
@@ -6274,24 +6289,44 @@ abstract class StackRouter extends RoutingController {
     return null;
   }
 
-  // Whether [data], a page that goes on over [screen], a screen the
-  // navigator shows, has children for the nested router built in that
-  // screen, which the navigation opens there next, as a link into another
-  // tab of the tabs page on screen does. That router reports the url as they
-  // go on. A url reported now would name the pages it still shows, which
-  // the children take the place of. The url names those pages already, or
-  // the link: the web history would take the link's entry, whose page is
-  // not open yet, for one whose page left, and step the browser back, then
-  // forward again. Not with a replace mark, which the url of the page keeps,
-  // see [_addNewPage].
+  // Whether [route], whose page goes on over [screen], a screen the
+  // navigator shows, has children for the nested router built there, which
+  // the navigation opens next, as a link into another tab does. That router
+  // reports the url as they go on: a url reported now would name the pages
+  // they take the place of, and the web history would take the link's entry
+  // for one whose page left, and step the browser back, then forward again.
+  // Not with a replace mark, which the page's url keeps.
   bool _opensChildrenOnScreen(
     RouteData<Object?>? screen,
-    RouteData<Object?> data,
+    RouteMatch<Object?> route,
   ) =>
       screen != null &&
-      data.hasPendingChildren &&
-      _innerControllerOfMatch(data.matchId) != null &&
+      route.hasChildren &&
+      _innerControllerOfMatch(route.id) != null &&
       !navigationHistory.isUrlStateMarkedForReplace;
+
+  // Shows [page] again, as it is, for [match]: a nested router not built yet
+  // opens the children of [match] once built, as a new page's would, in
+  // place of a navigation still waiting for it.
+  void _showAsItIs(
+    AutoRoutePage<Object?> page,
+    RouteMatch<Object?> match, {
+    required bool notify,
+  }) {
+    final data = page.routeData;
+    final children = match.children ?? const [];
+    if (children.isNotEmpty && _innerControllerOfMatch(data.matchId) == null) {
+      _NestedLetIn.claimToTurnDown(data)?.turnDown(canTakeBack: false);
+      data._pendingChildren = List.of(children);
+    }
+    if (!notify) return;
+    if (_opensChildrenOnScreen(data, match)) {
+      notifyListeners();
+      if (!isRoot) root.notifyListeners();
+    } else {
+      notifyAll();
+    }
+  }
 
   // The data of the page the navigator shows on top, once that page has left
   // the stack and [route] is about to go on top in its place. The new page
