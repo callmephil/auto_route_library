@@ -2163,7 +2163,7 @@ class TabsRouter extends RoutingController {
       _pushAll(routesToPush, isFromDefault: routes == null);
     }
     _routeData.pendingChildren.clear();
-    if (notListed != null) _turnDownPendingRoute(notListed);
+    final isTakenBack = notListed != null && _turnDownPendingRoute(notListed);
     if (guarding != null) {
       final index = guardedIndex;
       final match = preMatchedRoute!;
@@ -2214,14 +2214,14 @@ class TabsRouter extends RoutingController {
     }
     // A host opened by a url that names no tab, such as '/tabs' when no tab is
     // initial, shows its first tab, as it does while the guards of the tab
-    // the url names decide. The url names that tab too, in place of the
-    // host's own entry, so going back to that entry shows it. The router is
-    // set up while the app builds, so nobody is told of the new url: the web
-    // history writes it over the host's entry by itself. A link's url stays
-    // the link's, so the pages the link opened under the host, such as a
-    // prefix match, share its entry, as they do when the link's own tab
-    // shows: the user made one navigation.
+    // the url names decide. The url names that tab too, over the host's
+    // entry, so going back to that entry shows it. The router is set up while
+    // the app builds, so the web history writes it by itself. A link's url
+    // stays the link's, so the pages the link opened under the host, such as
+    // a prefix match, share its entry. Not when [_turnDownPendingRoute] takes
+    // the page back: the url stays as before the navigation.
     if (_pages.isNotEmpty &&
+        !isTakenBack &&
         navigationHistory.isRouteDataActive(routeData) &&
         !navigationHistory.isRouteDataActive(current)) {
       final isUrlOfLink = root._isUrlStateOfLink;
@@ -2238,14 +2238,16 @@ class TabsRouter extends RoutingController {
   // The navigation that put this router's page on named [route] for it, a
   // route that is not one of the tabs: it is turned down, as in
   // [_turnDownRouteNotListed], once the frame that builds the tabs ends,
-  // and the first tab shows meanwhile. The page is taken back, so the stack
-  // and the url are as before the navigation, unless it is the only page
-  // its stack has, as when the app starts at the link: it then stays, on its
-  // first tab. Nothing waits when the page went on long before.
-  void _turnDownPendingRoute(RouteMatch<Object?> route) {
+  // and the first tab shows meanwhile. Answers whether the turn-down takes
+  // the page back, or puts back the pages a replace took off: the stack and
+  // the url are then as before the navigation. The only page of its stack,
+  // as when the app starts at the link, stays on its first tab. Nothing
+  // waits when the page went on long before.
+  bool _turnDownPendingRoute(RouteMatch<Object?> route) {
     final waiting = _NestedLetIn.claimToTurnDown(_routeData);
-    if (waiting == null) return;
+    if (waiting == null) return false;
     final page = _routeData;
+    final takesBack = waiting.takeBack != null || waiting.putBack != null;
     SchedulerBinding.instance
       ..addPostFrameCallback((_) {
         final onFailure = waiting.onFailure;
@@ -2255,10 +2257,7 @@ class TabsRouter extends RoutingController {
         // future, which is taken back; a batch that answers before, as
         // pushAll, from [_NestedLetIn.taken]. A link has no caller to tell,
         // and a page that stays answers when it closes.
-        final error =
-            onFailure == null &&
-                waiting.link == null &&
-                (waiting.takeBack != null || waiting.putBack != null)
+        final error = onFailure == null && waiting.link == null && takesBack
             ? _notListedError(route)
             : null;
         onFailure?.call(RouteNotFoundFailure(route.name));
@@ -2274,6 +2273,7 @@ class TabsRouter extends RoutingController {
         waiting.turnDown(isNotListed: true, error: error);
       })
       ..ensureVisualUpdate();
+    return takesBack;
   }
 
   // The tab named for these tabs is on: [letIn] waits for the nested router
@@ -5888,12 +5888,12 @@ abstract class StackRouter extends RoutingController {
   // context. Until they let the navigation in, the step of its [link]
   // ([linkStep]) waits, so a link's dialog stays open, and so does what the
   // routers above do once let in; see [_NestedLetIn]. A guard's rejection
-  // there reaches [onFailure], the caller's. A "no" there takes the
-  // pages this step put on back, when [canTakeBack] and a page this router
-  // had before stays under them: the root is never left empty, and a router
-  // the navigation opened with this page alone keeps it, on its first page.
-  // [newPage] is that page's data when it is not the one on top, as for a
-  // page insert puts under the top.
+  // there reaches [onFailure], the caller's. A "no" there takes the pages
+  // this step put on back, when [canTakeBack] and a page this router had
+  // before stays under them: the root is never left empty, and a router the
+  // navigation opened with this page alone keeps it, on its first page. A
+  // step that put no page on, as a back onto a page that waits, undoes
+  // nothing. [newPage] is that page's data when insert put it under the top.
   void _waitForNewNestedRouter({
     required List<AutoRoutePage<Object?>> pagesBefore,
     required int? link,
@@ -5910,17 +5910,16 @@ abstract class StackRouter extends RoutingController {
       return;
     }
     final added = _pages.whereNot(pagesBefore.contains).toList();
+    final canUndo = pagesBefore.isNotEmpty && added.isNotEmpty;
     _NestedLetIn(
       root,
       link: link,
       linkStep: linkStep,
       onFailure: onFailure,
-      takeBack: canTakeBack && pagesBefore.isNotEmpty
-          ? () => _takeBack(added)
-          : null,
+      takeBack: canTakeBack && canUndo ? () => _takeBack(added) : null,
       // Pages this step took off, as replace does, come back only when the
       // nested router can not show the page at all, see [_putBack].
-      putBack: !canTakeBack && pagesBefore.isNotEmpty
+      putBack: !canTakeBack && canUndo
           ? () => _putBack(pagesBefore, added)
           : null,
     ).waitOn(data);

@@ -490,6 +490,8 @@ import 'taken_over_screen_keeps_caller_test.dart'
     as taken_over_screen_keeps_caller;
 import 'theme_change_test.dart' as theme_change;
 import 'theme_page_transitions_test.dart' as theme_page_transitions;
+import 'turned_down_tab_link_keeps_typed_url_test.dart'
+    as turned_down_tab_link_keeps_typed_url;
 import 'two_links_into_nested_router_test.dart' as two_links_into_nested_router;
 import 'two_navigations_to_one_page_test.dart' as two_navigations_to_one_page;
 import 'two_pushes_one_turn_test.dart' as two_pushes_one_turn;
@@ -907,6 +909,7 @@ void main() {
   taken_over_screen_keeps_caller.main();
   theme_change.main();
   theme_page_transitions.main();
+  turned_down_tab_link_keeps_typed_url.main();
   two_links_into_nested_router.main();
   two_navigations_to_one_page.main();
   two_pushes_one_turn.main();

@@ -112,11 +112,12 @@ class NavigationHistoryImpl extends NavigationHistory {
   }
 
   // Brings the entries to the stacks after a change that may report no url:
-  // an entry whose page has gone in counts as once open from then on, so it
-  // leaves with its page, and the entry of a page that left goes at once, so
-  // length and canNavigateBack count the pages open.
+  // an entry whose page has gone in leaves with its page from then on. A page
+  // that left loses its entry at once, so length and canNavigateBack count
+  // the pages open, and it is new on the way back if it comes back.
   void _onStacksChanged() {
     if (_dropClosed()) _isTopFree = true;
+    _wayBackIds.removeWhere((pageId) => controllerOfPage(pageId) == null);
     _giveLinkEntryToTop();
     // Pages that go in with no url report, as those of a nested router built
     // a frame after the call that put its page on, get their entries now.

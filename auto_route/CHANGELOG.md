@@ -1,4 +1,13 @@
 ## 13.0.0-rc.1
+- **FIX**: on the web, a url typed into the address bar to a child of a tabs page that is not open, which the tabs of
+  that page do not list, keeps its url in its entry. The tabs turn the link down, the page shown before stays, and the
+  browser steps back to the entry of that page, as after a guard's no. The forward button then opens the url again, and
+  the tabs turn it down again. A back press onto that tabs page while it still loads its library, as a deferred page
+  does, takes nothing back. The page then shows its first tab, the url names that tab, and the app's own call that
+  opened the page hears no error while the page stays. Before, that call heard that the tabs do not list the route, and
+  the app wrote the url of the first tab over the typed entry, so the forward button opened the tabs page on its first
+  tab. With `rebuildStackOnDeepLink`, the app stepped back to its first entry instead, wrote over it and pushed the url
+  of each page again, which dropped the typed entry.
 - **FIX**, **BEHAVIOR CHANGE**: on the web, a jump forward over several entries, from the list a long press on the
   forward button shows or `history.go(2)`, opens the page of each entry it passes, in order, as forward presses do, and
   changes no entry. The stack and the entries are then what the same number of forward presses give, and the back button
