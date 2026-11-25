@@ -75,7 +75,7 @@ dart_code_metrics:
     - avoid-unsafe-collection-methods
     - avoid-dynamic
     - avoid-duplicate-constant-values
-    - prefer-match-file-name
+    - prefer-match-file-name: false
     - avoid-duplicate-test-assertions
     - avoid-empty-test-groups
     - avoid-shadowing
