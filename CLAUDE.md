@@ -4,7 +4,7 @@ This repository is its own product: a maintained fork of the auto_route package.
 
 ## Rules
 1. One issue is one commit. Its tests and its fix land together in a single commit named after the issue, `fix: <what users see> (#N)`, with the cause in the body. An integration test added later for an issue already fixed is its own commit: `test: integration test for <what> (#N)`.
-2. If fixing an issue breaks something somewhere else, fix that as a separate issue, in its own commit.
+2. If fixing an issue breaks something somewhere else, fix that as a separate issue, in its own commit. That issue gets the `regression` label, and its **Origin:** line names the commit that broke it. A fixed bug that comes back also gets a new issue with the `regression` label, which links the old issue and names the commit that brought it back. Phil's rule, since 2026-11-25.
 3. Finish the whole job yourself. Make the decisions and say in the report what was decided and why. Stop only for something that would go live, or for data that can't be restored.
 4. A new issue found along the way goes to its own chat, on a model that fits its difficulty, with these rules passed on. First check that no chat is on it already.
 5. Before solving an issue, check whether other issues are similar or rest on the same groundwork. Do the groundwork first, in its own commit, then each issue on top, one commit each.
@@ -63,7 +63,7 @@ Exceptions, Phil's. Since 2026-11-06, `prefer-boolean-prefixes` and `prefer-corr
    And on web, in headless Chrome through ChromeDriver (see Devices). Start ChromeDriver, run the tests, then stop it:
 
    ```bash
-   ~/.cache/chromedriver/157.0.8103.78/chromedriver-mac-arm64/chromedriver --port=4444 &
+   ~/.cache/chromedriver/158.0.8127.38/chromedriver-mac-arm64/chromedriver --port=4444 &
    ```
 
    ```bash
@@ -95,7 +95,7 @@ A `flutter_canary_*` test pins a Flutter bug or fix that auto_route depends on. 
   ```
 
 - iOS: use the simulator that is already booted (`xcrun simctl list devices booted`) and leave it running. Never create one.
-- Web: ChromeDriver 157.0.8103.78 for mac-arm64, from Google's Chrome for Testing, is at `~/.cache/chromedriver/157.0.8103.78/chromedriver-mac-arm64/chromedriver`. Its version must match the installed Chrome's; when Chrome updates itself, the matching ChromeDriver is a new download, which needs Phil's OK. Before starting it, check nothing else uses port 4444: `pgrep -f "chromedriver --port=4444"` prints nothing. Stop it when done.
+- Web: ChromeDriver 158.0.8127.38 for mac-arm64, from Google's Chrome for Testing, is at `~/.cache/chromedriver/158.0.8127.38/chromedriver-mac-arm64/chromedriver`. Its version must match the installed Chrome's; when Chrome updates itself, the matching ChromeDriver is a new download, which needs Phil's OK. Before starting it, check nothing else uses port 4444: `pgrep -f "chromedriver --port=4444"` prints nothing. Stop it when done.
 
 ## Traps
 - Run `integration_test/all_tests.dart`, not the folder. On macOS the second file fails to relaunch the app, and `flutter drive` on web takes one target.

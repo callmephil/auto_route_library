@@ -27,6 +27,13 @@ labels: bug
 - Flutter (`flutter --version`):
 - Platform and OS version:
 
+## Regression
+
+If this worked before, add the `regression` label.
+
+- Last commit or version where it worked:
+- Commit that broke it, or the fixed issue that came back:
+
 ## Logs or stack trace
 
 ```
